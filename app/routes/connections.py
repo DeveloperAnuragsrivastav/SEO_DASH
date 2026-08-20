@@ -1,0 +1,324 @@
+from __future__ import annotations
+from typing import Optional
+"""Routes for Connection management and verification."""
+
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models.connection import Connection
+from app.models.enums import AccessMode, ConnectionStatus, ProviderType
+from app.services.google_clients import verify_ga4, verify_gbp, verify_gsc
+from app.services.crypto import encrypt_credentials
+from app.services.dataforseo_auth import validate_dataforseo_credentials
+
+from app.dependencies import RequireRole
+from app.models.enums import UserRole
+
+router = APIRouter(
+    prefix="/clients/{client_id}/connections",
+    tags=["connections"],
+    dependencies=[Depends(RequireRole([UserRole.agency_admin]))]
+)
+read_router = APIRouter(
+    prefix="/clients/{client_id}/connections",
+    tags=["connections"],
+    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff]))]
+)
+verify_router = APIRouter(
+    prefix="/connections",
+    tags=["connections_verify"],
+    dependencies=[Depends(RequireRole([UserRole.agency_admin]))]
+)
+
+# Schemas
+class ConnectionCreate(BaseModel):
+    provider: ProviderType
+    property_id: str
+    property_tz: Optional[str] = None
+
+class ConnectionUpdate(BaseModel):
+    property_id: Optional[str] = None
+    property_tz: Optional[str] = None
+
+class ConnectionResponse(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID
+    provider: ProviderType
+    access_mode: AccessMode
+    property_id: str
+    property_tz: Optional[str]
+    status: ConnectionStatus
+    last_verified_at: Optional[datetime]
+    last_error: Optional[str]
+
+    model_config = {"from_attributes": True}
+
+
+class DataForSEOConnectionCreate(BaseModel):
+    access_mode: AccessMode
+    login: Optional[str] = None
+    password: Optional[str] = None
+
+class DataForSEOConnectionUpdate(BaseModel):
+    access_mode: AccessMode
+    login: Optional[str] = None
+    password: Optional[str] = None
+
+
+@router.post("", response_model=ConnectionResponse, status_code=201)
+def create_connection(
+    client_id: uuid.UUID,
+    data: ConnectionCreate,
+    db: Session = Depends(get_db),
+) -> Connection:
+    """Create a new service-account connection for a client."""
+    if data.provider == ProviderType.dataforseo:
+        raise HTTPException(
+            status_code=400, detail="DataForSEO connections are handled separately."
+        )
+
+    conn = Connection(
+        client_id=client_id,
+        provider=data.provider,
+        access_mode=AccessMode.platform_shared,
+        property_id=data.property_id,
+        property_tz=data.property_tz,
+        status=ConnectionStatus.not_connected,
+    )
+    db.add(conn)
+    db.commit()
+    db.refresh(conn)
+    return conn
+
+
+@read_router.get("", response_model=list[ConnectionResponse])
+def list_connections(
+    client_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> list[Connection]:
+    """List all connections for a client."""
+    return db.query(Connection).filter(Connection.client_id == client_id).all()
+
+
+@verify_router.patch("/{connection_id}", response_model=ConnectionResponse)
+def update_connection(
+    connection_id: uuid.UUID,
+    data: ConnectionUpdate,
+    db: Session = Depends(get_db),
+) -> Connection:
+    """Update connection properties. Modifying property_id resets status."""
+    conn = db.query(Connection).filter(Connection.id == connection_id).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+
+    if data.property_id is not None and data.property_id != conn.property_id:
+        conn.property_id = data.property_id
+        conn.status = ConnectionStatus.not_connected
+        conn.last_verified_at = None
+        conn.last_error = None
+
+    if data.property_tz is not None:
+        conn.property_tz = data.property_tz
+
+    db.commit()
+    db.refresh(conn)
+    return conn
+
+
+@verify_router.post("/{connection_id}/verify", response_model=ConnectionResponse)
+def verify_connection(
+    connection_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> Connection:
+    """Trigger an immediate, lightweight verification call to Google."""
+    conn = db.query(Connection).filter(Connection.id == connection_id).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+
+    if conn.provider not in (ProviderType.gsc, ProviderType.ga4, ProviderType.gbp):
+        raise HTTPException(
+            status_code=400, detail="Verification only supported for Google providers in this phase."
+        )
+
+    try:
+        if conn.provider == ProviderType.gsc:
+            verify_gsc(conn.property_id)
+        elif conn.provider == ProviderType.ga4:
+            conn.property_tz = verify_ga4(conn.property_id)
+        elif conn.provider == ProviderType.gbp:
+            verify_gbp(conn.property_id)
+
+        conn.status = ConnectionStatus.connected
+        conn.last_verified_at = datetime.now(timezone.utc)
+        conn.last_error = None
+
+    except ValueError as e:
+        conn.status = ConnectionStatus.error
+        conn.last_error = str(e)
+
+    db.commit()
+    db.refresh(conn)
+
+    # Return 400 so the caller knows it failed immediately,
+    # but the DB record is already updated.
+    if conn.status == ConnectionStatus.error:
+        raise HTTPException(status_code=400, detail=conn.last_error)
+
+    return conn
+
+
+class PullRequest(BaseModel):
+    start_date: str  # ISO date YYYY-MM-DD
+    end_date: str
+
+class PullResponse(BaseModel):
+    status: str
+    rows_inserted: int
+
+@verify_router.post("/{connection_id}/pull", response_model=PullResponse)
+def trigger_pull(
+    connection_id: uuid.UUID,
+    data: PullRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Manually trigger a data pull for a connection (testing purposes)."""
+    conn = db.query(Connection).filter(Connection.id == connection_id).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+
+    from datetime import date
+    try:
+        sd = date.fromisoformat(data.start_date)
+        ed = date.fromisoformat(data.end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, must be YYYY-MM-DD")
+
+    if conn.provider == ProviderType.gsc:
+        from app.services.gsc_service import pull_gsc_data
+        try:
+            rows_inserted = pull_gsc_data(db, connection_id, sd, ed)
+            return {"status": "success", "rows_inserted": rows_inserted}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    elif conn.provider == ProviderType.ga4:
+        from app.services.ga4_service import pull_ga4_data
+        try:
+            rows_inserted = pull_ga4_data(db, connection_id, sd, ed)
+            return {"status": "success", "rows_inserted": rows_inserted}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    elif conn.provider == ProviderType.gbp:
+        from app.services.gbp_service import pull_gbp_data
+        try:
+            rows_inserted = pull_gbp_data(db, connection_id, sd, ed)
+            return {"status": "success", "rows_inserted": rows_inserted}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported provider for pull")
+
+
+@router.post("/dataforseo", response_model=ConnectionResponse, status_code=201)
+def create_dataforseo_connection(
+    client_id: uuid.UUID,
+    data: DataForSEOConnectionCreate,
+    db: Session = Depends(get_db),
+) -> Connection:
+    """Create a DataForSEO connection."""
+    # Validate credentials if client-owned
+    if data.access_mode == AccessMode.client_owned:
+        if not data.login or not data.password:
+            raise HTTPException(status_code=400, detail="login and password required for client_owned mode")
+        try:
+            validate_dataforseo_credentials(data.login, data.password)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        credentials_blob = encrypt_credentials({"login": data.login, "password": data.password})
+        status = ConnectionStatus.connected
+        last_error = None
+        last_verified_at = datetime.now(timezone.utc)
+    else:
+        # Platform shared
+        credentials_blob = None
+        # We don't necessarily validate the platform credentials here inline, 
+        # but we could. For now, mark connected if platform shared.
+        status = ConnectionStatus.connected
+        last_error = None
+        last_verified_at = datetime.now(timezone.utc)
+
+    conn = Connection(
+        client_id=client_id,
+        provider=ProviderType.dataforseo,
+        access_mode=data.access_mode,
+        property_id="dataforseo_account",  # Not really used for DataForSEO
+        credentials=credentials_blob,
+        status=status,
+        last_verified_at=last_verified_at,
+        last_error=last_error
+    )
+    db.add(conn)
+    db.commit()
+    db.refresh(conn)
+    return conn
+
+
+@verify_router.put("/{connection_id}/dataforseo", response_model=ConnectionResponse)
+def update_dataforseo_connection(
+    connection_id: uuid.UUID,
+    data: DataForSEOConnectionUpdate,
+    db: Session = Depends(get_db),
+) -> Connection:
+    """Update a DataForSEO connection (access mode / credentials)."""
+    conn = db.query(Connection).filter(Connection.id == connection_id).first()
+    if not conn or conn.provider != ProviderType.dataforseo:
+        raise HTTPException(status_code=404, detail="DataForSEO connection not found")
+
+    if data.access_mode == AccessMode.client_owned:
+        if not data.login or not data.password:
+            raise HTTPException(status_code=400, detail="login and password required for client_owned mode")
+        try:
+            validate_dataforseo_credentials(data.login, data.password)
+        except ValueError as e:
+            # Explicitly set error state if validation fails
+            conn.status = ConnectionStatus.error
+            conn.last_error = str(e)
+            db.commit()
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        conn.credentials = encrypt_credentials({"login": data.login, "password": data.password})
+        conn.access_mode = data.access_mode
+        conn.status = ConnectionStatus.connected
+        conn.last_error = None
+        conn.last_verified_at = datetime.now(timezone.utc)
+    else:
+        # Switching to platform shared
+        conn.access_mode = data.access_mode
+        conn.credentials = None
+        conn.status = ConnectionStatus.connected
+        conn.last_error = None
+        conn.last_verified_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(conn)
+    return conn
+
+@verify_router.delete("/{connection_id}")
+def delete_connection(
+    connection_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Delete a connection record."""
+    conn = db.query(Connection).filter(Connection.id == connection_id).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+        
+    db.delete(conn)
+    db.commit()
+    return {"status": "success", "message": "Connection deleted"}
+

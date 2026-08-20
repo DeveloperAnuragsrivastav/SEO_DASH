@@ -1,0 +1,37 @@
+
+> frontend@0.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Users/admin/Desktop/anurag/seo_dahboard/frontend[39m
+
+ [32m✓[39m src/__tests__/ConnectionsAdmin.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 381[2mms[22m[39m
+ [32m✓[39m src/__tests__/ClientsAdmin.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 427[2mms[22m[39m
+ [32m✓[39m src/__tests__/RankingsTable.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 494[2mms[22m[39m
+ [32m✓[39m src/__tests__/Links.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 555[2mms[22m[39m
+     [33m[2m✓[22m[39m renders loading state and then data correctly [33m 389[2mms[22m[39m
+ [32m✓[39m src/__tests__/WorkDone.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 580[2mms[22m[39m
+     [33m[2m✓[22m[39m allows adding an activity [33m 312[2mms[22m[39m
+ [32m✓[39m src/__tests__/Overview.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 559[2mms[22m[39m
+     [33m[2m✓[22m[39m renders empty state and allows generation [33m 430[2mms[22m[39m
+ [32m✓[39m src/__tests__/SearchPerformance.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 752[2mms[22m[39m
+     [33m[2m✓[22m[39m renders table correctly with mock data and tests trend classification logic [33m 745[2mms[22m[39m
+ [32m✓[39m src/__tests__/Audience.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 943[2mms[22m[39m
+     [33m[2m✓[22m[39m renders all three breakdown tables correctly with mock data [33m 937[2mms[22m[39m
+ [32m✓[39m src/__tests__/ProvenanceBadge.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 814[2mms[22m[39m
+     [33m[2m✓[22m[39m renders correctly for automated source [33m 677[2mms[22m[39m
+ [32m✓[39m src/__tests__/ManualRankingUI.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 646[2mms[22m[39m
+     [33m[2m✓[22m[39m shows specific per-row errors from a mocked malformed-row API response [33m 491[2mms[22m[39m
+ [32m✓[39m src/__tests__/ProtectedRoute.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+ [32m✓[39m src/__tests__/Login.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1485[2mms[22m[39m
+     [33m[2m✓[22m[39m renders login form correctly [33m 918[2mms[22m[39m
+ [32m✓[39m src/__tests__/AIVisibility.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 641[2mms[22m[39m
+     [33m[2m✓[22m[39m renders ai visibility data correctly [33m 497[2mms[22m[39m
+ [32m✓[39m src/__tests__/KpiCard.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 162[2mms[22m[39m
+ [32m✓[39m src/__tests__/client.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m15 passed[39m[22m[90m (15)[39m
+[2m      Tests [22m [1m[32m33 passed[39m[22m[90m (33)[39m
+[2m   Start at [22m 12:19:28
+[2m   Duration [22m 7.55s[2m (transform 2.39s, setup 3.14s, import 9.72s, tests 8.79s, environment 21.65s)[22m
+

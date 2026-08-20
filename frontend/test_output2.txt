@@ -1,0 +1,39 @@
+
+> frontend@0.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Users/admin/Desktop/anurag/seo_dahboard/frontend[39m
+
+ [32m✓[39m src/__tests__/Login.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1082[2mms[22m[39m
+     [33m[2m✓[22m[39m renders login form correctly [33m 754[2mms[22m[39m
+ [32m✓[39m src/__tests__/WorkDone.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 766[2mms[22m[39m
+     [33m[2m✓[22m[39m renders data correctly [33m 388[2mms[22m[39m
+     [33m[2m✓[22m[39m allows adding an activity [33m 321[2mms[22m[39m
+ [32m✓[39m src/__tests__/RankingsTable.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1194[2mms[22m[39m
+     [33m[2m✓[22m[39m renders rows with correct position-band coloring and provenance [33m 862[2mms[22m[39m
+ [32m✓[39m src/__tests__/Audience.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1345[2mms[22m[39m
+     [33m[2m✓[22m[39m renders all three breakdown tables correctly with mock data [33m 1275[2mms[22m[39m
+ [32m✓[39m src/__tests__/Overview.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1774[2mms[22m[39m
+     [33m[2m✓[22m[39m renders empty state and allows generation [33m 1345[2mms[22m[39m
+     [33m[2m✓[22m[39m renders correctly with real mock data [33m 424[2mms[22m[39m
+ [32m✓[39m src/__tests__/Links.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1442[2mms[22m[39m
+     [33m[2m✓[22m[39m renders loading state and then data correctly [33m 682[2mms[22m[39m
+     [33m[2m✓[22m[39m allows adding a new link [33m 753[2mms[22m[39m
+ [32m✓[39m src/__tests__/SearchPerformance.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 3874[2mms[22m[39m
+     [33m[2m✓[22m[39m renders table correctly with mock data and tests trend classification logic [33m 3863[2mms[22m[39m
+ [32m✓[39m src/__tests__/client.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/ProtectedRoute.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 138[2mms[22m[39m
+ [32m✓[39m src/__tests__/KpiCard.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 387[2mms[22m[39m
+ [32m✓[39m src/__tests__/ProvenanceBadge.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 597[2mms[22m[39m
+     [33m[2m✓[22m[39m renders correctly for automated source [33m 540[2mms[22m[39m
+ [32m✓[39m src/__tests__/ManualRankingUI.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 536[2mms[22m[39m
+     [33m[2m✓[22m[39m shows specific per-row errors from a mocked malformed-row API response [33m 441[2mms[22m[39m
+ [32m✓[39m src/__tests__/AIVisibility.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 554[2mms[22m[39m
+     [33m[2m✓[22m[39m renders ai visibility data correctly [33m 322[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m13 passed[39m[22m[90m (13)[39m
+[2m      Tests [22m [1m[32m27 passed[39m[22m[90m (27)[39m
+[2m   Start at [22m 17:41:48
+[2m   Duration [22m 16.75s[2m (transform 4.85s, setup 7.08s, import 12.83s, tests 13.70s, environment 66.26s)[22m
+

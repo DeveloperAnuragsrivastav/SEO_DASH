@@ -1,0 +1,1013 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1A1D23; --ink-2:#454B57; --ink-3:#7C8494;
+  --canvas:#E9ECE7; --card:#FFFFFF; --line:#DCE0DA; --line-2:#EDEFEA;
+  --brand:#7B1C29;   /* client accent — set per client */
+  --client:#7B1C29; --amber:#E8A317; --amber-soft:#FCEFD2;
+  --up:#166F52; --up-soft:#DDEFE7; --down:#B8433A; --down-soft:#F8E3E1;
+  --r:10px;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --disp:"Bricolage Grotesque","Inter",sans-serif;
+  --body:"Inter",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--disp);margin:0;letter-spacing:-.02em;font-weight:600}
+a{color:inherit}
+.mono{font-family:var(--mono)}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+/* ---------- top bar ---------- */
+.demobar{position:sticky;top:0;z-index:60;background:#0B0D11;border-bottom:1px solid #242932}
+.demobar .wrap{display:flex;align-items:center;gap:10px;height:38px;font-family:var(--mono);font-size:11px;color:#7E8694}
+.demobar b{color:#E6E9EE;font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.demobar select{background:#1B1F27;border:1px solid #333A45;color:#fff;font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:6px}
+.demobar .why{color:#636B79;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.topbar{position:sticky;top:38px;z-index:50;background:var(--ink);color:#fff}
+.topbar .wrap{display:flex;align-items:center;gap:16px;height:66px}
+body.role-client #agencyBtn,body.role-client .src.man .agency-inline{display:none}
+.agencymark{display:flex;align-items:center;text-decoration:none;flex:none}
+.ezlogo{height:32px;width:auto;display:block}
+.agencymark:hover .ezlogo{opacity:.85}
+.vr{width:1px;height:26px;background:#3A404C;flex:none}
+.clientmark{display:flex;align-items:center;gap:9px;min-width:0}
+.clientmark b{display:block;font-family:var(--disp);font-weight:600;font-size:14.5px;letter-spacing:-.02em;line-height:1.2;color:#fff}
+/* Drop-in slot for the client's own mark: replace the span with <img src="..."> */
+.logoslot{display:grid;place-items:center;height:30px;min-width:86px;padding:0 10px;border:1px dashed #4A515F;border-radius:7px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#8C94A2;flex:none;white-space:nowrap}
+.logoslot img{max-height:26px;width:auto;display:block}
+.dom{font-family:var(--mono);font-size:11px;color:#9AA2B0;display:block;line-height:1.3}
+.spacer{flex:1}
+.sel{background:#282C35;border:1px solid #3A404C;color:#fff;font-family:var(--mono);font-size:12px;padding:7px 10px;border-radius:8px}
+.pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:99px;background:#282C35;color:#9AA2B0;border:1px solid #3A404C}
+.pill.live{background:rgba(22,111,82,.2);color:#6FD1A9;border-color:#2C6B54}
+.btn{background:var(--amber);color:#1A1D23;border:0;font-family:var(--body);font-weight:600;font-size:13px;padding:8px 14px;border-radius:8px;cursor:pointer}
+.btn:hover{filter:brightness(1.06)}
+.ghost{background:transparent;color:#C9CFD9;border:1px solid #3A404C}
+.ghost.on{background:#fff;color:#1A1D23;border-color:#fff}
+
+/* ---------- section nav ---------- */
+.nav{position:sticky;top:104px;z-index:40;background:var(--canvas);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;gap:2px;overflow-x:auto}
+.nav a{padding:12px 14px;font-size:13px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+.nav a:hover{color:var(--ink)}
+.nav a.act{color:var(--ink);border-bottom-color:var(--brand);font-weight:600}
+
+/* ---------- section shell ---------- */
+section{padding:44px 0 8px;scroll-margin-top:150px}
+.head{display:flex;align-items:baseline;gap:14px;margin-bottom:18px}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.head h2{font-size:26px}
+.src{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);border:1px solid var(--line);background:var(--card);padding:4px 8px;border-radius:99px;white-space:nowrap}
+.src.man{border-color:#E4CE9A;background:var(--amber-soft);color:#7A5B14}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+.pad{padding:18px}
+.grid{display:grid;gap:12px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:2fr 1fr}
+.geq{grid-template-columns:1fr 1fr}
+
+/* ---------- kpi ---------- */
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 15px;position:relative;overflow:hidden}
+.kpi .lab{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.kpi .val{font-family:var(--disp);font-size:34px;font-weight:600;letter-spacing:-.035em;line-height:1.15;margin-top:6px}
+.kpi .sub{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:3px}
+.d{font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 6px;border-radius:5px;display:inline-block}
+.d.up{background:var(--up-soft);color:var(--up)}
+.d.dn{background:var(--down-soft);color:var(--down)}
+.d.flat{background:#EEF0EC;color:var(--ink-3)}
+
+/* ---------- narrative ---------- */
+.note{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:var(--r);padding:16px 18px}
+.note p{margin:0;font-size:15px;line-height:1.6;color:var(--ink-2)}
+.note b{color:var(--ink)}
+
+/* ---------- table ---------- */
+table{width:100%;border-collapse:collapse}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-weight:500;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#FAFBF9}
+.num{font-family:var(--mono);font-size:13px;text-align:right}
+th.num{text-align:right}
+.kwname{font-weight:500}
+.rank{font-family:var(--mono);font-weight:600;display:inline-grid;place-items:center;min-width:30px;height:24px;border-radius:6px;padding:0 6px;background:#F1F3EF;color:var(--ink-2)}
+.rank.p1{background:var(--up-soft);color:var(--up)}
+.rank.p2{background:var(--amber-soft);color:#7A5B14}
+.rank.out{background:#F1F3EF;color:var(--ink-3);font-size:11px}
+
+/* ---------- controls ---------- */
+.ctrl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink-2);font-size:12.5px;padding:6px 11px;border-radius:99px;cursor:pointer;font-family:var(--body)}
+.chip:hover{border-color:var(--ink-3)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip .c{font-family:var(--mono);font-size:11px;opacity:.6;margin-left:5px}
+input.search{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:7px 13px;font-family:var(--body);font-size:13px;width:210px;outline:none}
+input.search:focus{border-color:var(--ink-3)}
+
+/* ---------- bars ---------- */
+.bar-row{display:grid;grid-template-columns:150px 1fr 56px;gap:12px;align-items:center;padding:6px 0}
+.bar{height:9px;border-radius:99px;background:#EEF0EC;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--brand)}
+.bar i.a{background:var(--amber)}
+.bar i.g{background:var(--up)}
+.bar-row .lab{font-size:13px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.detail{background:#FAFBF9}
+.detail td{padding:0}
+.hist{display:flex;gap:0;padding:12px 12px 14px;overflow-x:auto}
+.hist div{min-width:56px;text-align:center;border-left:1px solid var(--line-2);padding:0 4px}
+.hist div:first-child{border-left:0}
+.hist .m{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);letter-spacing:.04em}
+.hist .v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:3px}
+
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-top:10px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+
+footer{margin-top:48px;background:var(--ink);color:#9AA2B0;padding:26px 0 34px}
+footer h3{color:#fff;font-size:15px;margin-bottom:14px}
+.srcgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.srccard{border:1px solid #2E3440;border-radius:8px;padding:11px 12px}
+.srccard b{display:block;color:#E6E9EE;font-size:12.5px;font-weight:600;margin-bottom:3px}
+.srccard span{font-family:var(--mono);font-size:10.5px}
+.dot{width:6px;height:6px;border-radius:50%;background:#4ECB8F;display:inline-block;margin-right:5px}
+.dot.man{background:var(--amber)}
+
+.agency{display:none}
+body.agency-on .agency{display:block}
+body.agency-on .chip.agency{display:inline-block}
+body.agency-on .agency-inline{display:inline-block}
+.agency-inline{display:none}
+
+
+.overlay{position:fixed;inset:0;z-index:70;background:rgba(20,23,28,.55);display:none;padding:24px;overflow:auto}
+.overlay.on{display:block}
+.sheet{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:840px;margin:40px auto;overflow:hidden}
+.sheethead{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.xbtn{background:transparent;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;cursor:pointer;color:var(--ink-2);font-size:13px}
+.xbtn:hover{border-color:var(--ink-3)}
+.genbar{display:none;align-items:center;gap:14px;padding:16px 20px;background:#FAFBF9;border-bottom:1px solid var(--line);flex-wrap:wrap}
+body.agency-on .genbar{display:flex}
+.step{display:flex;align-items:center;gap:10px;padding:7px 20px;font-size:13px;color:var(--ink-3);border-bottom:1px solid var(--line-2)}
+.step b{font-weight:500;color:var(--ink-2)}
+.step .tick{width:16px;text-align:center;font-family:var(--mono);font-size:12px}
+.step.done{color:var(--ink-2)}
+.step.done .tick{color:var(--up)}
+.st{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid var(--line)}
+.st.pub{background:var(--up-soft);color:var(--up);border-color:#BFE0D2}
+.st.draft{background:var(--amber-soft);color:#7A5B14;border-color:#E4CE9A}
+@media(max-width:980px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2,.geq{grid-template-columns:1fr}.srcgrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.ezlogo{height:24px}.wrap{padding:0 14px}.kpi .val{font-size:26px}.head h2{font-size:21px}.topbar .wrap{gap:10px}.hide-s{display:none}}
+@media(prefers-reduced-motion:no-preference){.kpi,.card{transition:box-shadow .18s}}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+</style>
+
+<div class="demobar"><div class="wrap">
+  <b>Prototype</b><span class="hide-s">·</span><span class="hide-s">Viewing as</span>
+  <select id="viewSel"></select>
+  <span class="why" id="viewNote"></span>
+</div></div>
+
+<div class="topbar"><div class="wrap">
+  <!-- Agency mark: resolved at runtime from the tenant's brand record -->
+  <a class="agencymark" id="agencyLink" href="#" target="_blank" rel="noopener"></a>
+  <span class="vr"></span>
+  <!-- CLIENT: logo + name, driven per client -->
+  <div class="clientmark">
+    <span class="logoslot" id="clientLogo">Client logo</span>
+    <span>
+      <b id="clientName"></b>
+      <span class="dom hide-s" id="clientDom"></span>
+    </span>
+  </div>
+  <span class="spacer"></span>
+  <select class="sel" id="monthSel"></select>
+  <span class="pill live hide-s">Published</span>
+  <button class="btn ghost" id="reportsBtn">All reports</button>
+  <button class="btn ghost" id="agencyBtn">Agency view</button>
+  <button class="btn hide-s">Download PDF</button>
+</div></div>
+
+<nav class="nav"><div class="wrap" id="navwrap">
+  <a href="#overview" class="act">Overview</a>
+  <a href="#rankings">Rankings</a>
+  <a href="#search">Search performance</a>
+  <a href="#audience">Audience</a>
+  <a href="#convert">Leads &amp; sales</a>
+  <a href="#ai">AI visibility</a>
+  <a href="#links">Links built</a>
+  <a href="#work">Work done</a>
+</div></nav>
+
+<div class="wrap">
+
+<!-- OVERVIEW -->
+<section id="overview">
+  <div class="head">
+    <div>
+      <div class="eyebrow" id="ovEyebrow">Monthly SEO report</div>
+      <h2 id="ovTitle">July 2026</h2>
+    </div>
+    <span class="spacer"></span>
+    <span class="src">Published 1 Aug 2026</span>
+  </div>
+
+  <div class="grid g4" id="kpis"></div>
+
+  <div style="height:12px"></div>
+  <div class="note">
+    <p id="narrative"></p>
+    <div class="agency" style="margin-top:10px"><span class="src man">Agency: auto-drafted, editable before publishing</span></div>
+  </div>
+
+  <div style="height:12px"></div>
+  <div class="card">
+    <div class="pad" style="padding-bottom:6px;display:flex;align-items:baseline;gap:12px">
+      <div>
+        <h3 style="font-size:16px">Keyword positioning summary</h3>
+        <div style="font-size:12.5px;color:var(--ink-3);margin-top:2px">Where the package sits now against the last three months and the day we started.</div>
+      </div>
+      <span class="spacer"></span><span class="src">Mangools · auto</span>
+    </div>
+    <table id="posTable"></table>
+  </div>
+
+  <div style="height:12px"></div>
+  <div class="card pad">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:2px">
+      <h3 style="font-size:16px">Where the 37 keywords sit, month by month</h3>
+      <span class="spacer"></span><span class="src">Mangools · auto</span>
+    </div>
+    <div style="font-size:12.5px;color:var(--ink-3);margin-bottom:10px">Each band is a slice of the keyword set. The top band is page one.</div>
+    <div id="flow"></div>
+    <div class="legend">
+      <span><i style="background:#166F52"></i>Top 10</span>
+      <span><i style="background:#E8A317"></i>11–20</span>
+      <span><i style="background:#C08A5E"></i>21–50</span>
+      <span><i style="background:#C9CEC6"></i>Below 50 / not ranking</span>
+    </div>
+  </div>
+</section>
+
+<!-- RANKINGS -->
+<section id="rankings">
+  <div class="head">
+    <div><div class="eyebrow">Section 01</div><h2>Keyword rankings</h2></div>
+    <span class="spacer"></span><span class="src">Mangools SERPWatcher · synced daily</span>
+  </div>
+  <div class="ctrl">
+    <button class="chip on" data-f="all">All</button>
+    <button class="chip" data-f="up">Improved</button>
+    <button class="chip agency" data-f="down">Dropped</button>
+    <button class="chip" data-f="p1">Page 1</button>
+    <button class="chip" data-f="p2">Page 2</button>
+    <span class="spacer"></span>
+    <input class="search" id="kwSearch" placeholder="Find a keyword">
+  </div>
+  <div class="card" style="overflow:hidden">
+    <table id="kwTable">
+      <thead><tr>
+        <th style="width:34px">#</th><th>Keyword</th>
+        <th class="num hide-s">Start</th><th class="num hide-s">Prev</th>
+        <th class="num">Now</th><th class="num">Change</th>
+        <th style="width:130px" class="hide-s">12-month track</th>
+        <th class="num hide-s">Best</th>
+      </tr></thead>
+      <tbody id="kwBody"></tbody>
+    </table>
+  </div>
+  <div style="font-size:12px;color:var(--ink-3);margin-top:8px">Click any keyword to open its full history. Screenshots attach to each row in the live build.</div>
+</section>
+
+<!-- SEARCH -->
+<section id="search">
+  <div class="head">
+    <div><div class="eyebrow">Section 02</div><h2>Search performance</h2></div>
+    <span class="spacer"></span><span class="src">Google Search Console · auto</span>
+  </div>
+  <div class="grid g4">
+    <div class="kpi"><div class="lab">Clicks</div><div class="val">4,703</div><div class="sub"><span class="d up">▲ 1,037.3%</span> vs Jun</div></div>
+    <div class="kpi"><div class="lab">Impressions</div><div class="val">449,832</div><div class="sub"><span class="d dn">▼ 20.6%</span> vs Jun</div></div>
+    <div class="kpi"><div class="lab">Site CTR</div><div class="val">0.88%</div><div class="sub"><span class="d up">▲ 9.5%</span> vs Jun</div></div>
+    <div class="kpi"><div class="lab">Average position</div><div class="val">15.93</div><div class="sub"><span class="d up">▲ 3.1% better</span></div></div>
+  </div>
+  <div style="height:12px"></div>
+  <div class="card">
+    <div class="pad" style="padding-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <h3 style="font-size:16px">Your content</h3>
+      <div class="ctrl" style="margin:0;gap:6px">
+        <button class="chip on" data-lp="top">Top pages</button>
+        <button class="chip" data-lp="up">Trending up</button>
+        <button class="chip agency" data-lp="down">Trending down</button>
+      </div>
+      <span class="spacer"></span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--ink-3)" id="lpCount"></span>
+    </div>
+    <div style="padding:0 18px 6px;font-size:12.5px;color:var(--ink-3)" id="lpNote"></div>
+    <table><thead id="lpHead"></thead><tbody id="lpBody"></tbody></table>
+  </div>
+</section>
+
+<!-- AUDIENCE -->
+<section id="audience">
+  <div class="head">
+    <div><div class="eyebrow">Section 03</div><h2>Audience &amp; traffic</h2></div>
+    <span class="spacer"></span><span class="src">GA4 · auto · 28 Jun – 27 Jul</span>
+  </div>
+  <div class="grid g4">
+    <div class="kpi"><div class="lab">Sessions</div><div class="val">24,863</div><div class="sub">21,134 users</div></div>
+    <div class="kpi"><div class="lab">Organic sessions</div><div class="val">5,109</div><div class="sub">20.6% of all traffic</div></div>
+    <div class="kpi"><div class="lab">Add to carts</div><div class="val">6,101</div><div class="sub">3,141 form submits</div></div>
+    <div class="kpi"><div class="lab">Avg session</div><div class="val">1:56</div><div class="sub">70,279 views</div></div>
+  </div>
+  <div style="height:12px"></div>
+  <div class="grid g2">
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:10px">Where sessions come from</h3>
+      <div id="channels"></div>
+    </div>
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:10px">Devices &amp; countries</h3>
+      <div id="devices"></div>
+      <div style="height:14px;border-top:1px solid var(--line-2);margin:12px 0 0"></div>
+      <div id="countries" style="margin-top:10px"></div>
+    </div>
+  </div>
+</section>
+
+<!-- CONVERSIONS -->
+<section id="convert">
+  <div class="head">
+    <div><div class="eyebrow">Section 04</div><h2>Leads &amp; sales from organic</h2></div>
+    <span class="spacer"></span>
+    <div class="ctrl" style="margin:0;gap:6px">
+      <button class="chip on" data-cv="ecom">E-commerce</button>
+      <button class="chip" data-cv="lead">Lead generation</button>
+    </div>
+    <span class="src">GA4 key events · organic only</span>
+  </div>
+
+  <div class="note" style="border-left-color:var(--up)">
+    <p id="cvLine"></p>
+  </div>
+  <div style="height:12px"></div>
+
+  <div class="grid g4" id="cvKpis"></div>
+  <div style="height:12px"></div>
+
+  <div class="grid g2">
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:4px" id="cvFunnelTitle"></h3>
+      <div style="font-size:12.5px;color:var(--ink-3);margin-bottom:14px" id="cvFunnelNote"></div>
+      <div id="cvFunnel"></div>
+    </div>
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:10px" id="cvTableTitle"></h3>
+      <div id="cvTable"></div>
+    </div>
+  </div>
+  <div style="height:8px"></div>
+  <div style="font-size:12px;color:var(--ink-3)">Organic only — paid, direct and social conversions are excluded, so this is the share the SEO work is responsible for.</div>
+</section>
+
+<!-- AI -->
+<section id="ai">
+  <div class="head">
+    <div><div class="eyebrow">Section 05</div><h2>AI visibility</h2></div>
+    <span class="spacer"></span><span class="src">Semrush AI toolkit · auto</span>
+  </div>
+  <div class="grid g4">
+    <div class="kpi"><div class="lab">Brand mentions</div><div class="val">120</div><div class="sub"><span class="d up">▲ 46</span> vs Jun</div></div>
+    <div class="kpi"><div class="lab">Cited pages</div><div class="val">50</div><div class="sub">388 prompt placements</div></div>
+    <div class="kpi"><div class="lab">AI Overview appearances</div><div class="val">18</div><div class="sub">of 25 tracked prompts</div></div>
+    <div class="kpi"><div class="lab">AI visibility score</div><div class="val">17</div><div class="sub">worldwide &amp; UK</div></div>
+  </div>
+  <div style="height:12px"></div>
+  <div class="grid g2">
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:4px">Mentions by answer engine</h3>
+      <div style="font-size:12.5px;color:var(--ink-3);margin-bottom:10px" id="aiNamedLine"></div>
+      <div id="engines"></div>
+    </div>
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:10px">Pages the AI engines cite most</h3>
+      <div id="cited"></div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+  <div class="card">
+    <div class="pad" style="padding-bottom:6px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <div>
+        <h3 style="font-size:16px">Traffic arriving from AI platforms</h3>
+        <div style="font-size:12.5px;color:var(--ink-3);margin-top:2px">Real visits sent by ChatGPT, Copilot, Perplexity and Gemini — the sessions behind the mentions above.</div>
+      </div>
+      <span class="spacer"></span><span class="src">GA4 · AI Assistant channel · auto</span>
+    </div>
+    <div class="pad" style="padding-top:10px">
+      <div class="grid g4">
+        <div class="kpi"><div class="lab">AI sessions</div><div class="val" id="aiSess">—</div><div class="sub"><span class="d up">▲ 63%</span> vs previous period</div></div>
+        <div class="kpi"><div class="lab">Engaged sessions</div><div class="val">20</div><div class="sub">45.5% engagement rate</div></div>
+        <div class="kpi"><div class="lab">Events per session</div><div class="val">4.39</div><div class="sub">193 events in total</div></div>
+        <div class="kpi"><div class="lab">Key events</div><div class="val">10</div><div class="sub">add to cart &amp; form submits</div></div>
+      </div>
+      <div style="height:16px"></div>
+      <div id="aiChart"></div>
+      <div style="height:14px"></div>
+      <table><thead><tr><th>Referring platform</th><th class="num">Sessions</th><th class="num hide-s">Engaged</th><th class="num hide-s">Engagement rate</th><th class="num">Key events</th></tr></thead><tbody id="aiSrc"></tbody></table>
+    </div>
+  </div>
+</section>
+
+<!-- LINKS -->
+<section id="links">
+  <div class="head">
+    <div><div class="eyebrow">Section 06</div><h2>Links built this month</h2></div>
+    <span class="spacer"></span><span class="src man">Manual entry <span class="agency-inline">· agency form</span></span>
+  </div>
+  <div class="grid g4">
+    <div class="kpi"><div class="lab">Links created</div><div class="val" id="lkTotal">98</div><div class="sub">in July 2026</div></div>
+    <div class="kpi"><div class="lab">Live &amp; verified</div><div class="val">98</div><div class="sub">checked 1 Aug</div></div>
+    <div class="kpi"><div class="lab">Unique domains</div><div class="val" id="lkDom">—</div><div class="sub">no repeats within month</div></div>
+    <div class="kpi"><div class="lab">Activity types</div><div class="val" id="lkTypes">—</div><div class="sub">profiles, Q&amp;A, syndication</div></div>
+  </div>
+  <div style="height:12px"></div>
+  <div class="grid g2">
+    <div class="card" style="overflow:hidden">
+      <div class="pad" style="padding-bottom:4px;display:flex;align-items:baseline">
+        <h3 style="font-size:16px">Every live link</h3><span class="spacer"></span>
+        <input class="search" id="lkSearch" placeholder="Filter by domain or type" style="width:200px">
+      </div>
+      <div style="max-height:420px;overflow:auto">
+        <table><thead><tr><th style="width:34px">#</th><th>Domain</th><th class="hide-s">Activity</th><th class="hide-s">Date</th><th class="num">Status</th></tr></thead>
+        <tbody id="lkBody"></tbody></table>
+      </div>
+    </div>
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:10px">By activity type</h3>
+      <div id="lkTypesChart"></div>
+    </div>
+  </div>
+</section>
+
+<!-- WORK -->
+<section id="work">
+  <div class="head">
+    <div><div class="eyebrow">Section 07</div><h2>Work done &amp; what's next</h2></div>
+    <span class="spacer"></span><span class="src man">Manual entry</span>
+  </div>
+  <div class="grid geq">
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:12px">Delivered in July</h3>
+      <div id="acts"></div>
+    </div>
+    <div class="card pad">
+      <h3 style="font-size:16px;margin-bottom:12px">Planned for August</h3>
+      <div id="plan"></div>
+    </div>
+  </div>
+  <div style="height:12px"></div>
+  <div class="card pad">
+    <h3 style="font-size:16px;margin-bottom:4px">Proof &amp; screenshots</h3>
+    <div style="font-size:12.5px;color:var(--ink-3);margin-bottom:12px">SERP and AI-answer captures, tagged to the keyword they belong to — no more 15 email attachments.</div>
+    <div id="shots" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px"></div>
+  </div>
+</section>
+
+</div>
+
+<div class="overlay" id="ovl">
+  <div class="sheet">
+    <div class="sheethead">
+      <div>
+        <h3 style="font-size:18px">Reports</h3>
+        <div style="font-size:12.5px;color:var(--ink-3);margin-top:2px" id="ovlSub"></div>
+      </div>
+      <span class="spacer" style="flex:1"></span>
+      <button class="xbtn" id="ovlClose" aria-label="Close reports">✕</button>
+    </div>
+
+    <div class="genbar agency">
+      <div style="flex:1;min-width:0">
+        <b style="font-family:var(--disp);font-size:15px;font-weight:600">Generate August 2026</b>
+        <div style="font-size:12.5px;color:var(--ink-2);margin-top:2px" id="genNote">Pulls rankings, Search Console, GA4 and Semrush, then freezes the numbers.</div>
+      </div>
+      <button class="btn" id="genBtn">Generate report</button>
+    </div>
+    <div id="genSteps"></div>
+
+    <table><thead><tr><th>Month</th><th>Status</th><th class="hide-s">Data pulled</th><th class="hide-s">Published</th><th class="num">Report</th></tr></thead>
+      <tbody id="archBody"></tbody></table>
+  </div>
+</div>
+
+<footer><div class="wrap">
+  <h3>Where these numbers come from</h3>
+  <div class="srcgrid">
+    <div class="srccard"><b>Mangools SERPWatcher</b><span><span class="dot"></span>API · daily pull, frozen on the 1st</span></div>
+    <div class="srccard"><b>Google Search Console</b><span><span class="dot"></span>API · nightly</span></div>
+    <div class="srccard"><b>Google Analytics 4</b><span><span class="dot"></span>Data API · nightly</span></div>
+    <div class="srccard"><b>Semrush AI toolkit</b><span><span class="dot"></span>API · weekly</span></div>
+    <div class="srccard"><b>Links &amp; activities</b><span><span class="dot man"></span>Agency form · manual</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;margin-top:22px;padding-top:16px;border-top:1px solid #2E3440;flex-wrap:wrap">
+    <span id="fLogo"></span>
+    <span style="font-size:12.5px" id="fLine"></span>
+    <span class="spacer" style="flex:1"></span>
+    <span style="font-family:var(--mono);font-size:11px;color:#666E7C" id="fMail"></span>
+  </div>
+</div></footer>
+
+<script>
+const DATA = {"months": ["Jul 26", "Jun 26", "May 26", "Apr 26", "Mar 26", "Feb 26", "Jan 26", "Dec 25", "Nov 25", "Oct 25", "Sep 25", "Aug 25"], "kw": [{"kw": "indian lays", "init": 49, "h": [1, 1, 1, 3, 4, 4, 3, 3, 6, 50, null, null]}, {"kw": "Desi Gur", "init": 9, "h": [2, 5, 5, 4, 4, 5, 4, 4, 3, 4, 6, 5]}, {"kw": "kurkure masala munch", "init": 28, "h": [2, 8, 13, 14, 12, 17, 13, 14, 23, 26, 24, 26]}, {"kw": "Pillsbury Chakki Atta", "init": 27, "h": [2, 9, 18, 14, 14, 12, 10, 31, 21, 20, 19, 18]}, {"kw": "chakki atta online", "init": null, "h": [3, 2, 3, 4, 15, 7, 13, 12, 12, 8, 8, 9]}, {"kw": "trs foods", "init": 3, "h": [4, 4, 3, 3, 2, 2, 2, 3, 2, 2, 2, 2]}, {"kw": "lays magic masala", "init": 5, "h": [4, 6, 7, 8, 21, 6, 6, 7, 6, 17, 15, 11]}, {"kw": "phool makhana online", "init": 10, "h": [5, 6, 6, 2, 2, 2, 2, 2, 7, 6, 7, 8]}, {"kw": "mdh deggi mirch", "init": null, "h": [5, 7, 7, 13, 15, 15, 16, 8, 12, 12, 11, 12]}, {"kw": "Buy Ghee", "init": 41, "h": [6, 7, 8, 9, 11, 17, 18, 21, 42, 45, null, null]}, {"kw": "Indian Grocery Store Near Me", "init": 41, "h": [6, 6, 5, 2, 4, 1, 3, 18, 40, 41, null, null]}, {"kw": "Pure Ghee", "init": 56, "h": [6, 8, 8, 9, 3, 6, 14, 13, null, null, null, null]}, {"kw": "basmati rice online", "init": 32, "h": [7, 13, 15, 16, 16, 18, 20, 30, 22, 22, 23, 23]}, {"kw": "limca bottle", "init": null, "h": [8, 9, 10, 8, 8, 11, 7, 9, null, null, null, null]}, {"kw": "Buy Besan", "init": 19, "h": [8, 10, 10, 10, 15, 13, 13, 14, 11, 11, 12, 16]}, {"kw": "buy kayam churna", "init": null, "h": [9, 2, 2, 5, 3, 6, 5, 6, null, null, null, null]}, {"kw": "natco olive oil", "init": null, "h": [9, 13, 10, 13, 19, 11, 13, 10, null, null, null, null]}, {"kw": "Moong Dal", "init": null, "h": [10, 10, 35, 23, 25, 8, 45, 58, null, null, null, null]}, {"kw": "jaggery powder online", "init": null, "h": [10, 14, 15, 18, 7, 10, 10, 9, 16, 17, 17, 16]}, {"kw": "buy pickles online", "init": 18, "h": [10, 32, 26, 24, 20, 24, 22, 23, 15, 14, 14, 15]}, {"kw": "fresh indian vegetables online", "init": null, "h": [15, 20, 20, 25, 19, 20, 20, 31, null, null, null, null]}, {"kw": "Buy Turmeric Powder", "init": null, "h": [17, 18, null, 33, null, null, 44, 44, null, null, null, null]}, {"kw": "Buy fruits online", "init": 28, "h": [17, 20, 18, 17, 21, 16, 23, 28, 23, 22, null, null]}, {"kw": "Takis Fuego", "init": 37, "h": [18, 18, 16, 28, 36, 28, 35, 34, 32, 28, 28, 28]}, {"kw": "indian snacks online", "init": 102, "h": [18, 19, 20, 22, 11, 16, 17, 24, 33, 33, 31, 30]}, {"kw": "Aashirvaad Atta", "init": 36, "h": [19, 22, 10, 10, 13, 14, 19, 8, 38, 40, null, null]}, {"kw": "indian grocery store", "init": 19, "h": [20, 20, 37, 24, 15, 22, 24, 31, 11, 12, 12, 11]}, {"kw": "indian sweets online", "init": 81, "h": [20, 20, 20, 20, 10, 11, 13, 20, 35, 38, 38, 39]}, {"kw": "haldiram products", "init": 20, "h": [21, 17, 18, 15, 15, 14, 14, 14, 24, 22, null, null]}, {"kw": "indian supermarket", "init": 94, "h": [21, 22, 25, 30, 21, 14, 13, 15, 11, 6, 7, 8]}, {"kw": "incense sticks online", "init": null, "h": [22, 18, 19, 26, 26, 22, 22, 18, 25, 25, 25, 24]}, {"kw": "Buy spices online", "init": 25, "h": [23, 26, 26, 23, 23, 32, 33, 33, 23, 22, null, null]}, {"kw": "Indian Food Shop", "init": 10, "h": [25, 28, 34, 30, 17, 17, 29, 32, 15, 15, null, null]}, {"kw": "order indian grocery online", "init": null, "h": [25, 30, 35, 25, 21, 17, 14, 12, 20, 19, 18, 18]}, {"kw": "buy mustard oil", "init": null, "h": [27, 16, 16, 13, 11, 7, 6, 18, 34, 30, 30, 28]}, {"kw": "buy cooking oils", "init": 24, "h": [35, 20, 20, 34, 31, 40, 45, 49, 20, 20, 22, 22]}, {"kw": "buy fresh herbs", "init": null, "h": [38, 47, 48, 35, 32, 41, 38, 37, null, null, null, null]}], "links": [{"d": "2026-07-10", "t": "Company Profile", "dom": "forum.prusa3d.com", "url": "https://forum.prusa3d.com/forum/profile/food-bazaar/", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.energycentral.com", "url": "https://www.energycentral.com/member/hV13lo5qKF", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.eminamclean.com", "url": "https://www.eminamclean.com/profile/uk-foodbazaar/profile", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.connect2ctc.org", "url": "https://www.connect2ctc.org/profile/foodbazaar/profile", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.arceosevents.com", "url": "https://www.arceosevents.com/profile/foodbazaar1/profile", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.atomicspeakers.com", "url": "https://www.atomicspeakers.com/profile/foodbazaar/profile", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.khadas.com", "url": "https://www.khadas.com/profile/foodbazaar/profile", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.cambodgemag.com", "url": "https://www.cambodgemag.com/profile/foodbazaar/profile", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.stenton.org", "url": "https://www.stenton.org/profile/foodbazaar/profile", "s": "Active"}, {"d": "2026-07-10", "t": "Company Profile", "dom": "www.launchgood.com", "url": "https://www.launchgood.com/user/newprofile#!/user-profile/profile/food.bazaar", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "www.tumblr.com", "url": "https://www.tumblr.com/foodbazaar13/821730715429388288/premium-chocolate-delights-delivered-across-the-uk", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "lebanonhub.app", "url": "https://lebanonhub.app/blogs/1021791/Craving-a-Cheesy-Crunch-Discover-Cheetos-in-the-UK", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "my.nio9.com", "url": "https://my.nio9.com/post/3396_cook-authentic-meals-with-premium-sella-basmati-rice-looking-to-buy-sella-basmat.html", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "foodbazaaruk.stck.me", "url": "https://foodbazaaruk.stck.me/post/2033200/Stay-Energised-Every-Day-Buy-Thailand-Red-Bull-in-the-UK", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "foodbazaar1.blogspot.com", "url": "https://foodbazaar1.blogspot.com/2026/07/keep-your-home-fresh-and-clean-buy.html", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "writexo.com", "url": "https://writexo.com/share/219684ea8ed2", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "medium.com", "url": "https://medium.com/@uk.foodbazaar/enjoy-bold-flavours-and-crunchy-bites-with-kurkure-653fefa71ebe", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "graph.org", "url": "https://graph.org/Enjoy-Fresh-Bitter-Gourd-for-Healthy-and-Authentic-Cooking-07-10", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "app.notion.com", "url": "https://app.notion.com/p/Craving-a-Cheesy-Crunch-Discover-Cheetos-in-the-UK-399bcf68a336802aad37ca53f52118b2?source=copy_link", "s": "Active"}, {"d": "2026-07-10", "t": "Link Syndication", "dom": "anotepad.com", "url": "https://anotepad.com/notes/d4bc992h", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "www.imagebam.com", "url": "https://www.imagebam.com/view/ME1E9W24", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "uk.pinterest.com", "url": "https://uk.pinterest.com/pin/869617009323682855", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "mediadisk.cz", "url": "https://mediadisk.cz/image/indian-grocery-store-guide.L8yUc", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "interestpin.com", "url": "https://interestpin.com/pin/807517/", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "marketplace.deals", "url": "https://marketplace.deals/pin/best-indian-grocery-store-in-the-uk/", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "manufacturers.network", "url": "https://manufacturers.network/pin/best-indian-grocery-store-in-the-uk/", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "www.behance.net", "url": "https://www.behance.net/gallery/252484455/Best-Indian-Grocery-Store-in-the-UK", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "www.imagevenue.com", "url": "https://www.imagevenue.com/ME1DATIT", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "ibb.co", "url": "https://ibb.co/ksMjwCbT", "s": "Active"}, {"d": "2026-07-10", "t": "Infographic Submission", "dom": "gifyu.com", "url": "https://gifyu.com/image/bdRZp", "s": "Active"}, {"d": "2026-07-10", "t": "Web 2.O", "dom": "food-bazaar-2.jimdosite.com", "url": "https://food-bazaar-2.jimdosite.com/", "s": "Active"}, {"d": "2026-07-10", "t": "Guest post", "dom": "guestcountry.com", "url": "https://guestcountry.com/@foodbazaar/top-10-must-have-ingredients-to-buy-at-an-indian-supermarket", "s": "Active"}, {"d": "2026-07-10", "t": "Guest post promotion", "dom": "posteezy.com", "url": "https://posteezy.com/top-10-must-have-ingredients-buy-indian-supermarket", "s": "Active"}, {"d": "2026-07-10", "t": "Guest post promotion", "dom": "ubookmarking.com", "url": "https://ubookmarking.com/story/top-10-must-have-ingredients-to-buy-at-an-indian-supermarket", "s": "Active"}, {"d": "2026-07-10", "t": "Guest post promotion", "dom": "oodare.com", "url": "https://oodare.com/post/766134_discover-the-essential-ingredients-that-bring-authentic-indian-flavors-to-your-k.html", "s": "Active"}, {"d": "2026-07-10", "t": "Guest post promotion", "dom": "newsvuse.com", "url": "https://newsvuse.com/post/51655_top-10-must-have-ingredients-to-buy-at-a-indian-supermarket-planning-a-trip-to-a.html", "s": "Active"}, {"d": "2026-07-10", "t": "Guest post promotion", "dom": "www.promorapid.com", "url": "https://www.promorapid.com/post/783897_want-to-cook-authentic-indian-dishes-at-home-start-with-the-right-ingredients-ex.html", "s": "Active"}, {"d": "2026-07-10", "t": "Blog Submission", "dom": "foodbazaar7.wordpress.com", "url": "https://foodbazaar7.wordpress.com/2026/07/03/tips-for-choosing-the-freshest-vegetables-when-shopping-online/", "s": "Active"}, {"d": "2026-07-10", "t": "Blog Promotion", "dom": "posteezy.com", "url": "https://posteezy.com/tips-choosing-freshest-vegetables-when-shopping-online", "s": "Active"}, {"d": "2026-07-10", "t": "Blog Promotion", "dom": "naijamatta.com", "url": "https://naijamatta.com/post/12661_tips-for-choosing-the-freshest-vegetables-when-shopping-online-ordering-vegetabl.html", "s": "Active"}, {"d": "2026-07-10", "t": "Blog Promotion", "dom": "ekcochat.com", "url": "https://ekcochat.com/post/1108251_tips-for-choosing-the-freshest-vegetables-when-shopping-online-ordering-vegetabl.html", "s": "Active"}, {"d": "2026-07-10", "t": "Blog Promotion", "dom": "www.playbook.com", "url": "https://www.playbook.com/s/foodbazaar/P9ubyUXf3jKs3ncsFn3xYWE6", "s": "Active"}, {"d": "2026-07-10", "t": "Blog Promotion", "dom": "culturesbook.com", "url": "https://culturesbook.com/post/344111_tips-for-choosing-the-freshest-vegetables-when-shopping-online-ordering-vegetabl.html", "s": "Active"}, {"d": "2026-07-10", "t": "Blog Promotion", "dom": "www.tourbr.com", "url": "https://www.tourbr.com/backlink/tips-for-choosing-the-freshest-vegetables-when-shopping-online/", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pFCGai", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pFF0SR", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pFoArV", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pFo0In", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pFPvsi", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pFPvCw", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pFPvq3", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pF4Tys", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pF4pkY", "s": "Active"}, {"d": "2026-07-10", "t": "Qoura Q&A", "dom": "qr.ae", "url": "https://qr.ae/pF4sYf", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "www.expatriates.com", "url": "https://www.expatriates.com/cls/63689556.html?preview", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "animead.com", "url": "https://animead.com/services/other-services/classifieds_for_free/grocery-shopping-made-simple_i109910/classifieds-for-free/london", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "pclassified.com", "url": "https://pClassified.com/587/posts/3/27/1903317.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "www.classifiedads.com", "url": "https://www.classifiedads.com/home_services_stores/12fwnmygg3dfc", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "postezads.com", "url": "https://PostEzAds.com/587/posts/3/27/2013370.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "classified4free.net", "url": "https://Classified4Free.net/587/posts/3/27/1941096.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "nextfreeads.com", "url": "https://NextFreeAds.com/587/posts/3/27/2319885.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "postezad.com", "url": "https://PostEzAd.com/587/posts/3/27/1974891.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "instantadz.com", "url": "https://InstantAdz.com/587/posts/3/27/2065662.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "classifiedonlineads.net", "url": "https://ClassifiedOnlineAds.net/587/posts/3/27/2268902.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "classifieds4free.biz", "url": "https://Classifieds4Free.biz/587/posts/3/27/2216550.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "freeadsonline.biz", "url": "https://FreeAdsOnline.biz/587/posts/3/27/2312756.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "postezad.com", "url": "https://PostEzAd.com/587/posts/3/27/1974891.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "foldads.com", "url": "https://FoldAds.com/587/posts/3/27/2239961.html", "s": "Active"}, {"d": "2026-07-10", "t": "Classified Submissions", "dom": "getadsonline.com", "url": "https://GetAdsOnline.com/587/posts/3/27/2254275.html", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "500px.com", "url": "https://500px.com/photo/1124673323/fresh-indian-vegetables-and-fruits-in-the-uk-by-food-bazaar", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "www.tumblr.com", "url": "https://www.tumblr.com/foodbazaar13/821544537274122240/fresh-indian-vegetables-fruits-in-the-uk", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "www.imagevenue.com", "url": "https://www.imagevenue.com/ME1DBPES", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "www.mediafire.com", "url": "https://www.mediafire.com/view/k8f9k5ploaoylxc/Fresh_Indian_Vegetables_%2526_Fruits_in_the_UK.jpg/file", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "imagevisit.com", "url": "https://imagevisit.com/image/myyjQV", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "uk.pinterest.com", "url": "https://uk.pinterest.com/pin/869617009323833089", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "www.pearltrees.com", "url": "https://www.pearltrees.com/foodbazaar1/item806645808", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "www.diigo.com", "url": "https://www.diigo.com/item/image/bikjg/emty", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "www.clickasnap.com", "url": "https://www.clickasnap.com/image/12324353", "s": "Active"}, {"d": "2026-07-10", "t": "Image Submission", "dom": "imgbox.com", "url": "https://imgbox.com/N0uKXfGj", "s": "Active"}, {"d": "2026-07-10", "t": "Article submission", "dom": "medium.com", "url": "https://medium.com/@uk.foodbazaar/how-to-buy-authentic-indian-spices-online-899c7f6efd87", "s": "Active"}, {"d": "2026-07-10", "t": "Article Promotion", "dom": "zomi.net", "url": "https://zomi.net/post/314079_how-to-buy-authentic-indian-spices-online-spices-are-one-of-those-things-you-ass.html", "s": "Active"}, {"d": "2026-07-10", "t": "Article Promotion", "dom": "blablasell.com", "url": "https://blablasell.com/post/80267_how-to-buy-authentic-indian-spices-online-spices-are-one-of-those-things-you-ass.html", "s": "Active"}, {"d": "2026-07-10", "t": "Article Promotion", "dom": "www.promorapid.com", "url": "https://www.promorapid.com/post/784630_how-to-buy-authentic-indian-spices-online-spices-are-one-of-those-things-you-ass.html", "s": "Active"}, {"d": "2026-07-10", "t": "Article Promotion", "dom": "diigo.com", "url": "https://diigo.com/012z67r", "s": "Active"}, {"d": "2026-07-10", "t": "Article Promotion", "dom": "followingbook.com", "url": "https://followingbook.com/post/768858_how-to-buy-authentic-indian-spices-online-spices-are-one-of-those-things-you-ass.html", "s": "Active"}, {"d": "2026-07-10", "t": "Social Sharing", "dom": "gettr.com", "url": "https://gettr.com/post/p41pv7yf7c5", "s": "Active"}, {"d": "2026-07-10", "t": "Social Sharing", "dom": "www.pearltrees.com", "url": "https://www.pearltrees.com/foodbazaar1/item807217698", "s": "Active"}, {"d": "2026-07-10", "t": "Social Sharing", "dom": "freebookmarkingsite.com", "url": "https://www.freebookmarkingsite.com/story/authentic-indian-spices-for-richer-flavors", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "www.mymeetbook.com", "url": "https://www.mymeetbook.com/post/1442305_where-to-buy-indian-vegetables-online-in-uk-supermarket-looking-for-fresh-indian.html", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "oodare.com", "url": "https://oodare.com/post/768585_where-to-buy-indian-vegetables-online-in-uk-supermarket-looking-for-fresh-indian.html", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "followingbook.com", "url": "https://followingbook.com/post/768209_where-to-buy-indian-vegetables-online-in-uk-supermarket-looking-for-fresh-indian.html", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "www.playbook.com", "url": "https://www.playbook.com/s/foodbazaar/o8aeewgJsPACH8FgqG61uBuw", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "zomi.net", "url": "https://zomi.net/post/313682_where-to-buy-indian-vegetables-online-in-uk-supermarket-looking-for-fresh-indian.html", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "www.tumblr.com", "url": "https://www.tumblr.com/foodbazaar13/821641049762037760/where-to-buy-indian-vegetables-online-in-uk", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "newsvuse.com", "url": "https://newsvuse.com/post/52343_where-to-buy-indian-vegetables-online-in-uk-supermarket-looking-for-fresh-indian.html", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "www.tourbr.com", "url": "https://www.tourbr.com/backlink/where-to-buy-indian-vegetables-online-in-uk-supermarket/", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "gettr.com", "url": "https://gettr.com/post/p41os072e53", "s": "Active"}, {"d": "2026-07-10", "t": "Website blog promotion", "dom": "workflowy.com", "url": "https://workflowy.com/s/where-to-buy-indian/DxoyDWbvOMaDij1X", "s": "Active"}]};
+const MONTHS = DATA.months;              // index 0 = Jul 26 (newest)
+const KW = DATA.kw;
+const LINKS = DATA.links;
+let mi = 0;                              // selected month index
+
+const band = r => r==null?3 : r<=10?0 : r<=20?1 : r<=50?2 : 3;
+const bandCol = ['#166F52','#E8A317','#C08A5E','#C9CEC6'];
+const el = s => document.querySelector(s);
+
+/* ---------- tenancy: brand + role resolution ---------- */
+const EZ_LOGO='data:image/png;base64,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';
+const NORTHLINE=`<svg viewBox="0 0 210 44" style="height:100%;width:auto;display:block">
+  <path d="M6 34V10l16 14V10" fill="none" stroke="#3FB6A8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="34" y="27" font-family="Bricolage Grotesque,Inter,sans-serif" font-size="19" font-weight="800" letter-spacing="-.6" fill="#fff">Northline</text>
+  <text x="34" y="39" font-family="IBM Plex Mono,monospace" font-size="8.5" letter-spacing=".22em" fill="#8C94A2">DIGITAL MARKETING</text></svg>`;
+
+const CLIENT={name:'Food Bazaar', domain:'foodbazaar.co.uk'};
+
+const BRANDS={
+  ez:{name:'EZ Rankings', href:'https://www.ezrankings.com', client:'#7B1C29', amber:'#E8A317',
+      mail:'mukul@ezrankings.com', host:'reports.ezrankings.com',
+      logo:`<img class="ezlogo" src="${EZ_LOGO}" alt="EZ Rankings">`},
+  northline:{name:'Northline Digital', href:'#', client:'#2E6F68', amber:'#3FB6A8',
+      mail:'hello@northlinedigital.co.uk', host:'reports.northlinedigital.co.uk',
+      logo:`<span class="ezlogo" style="display:block">${NORTHLINE}</span>`}
+};
+
+const VIEWS={
+  ez_staff:{b:'ez',r:'staff',lab:'EZ Rankings team',
+    note:'Full access — every client, every edit, fulfilment queue and cost.'},
+  ez_client:{b:'ez',r:'client',lab:'EZ direct retail client',
+    note:'Published report only. No edit controls, no internal data.'},
+  agency_admin:{b:'northline',r:'staff',lab:'Reseller agency admin',
+    note:'Northline branding throughout. Can publish; never sees EZ Rankings or cost.'},
+  agency_client:{b:'northline',r:'client',lab:"Reseller agency's client",
+    note:'Agency branding only. No trace of EZ Rankings anywhere on the page.'}
+};
+
+const vs=document.querySelector('#viewSel');
+Object.entries(VIEWS).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.lab;vs.appendChild(o);});
+function applyView(key){
+  const v=VIEWS[key], b=BRANDS[v.b];
+  document.documentElement.style.setProperty('--client',b.client);
+  document.documentElement.style.setProperty('--brand',b.client);
+  document.documentElement.style.setProperty('--amber',b.amber);
+  document.querySelector('#agencyLink').innerHTML=b.logo;
+  document.querySelector('#agencyLink').href=b.href;
+  document.querySelector('#fLogo').innerHTML=b.logo.replace('class="ezlogo"','class="ezlogo" style="height:30px"');
+  document.querySelector('#ovEyebrow').textContent=`Monthly SEO report · prepared by ${b.name}`;
+  document.querySelector('#clientName').textContent=CLIENT.name;
+  document.querySelector('#clientDom').textContent=CLIENT.domain;
+  document.querySelector('#aiNamedLine').textContent=`How often ${CLIENT.name} is named in the answer.`;
+  document.querySelector('#fLine').textContent=`SEO report prepared for ${CLIENT.name} · July 2026`;
+  document.querySelector('#fMail').textContent=`Questions? ${b.mail}`;
+  document.querySelector('#viewNote').textContent=v.note;
+  document.body.classList.toggle('role-client',v.r==='client');
+  if(v.r==='client'){ document.body.classList.remove('agency-on');
+    const ab=document.querySelector('#agencyBtn'); ab.classList.remove('on'); ab.textContent='Agency view';
+    if(typeof resetNegativeViews==='function') resetNegativeViews(); }
+  document.title=`${CLIENT.name} — SEO Dashboard | ${b.name}`;
+  if(document.querySelector('#ovl').classList.contains('on')) renderArch();
+  renderAiChart();
+}
+vs.onchange=e=>applyView(e.target.value);
+
+/* ---------- month selector ---------- */
+const ms = el('#monthSel');
+MONTHS.forEach((m,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=m.replace(' ',' 20'); ms.appendChild(o); });
+ms.onchange = e => { mi = +e.target.value; renderAll(); };
+
+/* ---------- helpers ---------- */
+function counts(i){
+  const c=[0,0,0,0];
+  KW.forEach(k=>c[band(k.h[i])]++);
+  return c;
+}
+function improved(i){
+  let n=0;
+  KW.forEach(k=>{ const a=k.h[i], b=k.h[i+1]; if(a!=null && (b==null || a<b)) n++; });
+  return n;
+}
+function rankCell(r){
+  if(r==null) return '<span class="rank out">50+</span>';
+  return `<span class="rank ${r<=10?'p1':r<=20?'p2':''}">${r}</span>`;
+}
+function delta(a,b){
+  if(a==null&&b==null) return '<span class="d flat">—</span>';
+  if(b==null) return '<span class="d up">▲ new</span>';
+  if(a==null) return '<span class="d dn">▼ out</span>';
+  const d=b-a;
+  if(d===0) return '<span class="d flat">0</span>';
+  return `<span class="d ${d>0?'up':'dn'}">${d>0?'▲':'▼'} ${Math.abs(d)}</span>`;
+}
+
+/* ---------- KPI cards ---------- */
+function renderKpis(){
+  const c=counts(mi), p=counts(Math.min(mi+1,MONTHS.length-1));
+  const imp=improved(mi);
+  const dd=(a,b)=>{const d=a-b;return d===0?'<span class="d flat">no change</span>':`<span class="d ${d>0?'up':'dn'}">${d>0?'▲':'▼'} ${Math.abs(d)}</span>`;};
+  const cards=[
+    ['Keywords tracked',KW.length,'in the agreed package'],
+    ['Improved this month',imp,`${Math.round(imp/KW.length*100)}% of the set moved up`],
+    ['Organic clicks','4,703','<span class="d up">▲ 1,037%</span> vs June'],
+    ['Organic sessions','5,109','20.6% of site traffic'],
+    ['Organic revenue','£7,456','<span class="d up">▲ 41%</span> vs June'],
+    ['Organic orders','218','<span class="d up">▲ 34</span> vs June'],
+    ['Links built',LINKS.length,'all live and verified'],
+    ['AI mentions','120','<span class="d up">▲ 46</span> across 5 engines'],
+  ];
+  el('#kpis').innerHTML = cards.map(([l,v,s])=>
+    `<div class="kpi"><div class="lab">${l}</div><div class="val mono-ish">${v}</div><div class="sub">${s}</div></div>`).join('');
+  el('#ovTitle').textContent = MONTHS[mi].replace(' ',' 20');
+  el('#narrative').innerHTML =
+    `<b>${imp} of ${KW.length} keywords moved up this month.</b> ${c[0]} now sit on page one and ${c[1]} on page two — up from ${p[0]} and ${p[1]} in ${MONTHS[Math.min(mi+1,MONTHS.length-1)].replace(' ',' 20')}. Organic clicks from Search Console reached 4,703, the strongest month on record, while impressions eased back as low-intent queries dropped away. ${LINKS.length} new links went live, and ${CLIENT.name} was named 120 times across ChatGPT, Gemini, AI Overviews and AI Mode.`;
+}
+
+/* ---------- positioning summary: last 3 months ---------- */
+function renderPos(){
+  const cols=[mi,mi+1,mi+2].filter(i=>i<MONTHS.length);
+  const data=cols.map(i=>counts(i));
+  const initC=[0,0,0,0];
+  KW.forEach(k=>initC[band(k.init)]++);
+  const labels=['Top 10','11 to 20','21 to 50','Not in top 50'];
+
+  let head=`<thead><tr><th style="width:150px">Position</th><th class="num" style="width:110px">Start</th>`;
+  cols.forEach((c,j)=>head+=`<th class="num" style="width:110px${j===0?';color:var(--ink)':''}">${MONTHS[c].replace(' ',' 20')}${j===0?' · now':''}</th>`);
+  head+=`<th class="num">Movement vs ${cols[1]!==undefined?MONTHS[cols[1]].replace(' ',' 20'):'start'}</th></tr></thead>`;
+
+  let body='<tbody>';
+  labels.forEach((lab,b)=>{
+    const now=data[0][b], prev=data[1]?data[1][b]:initC[b];
+    const diff=now-prev;
+    // only the top-10 band reads as straightforwardly good or bad; middle bands are a staging post
+    let mv;
+    if(diff===0) mv='<span class="d flat">no change</span>';
+    else if(b===0) mv=`<span class="d ${diff>0?'up':'dn'}">${diff>0?'▲':'▼'} ${Math.abs(diff)}</span>`;
+    else if(b===3) mv=`<span class="d ${diff<0?'up':'dn'}">${diff>0?'▲':'▼'} ${Math.abs(diff)}</span>`;
+    else mv=`<span class="d flat">${diff>0?'+':'−'}${Math.abs(diff)}</span>`;
+    body+=`<tr><td><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:${bandCol[b]};margin-right:8px;vertical-align:0"></span><b style="font-weight:500">${lab}</b></td>
+      <td class="num" style="color:var(--ink-3)">${initC[b]}</td>`;
+    data.forEach((d,j)=>body+=`<td class="num" style="${j===0?'font-weight:600;background:#F7F8F5':''}">${d[b]}</td>`);
+    body+=`<td class="num">${mv}</td></tr>`;
+  });
+  body+=`<tr style="border-top:1px solid var(--line)"><td style="color:var(--ink-3)">Total tracked</td><td class="num" style="color:var(--ink-3)">${KW.length}</td>`;
+  data.forEach((d,j)=>body+=`<td class="num" style="color:var(--ink-3);${j===0?'background:#F7F8F5':''}">${KW.length}</td>`);
+  body+=`<td></td></tr></tbody>`;
+  el('#posTable').innerHTML=head+body;
+}
+
+/* ---------- band flow (signature) ---------- */
+function renderFlow(){
+  const W=1000,H=180,n=MONTHS.length,pad=26;
+  const xs=i=>pad+(W-pad*2)*(1-i/(n-1));
+  const series=MONTHS.map((_,i)=>counts(i));
+  let paths='';
+  let base=new Array(n).fill(0);
+  for(let b=0;b<4;b++){
+    let top=series.map((c,i)=>base[i]+c[b]);
+    let d='M'+xs(n-1)+','+(H-base[n-1]/KW.length*H);
+    for(let i=n-1;i>=0;i--) d+=' L'+xs(i)+','+(H-top[i]/KW.length*H);
+    for(let i=0;i<n;i++) d+=' L'+xs(i)+','+(H-base[i]/KW.length*H);
+    d+=' Z';
+    paths+=`<path d="${d}" fill="${bandCol[b]}" opacity="${b===3?.5:.92}"/>`;
+    base=top;
+  }
+  let labs='';
+  MONTHS.forEach((m,i)=>{ if(i%2===0||i===0) labs+=`<text x="${xs(i)}" y="${H+16}" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#7C8494">${m}</text>`; });
+  const hi=`<line x1="${xs(mi)}" y1="0" x2="${xs(mi)}" y2="${H}" stroke="#1A1D23" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+  el('#flow').innerHTML=`<svg viewBox="0 0 ${W} ${H+24}" style="width:100%;height:auto;display:block">${paths}${hi}${labs}</svg>`;
+}
+
+/* ---------- rank track sparkline ---------- */
+function track(h){
+  const W=120,H=26,n=h.length;
+  const v=r=>r==null?H-2:Math.max(2,Math.min(H-2,2+(Math.min(r,50)/50)*(H-4)));
+  let d='',dots='';
+  for(let i=n-1;i>=0;i--){
+    const x=(n-1-i)/(n-1)*W, y=v(h[i]);
+    d+=(d?' L':'M')+x.toFixed(1)+','+y.toFixed(1);
+  }
+  const last=h[0];
+  dots=`<circle cx="${W}" cy="${v(last)}" r="3" fill="${bandCol[band(last)]}"/>`;
+  return `<svg viewBox="0 0 ${W+4} ${H}" style="width:120px;height:26px"><path d="${d}" fill="none" stroke="#454B57" stroke-width="1.4" stroke-linejoin="round"/>${dots}</svg>`;
+}
+
+/* ---------- keyword table ---------- */
+let filter='all', q='';
+function renderKw(){
+  const prev=Math.min(mi+1,MONTHS.length-1);
+  let rows=KW.map((k,idx)=>({...k,idx,now:k.h[mi],prev:k.h[prev]}));
+  if(q) rows=rows.filter(r=>r.kw.toLowerCase().includes(q));
+  if(filter==='up') rows=rows.filter(r=>r.now!=null&&(r.prev==null||r.now<r.prev));
+  if(filter==='down') rows=rows.filter(r=>r.now==null||(r.prev!=null&&r.now>r.prev));
+  if(filter==='p1') rows=rows.filter(r=>r.now!=null&&r.now<=10);
+  if(filter==='p2') rows=rows.filter(r=>r.now!=null&&r.now>10&&r.now<=20);
+  rows.sort((a,b)=>(a.now??999)-(b.now??999));
+  el('#kwBody').innerHTML = rows.map((r,i)=>{
+    const best=Math.min(...r.h.filter(x=>x!=null),999);
+    return `<tr data-k="${r.idx}" style="cursor:pointer">
+      <td class="mono" style="color:var(--ink-3);font-size:12px">${i+1}</td>
+      <td class="kwname">${r.kw}</td>
+      <td class="num hide-s" style="color:var(--ink-3)">${r.init??'—'}</td>
+      <td class="num hide-s">${r.prev??'—'}</td>
+      <td class="num">${rankCell(r.now)}</td>
+      <td class="num">${delta(r.now,r.prev)}</td>
+      <td class="hide-s">${track(r.h)}</td>
+      <td class="num hide-s" style="color:var(--ink-3)">${best===999?'—':best}</td></tr>`;
+  }).join('') || `<tr><td colspan="8" style="padding:26px;text-align:center;color:var(--ink-3)">No keywords match that filter. Clear it to see all ${KW.length}.</td></tr>`;
+}
+el('#kwBody').addEventListener('click',e=>{
+  const tr=e.target.closest('tr[data-k]'); if(!tr) return;
+  const nx=tr.nextElementSibling;
+  if(nx&&nx.classList.contains('detail')){nx.remove();return;}
+  document.querySelectorAll('.detail').forEach(d=>d.remove());
+  const k=KW[+tr.dataset.k];
+  const cells=k.h.map((v,i)=>`<div><div class="m">${MONTHS[i]}</div><div class="v" style="color:${v==null?'#7C8494':bandCol[band(v)]}">${v??'—'}</div></div>`).reverse().join('');
+  tr.insertAdjacentHTML('afterend',`<tr class="detail"><td colspan="8"><div class="hist">${cells}<div style="min-width:70px"><div class="m">Start</div><div class="v" style="color:#7C8494">${k.init??'—'}</div></div></div></td></tr>`);
+});
+document.querySelectorAll('.ctrl .chip').forEach(c=>c.onclick=()=>{
+  document.querySelectorAll('.ctrl .chip').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on'); filter=c.dataset.f; renderKw();
+});
+el('#kwSearch').oninput=e=>{q=e.target.value.toLowerCase();renderKw();};
+
+/* ---------- static panels ---------- */
+const LP=[['/',378,25534,'1.48%',15.93],['/pages/wholesale-indian-world-foods-bulk-grocery',82,2384,'3.44%',9.79],
+['/products/diblong-power-honey-sachet-15g-single',72,1629,'4.42%',4.65],['/products/parle-mango-bites-toffee',64,1817,'3.52%',5.31],
+['/collections/rajnigandha',54,1036,'5.21%',3.95],['/collections/vendors?q=diblong',51,1064,'4.79%',3.61],
+['/products/lu-gala-biscuits-114g',51,934,'5.46%',5.25],['/products/sting-drink-500ml',48,5015,'0.96%',5.41],
+['/collections/amul',45,1859,'2.42%',7.46]];
+
+/* SAMPLE — replace with the GSC "trending" comparison pull (current period vs previous) */
+const TRENDUP=[['/collections/rajnigandha','Rajnigandha — full range',54,'+38',237],
+['/products/diblong-power-honey-sachet-15g-single','Diblong Power Honey Sachet 15g',72,'+31',75],
+['/blogs/news/where-can-you-buy-takis-fuego','Where can you buy Takis Fuego in the UK?',29,'+24',480],
+['/pages/wholesale-indian-world-foods-bulk-grocery','Wholesale Indian & world foods',82,'+19',30],
+['/collections/kurkure','Kurkure — all flavours',26,'+15',136],
+['/blogs/news/pillsbury-chakki-atta-vs-aashirvaad','Pillsbury Chakki Atta vs Aashirvaad',18,'+12',200]];
+const TRENDDOWN=[['/products/sting-drink-500ml','Sting Drink 500ml',48,'−22',-31],
+['/collections/amul','Amul products',45,'−14',-24],
+['/products/lu-gala-biscuits-114g','LU Gala Biscuits 114g',51,'−9',-15]];
+
+let lpTab='top';
+function renderLp(){
+  const H=el('#lpHead'), B=el('#lpBody');
+  if(lpTab==='top'){
+    el('#lpNote').textContent='';
+    el('#lpCount').textContent='1–9 of 4,581';
+    H.innerHTML='<tr><th>Page</th><th class="num">Clicks</th><th class="num hide-s">Impressions</th><th class="num hide-s">CTR</th><th class="num">Avg pos</th></tr>';
+    B.innerHTML=LP.map(r=>`<tr><td style="font-family:var(--mono);font-size:12.5px">${r[0]}</td><td class="num">${r[1]}</td><td class="num hide-s">${r[2].toLocaleString()}</td><td class="num hide-s">${r[3]}</td><td class="num">${r[4]}</td></tr>`).join('');
+    return;
+  }
+  const up=lpTab==='up', rows=up?TRENDUP:TRENDDOWN;
+  el('#lpNote').textContent=up?'Biggest click gains this month against last month. These are the pages the work is landing on.'
+                              :'Pages losing clicks. Worth a look before next month\'s plan.';
+  el('#lpCount').textContent=rows.length+' pages';
+  H.innerHTML='<tr><th>Page</th><th class="num">Clicks</th><th class="num">Change</th><th class="num hide-s">%</th></tr>';
+  B.innerHTML=rows.map(r=>`<tr>
+    <td><div style="font-size:13.5px;font-weight:500">${r[1]}</div>
+        <div style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:1px">${r[0]}</div></td>
+    <td class="num">${r[2]}</td>
+    <td class="num"><span class="d ${up?'up':'dn'}">${up?'▲':'▼'} ${r[3].replace(/[+−]/,'')}</span></td>
+    <td class="num hide-s" style="color:var(--ink-3);font-size:12px">${r[4]>0?'+':''}${r[4]}%</td></tr>`).join('');
+}
+document.querySelectorAll('[data-lp]').forEach(c=>c.onclick=()=>{
+  document.querySelectorAll('[data-lp]').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on'); lpTab=c.dataset.lp; renderLp();
+});
+renderLp();
+
+/* ---------- AI platform traffic (GA4) — SAMPLE daily series ---------- */
+const AIDAY=[0,0,1,3,4,4,0,1,2,1,0,2,2,3,5,4,3,4,4,1,0,4,2,1,0,0,3,1,2];
+const AISRC=[['chatgpt.com',41,18,'43.9%',10],['copilot.com',3,2,'66.7%',0],['perplexity.ai',0,0,'—',0],['gemini.google.com',0,0,'—',0]];
+const AC=()=>getComputedStyle(document.documentElement).getPropertyValue('--client').trim()||'#7B1C29';
+function renderAiChart(){
+  const W=1000,H=150,pad=28,n=AIDAY.length;
+  const max=Math.max(...AIDAY,1);
+  const x=i=>pad+(W-pad*2)*(i/(n-1));
+  const y=v=>H-8-(v/max)*(H-30);
+  let line='',area='M'+pad+','+(H-8);
+  AIDAY.forEach((v,i)=>{ const px=x(i).toFixed(1), py=y(v).toFixed(1);
+    line+=(i?' L':'M')+px+','+py; area+=' L'+px+','+py; });
+  area+=' L'+(W-pad)+','+(H-8)+' Z';
+  let grid='';
+  [0,max/2,max].forEach(v=>{grid+=`<line x1="${pad}" y1="${y(v)}" x2="${W-pad}" y2="${y(v)}" stroke="#EDEFEA"/>
+    <text x="${W-pad+6}" y="${y(v)+3.5}" font-family="IBM Plex Mono" font-size="10" fill="#7C8494">${Math.round(v)}</text>`;});
+  let labs='';
+  ['25 Jun','01 Jul','07 Jul','13 Jul','19 Jul','23 Jul'].forEach((t,k)=>{
+    const i=[0,6,12,18,24,28][k];
+    labs+=`<text x="${x(i)}" y="${H+12}" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#7C8494">${t}</text>`;});
+  el('#aiChart').innerHTML=`<svg viewBox="0 0 ${W} ${H+20}" style="width:100%;height:auto;display:block">
+    ${grid}<path d="${area}" fill="${AC()}" opacity=".08"/>
+    <path d="${line}" fill="none" stroke="${AC()}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+    ${labs}</svg>`;
+}
+renderAiChart();
+el('#aiSess').textContent=AISRC.reduce((a,b)=>a+b[1],0);
+el('#aiSrc').innerHTML=AISRC.map(r=>`<tr${r[1]===0?' style="opacity:.5"':''}>
+  <td style="font-family:var(--mono);font-size:12.5px">${r[0]}</td>
+  <td class="num" style="font-weight:600">${r[1]}</td>
+  <td class="num hide-s">${r[2]}</td><td class="num hide-s">${r[3]}</td><td class="num">${r[4]}</td></tr>`).join('');
+
+function bars(target,rows,cls){
+  const max=Math.max(...rows.map(r=>r[1]));
+  el(target).innerHTML=rows.map(r=>`<div class="bar-row"><div class="lab">${r[0]}</div><div class="bar"><i class="${cls||''}" style="width:${r[1]/max*100}%"></i></div><div class="num" style="font-size:12px">${r[1].toLocaleString()}</div></div>`).join('');
+}
+bars('#channels',[['Paid Search',10205],['Cross-network',5413],['Organic Search',5109],['Direct',3227],['Organic Shopping',524],['Paid Shopping',480],['Unassigned',450]]);
+bars('#devices',[['Mobile',18853],['Desktop',5554],['Tablet',251]],'a');
+bars('#countries',[['United Kingdom',20847],['Slovenia',877],['India',422],['Singapore',295],['United States',278]],'g');
+bars('#engines',[['ChatGPT',25],['Gemini',20],['AI Overview',18],['AI Mode',18]]);
+
+const CITED=[['/','uk',6],['/collections/kurkure','uk',5],['/products/harrisons-tomato-ketchup-1l','uk',5],
+['/products/taaza-sweets-gulab-jamun-250g','uk',5],['/blogs/news/pillsbury-chakki-atta-vs-aashirvaad','in',4],
+['/blogs/news/where-can-you-buy-takis-fuego','us',4],['/collections/top-op','us',4]];
+el('#cited').innerHTML=`<table><thead><tr><th>Page</th><th>Market</th><th class="num">Prompts</th></tr></thead><tbody>`+
+CITED.map(r=>`<tr><td style="font-family:var(--mono);font-size:12px">${r[0]}</td><td class="mono" style="font-size:11px;color:var(--ink-3);text-transform:uppercase">${r[1]}</td><td class="num">${r[2]}</td></tr>`).join('')+`</tbody></table>`;
+
+/* ---------- links ---------- */
+let lq='';
+function renderLinks(){
+  const rows=LINKS.filter(l=>!lq||l.dom.toLowerCase().includes(lq)||l.t.toLowerCase().includes(lq));
+  el('#lkBody').innerHTML=rows.map((l,i)=>`<tr><td class="mono" style="color:var(--ink-3);font-size:12px">${i+1}</td>
+    <td><a href="${l.url}" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:12.5px;text-decoration:none;border-bottom:1px solid var(--line)">${l.dom}</a></td>
+    <td class="hide-s" style="font-size:12.5px;color:var(--ink-2)">${l.t}</td>
+    <td class="hide-s mono" style="font-size:11.5px;color:var(--ink-3)">${l.d}</td>
+    <td class="num"><span class="d up">${l.s}</span></td></tr>`).join('')
+    || `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--ink-3)">Nothing matches. Clear the filter to see all ${LINKS.length}.</td></tr>`;
+}
+el('#lkSearch').oninput=e=>{lq=e.target.value.toLowerCase();renderLinks();};
+const byType={}; LINKS.forEach(l=>byType[l.t]=(byType[l.t]||0)+1);
+bars('#lkTypesChart',Object.entries(byType).sort((a,b)=>b[1]-a[1]));
+el('#lkTotal').textContent=LINKS.length;
+el('#lkDom').textContent=new Set(LINKS.map(l=>l.dom)).size;
+el('#lkTypes').textContent=Object.keys(byType).length;
+
+/* ---------- conversions — SAMPLE until GA4 key events are cleaned up ---------- */
+const CONV={
+  ecom:{
+    kpis:[['Organic revenue','£7,456','<span class="d up">▲ 41%</span> vs June'],
+          ['Orders from organic','218','<span class="d up">▲ 34</span> vs June'],
+          ['Conversion rate','4.27%','of 5,109 organic sessions'],
+          ['Average order value','£34.20','<span class="d up">▲ £2.10</span> vs June']],
+    line:'<b>Organic search brought in £7,456 across 218 orders this month</b> — 41% more revenue than June, on 34 more orders. The gain came from higher-intent traffic rather than volume: sessions rose 9% while conversion rate rose from 3.4% to 4.27%.',
+    funnelTitle:'From visit to order',
+    funnelNote:'Organic sessions only. Percentages are drop-off from the previous step.',
+    steps:[['Organic sessions',5109],['Viewed a product',3182],['Added to cart',1247],['Started checkout',486],['Completed order',218]],
+    tableTitle:'Revenue by entry page',
+    cols:['Landing page','Orders','Revenue'],
+    rows:[['/collections/rajnigandha',41,'£1,504'],['/products/diblong-power-honey-sachet-15g-single',34,'£1,088'],
+          ['/',31,'£1,240'],['/collections/kurkure',27,'£823'],['/pages/wholesale-indian-world-foods-bulk-grocery',24,'£1,392'],
+          ['/collections/amul',22,'£690'],['/products/parle-mango-bites-toffee',19,'£479']]},
+  lead:{
+    kpis:[['Leads from organic','642','<span class="d up">▲ 18%</span> vs June'],
+          ['Qualified leads','187','29% of all leads'],
+          ['Conversion rate','12.6%','of 5,109 organic sessions'],
+          ['Cost per lead','£4.60','against monthly retainer']],
+    line:'<b>Organic search generated 642 enquiries this month, 187 of which were qualified.</b> Qualified volume is the number worth watching — total leads rose 18%, but the qualified share held steady, which says the new traffic is the right kind.',
+    funnelTitle:'From visit to enquiry',
+    funnelNote:'Organic sessions only. Percentages are drop-off from the previous step.',
+    steps:[['Organic sessions',5109],['Reached a service page',2874],['Opened the form',1103],['Submitted the form',642],['Qualified by sales',187]],
+    tableTitle:'Leads by form',
+    cols:['Form','Leads','Qualified'],
+    rows:[['Wholesale enquiry',214,78],['Contact us',186,41],['Bulk quote request',122,49],
+          ['Newsletter signup',88,12],['Callback request',32,7]]}
+};
+let cvMode='ecom';
+function renderConv(){
+  const c=CONV[cvMode];
+  el('#cvLine').innerHTML=c.line;
+  el('#cvKpis').innerHTML=c.kpis.map(([l,v,sub])=>
+    `<div class="kpi"><div class="lab">${l}</div><div class="val">${v}</div><div class="sub">${sub}</div></div>`).join('');
+  el('#cvFunnelTitle').textContent=c.funnelTitle;
+  el('#cvFunnelNote').textContent=c.funnelNote;
+  const top=c.steps[0][1];
+  el('#cvFunnel').innerHTML=c.steps.map((st,i)=>{
+    const pct=st[1]/top*100, prev=i?c.steps[i-1][1]:null;
+    const keep=prev?Math.round(st[1]/prev*100):null;
+    const last=i===c.steps.length-1;
+    return `<div style="margin-bottom:${last?0:10}px">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+        <span style="font-size:13px;color:var(--ink-2)">${st[0]}</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="mono" style="font-size:13px;font-weight:600">${st[1].toLocaleString()}</span>
+        ${keep!==null?`<span class="mono" style="font-size:11px;color:var(--ink-3);min-width:38px;text-align:right">${keep}%</span>`:'<span style="min-width:38px"></span>'}
+      </div>
+      <div style="height:${last?16:12}px;border-radius:4px;background:#EEF0EC;overflow:hidden">
+        <i style="display:block;height:100%;width:${pct}%;border-radius:4px;background:${last?'var(--up)':'var(--client)'};opacity:${last?1:0.25+0.75*(pct/100)}"></i>
+      </div></div>`;
+  }).join('');
+  el('#cvTableTitle').textContent=c.tableTitle;
+  el('#cvTable').innerHTML=`<table><thead><tr><th>${c.cols[0]}</th><th class="num">${c.cols[1]}</th><th class="num">${c.cols[2]}</th></tr></thead><tbody>`+
+    c.rows.map(r=>`<tr><td style="font-family:var(--mono);font-size:12px">${r[0]}</td><td class="num">${r[1]}</td><td class="num" style="font-weight:600">${r[2]}</td></tr>`).join('')+
+    `</tbody></table>`;
+}
+document.querySelectorAll('[data-cv]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-cv]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); cvMode=b.dataset.cv; renderConv();
+});
+renderConv();
+
+/* ---------- work ---------- */
+const ACTS=[['New content pages',10],['Blogs published',3],['Reddit community posts',3],['Quora answers',2],
+['Guest posts optimised',5],['Branded pages rebuilt',2],['Brand keyword pushes',2],['Backlinks',25]];
+el('#acts').innerHTML=ACTS.map(a=>`<div class="bar-row" style="grid-template-columns:1fr 40px"><div class="lab">✓ ${a[0]}</div><div class="num" style="font-size:13px;font-weight:600">${a[1]}</div></div>`).join('');
+const PLAN=['Push "chakki atta online" and "moong dal" from page 2 into the top 5','Two new recipe blogs targeting summer fruit demand',
+'Fix thin content on 6 collection pages flagged in the crawl','30 links, weighted to food and lifestyle domains','Build FAQ schema on the 12 pages AI engines already cite'];
+el('#plan').innerHTML=PLAN.map(p=>`<div style="display:flex;gap:9px;padding:6px 0;font-size:13.5px;color:var(--ink-2)"><span style="color:var(--amber);font-weight:700">→</span><span>${p}</span></div>`).join('');
+const SHOTS=['indian lays','buy pickles online','Buy Besan','basmati rice online','Desi Gur','kurkure masala munch','jaggery powder online','Pillsbury Chakki Atta','natco olive oil','limca bottle','Pure Ghee'];
+el('#shots').innerHTML=SHOTS.map(s=>`<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#F6F7F4">
+  <div style="height:74px;background:repeating-linear-gradient(0deg,#EDEFEA 0 6px,#F6F7F4 6px 13px)"></div>
+  <div style="padding:7px 9px;font-size:11.5px;color:var(--ink-2);border-top:1px solid var(--line)">${s}</div></div>`).join('');
+
+/* ---------- report archive + generate ---------- */
+const PULLS=[['Mangools','37 keyword positions'],['Search Console','clicks, pages, queries'],
+             ['Google Analytics 4','sessions, channels, key events'],['Semrush','AI mentions and citations'],
+             ['Freeze snapshot','numbers locked for this month']];
+let ARCH=MONTHS.map((m,i)=>({m,status:'published',pulled:'1 '+nextMonth(m),pub:'1 '+nextMonth(m)}));
+function nextMonth(lbl){
+  const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const [mn,yr]=lbl.split(' '); let i=names.indexOf(mn)+1, y=+yr;
+  if(i>11){i=0;y++;} return names[i]+' 20'+y;
+}
+function renderArch(){
+  el('#ovlSub').textContent=`${CLIENT.name} · ${ARCH.length} reports`;
+  el('#archBody').innerHTML=ARCH.map((r,i)=>`<tr>
+    <td style="font-weight:500">${r.m.replace(' ',' 20')}${i===0?' <span class="mono" style="font-size:10.5px;color:var(--ink-3)">latest</span>':''}</td>
+    <td><span class="st ${r.status==='published'?'pub':'draft'}">${r.status}</span></td>
+    <td class="hide-s mono" style="font-size:11.5px;color:var(--ink-3)">${r.pulled}</td>
+    <td class="hide-s mono" style="font-size:11.5px;color:var(--ink-3)">${r.pub||'—'}</td>
+    <td class="num"><a href="#" onclick="openMonth(${i});return false" style="font-size:12.5px">View</a>
+      <span style="color:var(--line);margin:0 6px">|</span><a href="#" onclick="return false" style="font-size:12.5px">PDF</a></td></tr>`).join('');
+}
+function openMonth(i){ mi=Math.min(i,MONTHS.length-1); ms.value=mi; renderAll(); closeOvl(); window.scrollTo({top:0,behavior:'smooth'}); }
+function openOvl(){ el('#ovl').classList.add('on'); renderArch(); }
+function closeOvl(){ el('#ovl').classList.remove('on'); }
+el('#reportsBtn').onclick=openOvl;
+el('#ovlClose').onclick=closeOvl;
+el('#ovl').onclick=e=>{ if(e.target.id==='ovl') closeOvl(); };
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeOvl(); });
+
+el('#genBtn').onclick=function(){
+  const btn=this; if(btn.disabled) return;
+  btn.disabled=true; btn.textContent='Generating…'; btn.style.opacity='.6';
+  const box=el('#genSteps'); box.innerHTML='';
+  PULLS.forEach(([n,d])=>box.insertAdjacentHTML('beforeend',
+    `<div class="step"><span class="tick">○</span><b>${n}</b><span style="color:var(--ink-3)">${d}</span></div>`));
+  const rows=[...box.querySelectorAll('.step')];
+  rows.forEach((r,i)=>setTimeout(()=>{
+    r.classList.add('done'); r.querySelector('.tick').textContent='✓';
+    if(i===rows.length-1){
+      ARCH.unshift({m:'Aug 26',status:'draft',pulled:'1 Sep 2026',pub:null});
+      renderArch();
+      btn.textContent='Generated'; btn.style.opacity='1'; btn.disabled=false;
+      el('#genNote').innerHTML='<b>August is a draft.</b> Review the narrative, then publish to release it to the client.';
+      setTimeout(()=>{box.innerHTML='';btn.textContent='Generate report';},2600);
+    }
+  }, 550*(i+1)));
+};
+
+/* ---------- nav + agency ---------- */
+const links_=[...document.querySelectorAll('.nav a')];
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){
+  links_.forEach(a=>a.classList.toggle('act',a.getAttribute('href')==='#'+e.target.id));}})},{rootMargin:'-120px 0px -70% 0px'});
+document.querySelectorAll('section').forEach(s=>obs.observe(s));
+el('#agencyBtn').onclick=e=>{
+  const on=document.body.classList.toggle('agency-on');
+  e.target.classList.toggle('on');
+  e.target.textContent=on?'Client view':'Agency view';
+  if(!on) resetNegativeViews();
+};
+function resetNegativeViews(){
+  if(filter==='down'){ filter='all';
+    document.querySelectorAll('.ctrl [data-f]').forEach(x=>x.classList.toggle('on',x.dataset.f==='all'));
+    renderKw(); }
+  if(lpTab==='down'){ lpTab='top';
+    document.querySelectorAll('[data-lp]').forEach(x=>x.classList.toggle('on',x.dataset.lp==='top'));
+    renderLp(); }
+}
+
+function renderAll(){renderKpis();renderPos();renderFlow();renderKw();}
+renderAll();renderLinks();applyView('ez_staff');
+</script>
