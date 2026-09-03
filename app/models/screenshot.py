@@ -3,7 +3,7 @@ from typing import Optional
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Text, text, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, Text, LargeBinary, text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,6 +30,10 @@ class Screenshot(Base):
     )
     file_url: Mapped[str] = mapped_column(Text, nullable=False)
     caption: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Store binary data directly in the database
+    file_data: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    mime_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     client = relationship("Client", back_populates="screenshots")

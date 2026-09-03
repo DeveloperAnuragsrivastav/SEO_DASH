@@ -3,8 +3,10 @@ import uuid
 import datetime
 import os
 import shutil
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -17,13 +19,15 @@ from app.models.enums import UserRole
 
 router = APIRouter(
     prefix="/clients/{client_id}/screenshots",
-    tags=["screenshots"],
+    tags=["screenshots"]
+)
+
+# Still using standard auth for endpoints EXCEPT the raw image serving
+secured_router = APIRouter(
     dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 
-SCREENSHOTS_DIR = os.path.join(os.getcwd(), "app", "static", "screenshots")
-
-@router.get("")
+@secured_router.get("")
 def list_screenshots(client_id: uuid.UUID, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
     """List all screenshots for a client."""
     from sqlalchemy import func
@@ -51,7 +55,7 @@ def list_screenshots(client_id: uuid.UUID, page: int = 1, page_size: int = 25, d
     ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@secured_router.post("", status_code=status.HTTP_201_CREATED)
 def upload_screenshot(
     client_id: uuid.UUID,
     month: str = Form(...),
@@ -59,7 +63,7 @@ def upload_screenshot(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    """Upload a new screenshot."""
+    """Upload a new screenshot (saved directly to DB)."""
     client = db.execute(select(Client).where(Client.id == client_id)).scalar_one_or_none()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -69,20 +73,17 @@ def upload_screenshot(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
 
-    file_extension = file.filename.split('.')[-1]
-    unique_filename = f"{uuid.uuid4()}.{file_extension}"
-    file_path = os.path.join(SCREENSHOTS_DIR, unique_filename)
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    file_url = f"/static/screenshots/{unique_filename}"
+    file_bytes = file.file.read()
+    screenshot_id = uuid.uuid4()
     
     screenshot = Screenshot(
+        id=screenshot_id,
         client_id=client_id,
         month=month_date,
-        file_url=file_url,
-        caption=caption.strip() if caption else None
+        file_url=f"/clients/{client_id}/screenshots/{screenshot_id}/image",
+        caption=caption.strip() if caption else None,
+        file_data=file_bytes,
+        mime_type=file.content_type or "image/png"
     )
     db.add(screenshot)
     db.commit()
@@ -97,9 +98,8 @@ def upload_screenshot(
         "caption": screenshot.caption
     }
 
-from typing import List
 
-@router.post("/bulk", status_code=status.HTTP_201_CREATED)
+@secured_router.post("/bulk", status_code=status.HTTP_201_CREATED)
 def upload_screenshots_bulk(
     client_id: uuid.UUID,
     month: str = Form(...),
@@ -107,7 +107,7 @@ def upload_screenshots_bulk(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
-    """Upload multiple screenshots."""
+    """Upload multiple screenshots (saved directly to DB)."""
     client = db.execute(select(Client).where(Client.id == client_id)).scalar_one_or_none()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -120,21 +120,18 @@ def upload_screenshots_bulk(
     uploaded = []
     
     for i, file in enumerate(files):
-        file_extension = file.filename.split('.')[-1]
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
-        file_path = os.path.join(SCREENSHOTS_DIR, unique_filename)
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        file_url = f"/static/screenshots/{unique_filename}"
+        file_bytes = file.file.read()
+        screenshot_id = uuid.uuid4()
         
         c = captions[i].strip() if captions and i < len(captions) and captions[i] else None
         screenshot = Screenshot(
+            id=screenshot_id,
             client_id=client_id,
             month=month_date,
-            file_url=file_url,
-            caption=c
+            file_url=f"/clients/{client_id}/screenshots/{screenshot_id}/image",
+            caption=c,
+            file_data=file_bytes,
+            mime_type=file.content_type or "image/png"
         )
         db.add(screenshot)
         uploaded.append(screenshot)
@@ -154,4 +151,22 @@ def upload_screenshots_bulk(
         }
         for s in uploaded
     ]
+
+# The actual image serving endpoint (does NOT require auth so <img src> works easily, 
+# or could rely on auth if the client passes tokens, but typical img tags don't pass headers without extra work. 
+# We'll leave it open under the specific client route for ease of embedding).
+@router.get("/{screenshot_id}/image")
+def get_screenshot_image(client_id: uuid.UUID, screenshot_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Serve the raw screenshot binary data."""
+    screenshot = db.execute(
+        select(Screenshot).where(Screenshot.client_id == client_id, Screenshot.id == screenshot_id)
+    ).scalar_one_or_none()
+    
+    if not screenshot or not screenshot.file_data:
+        raise HTTPException(status_code=404, detail="Image not found")
+        
+    return Response(content=screenshot.file_data, media_type=screenshot.mime_type or "image/png")
+
+# Include the secured routes in the main router
+router.include_router(secured_router)
 
