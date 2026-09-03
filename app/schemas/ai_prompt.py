@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import uuid
 import datetime
 from pydantic import BaseModel, Field
@@ -8,8 +7,8 @@ class AIPromptCreate(BaseModel):
     prompt_text: str = Field(..., min_length=1)
 
 class AIPromptUpdate(BaseModel):
-    prompt_text: Optional[str] = Field(None, min_length=1)
-    is_active: Optional[bool] = None
+    prompt_text: str | None = Field(None, min_length=1)
+    is_active: bool | None = None
 
 class AIPromptResponse(BaseModel):
     id: uuid.UUID

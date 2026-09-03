@@ -22,6 +22,12 @@ class User(Base):
     account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False
     )
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clients.id"), nullable=True
+    )
+    manager_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[UserRole] = mapped_column(
@@ -33,4 +39,8 @@ class User(Base):
 
     # Relationships
     account = relationship("Account", back_populates="users")
-    published_reports = relationship("ReportMonth", back_populates="publisher")
+    published_reports = relationship("ReportSnapshot", back_populates="publisher")
+    manager = relationship("User", remote_side=[id], foreign_keys=[manager_id], back_populates="managed_users")
+    managed_users = relationship("User", back_populates="manager")
+    managed_clients = relationship("Client", foreign_keys="[Client.manager_id]", back_populates="manager")
+    project_assignments = relationship("UserProjectAssignment", back_populates="user")

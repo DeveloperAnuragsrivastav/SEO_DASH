@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Health-check routes — liveness and readiness. §14.
 
 Two distinct routes, not one combined endpoint:
@@ -6,7 +7,6 @@ Two distinct routes, not one combined endpoint:
 """
 
 
-from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import text

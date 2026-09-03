@@ -1,4 +1,3 @@
-from __future__ import annotations
 import pytest
 from app.services.crypto import encrypt_credentials, decrypt_credentials, get_master_key
 from app.config import settings

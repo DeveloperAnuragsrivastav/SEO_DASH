@@ -16,12 +16,59 @@ from app.models.enums import UserRole
 router = APIRouter(
     prefix="/clients/{client_id}/search",
     tags=["search"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 
 def get_month_boundaries(year: int, month: int) -> tuple[datetime.date, datetime.date]:
     _, last_day = monthrange(year, month)
     return datetime.date(year, month, 1), datetime.date(year, month, last_day)
+
+@router.get("/history")
+def get_search_history(
+    client_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    start_date: datetime.date | None = None,
+    end_date: datetime.date | None = None,
+    db: Session = Depends(get_db)
+):
+    query = select(Metric).where(
+        Metric.client_id == client_id,
+        Metric.provider == "gsc",
+        Metric.dimension_key.in_(["page", "query", "device", "country"])
+    )
+    if start_date: query = query.where(Metric.captured_on >= start_date)
+    if end_date: query = query.where(Metric.captured_on <= end_date)
+    
+    metrics = db.execute(query).scalars().all()
+    
+    from collections import defaultdict
+    grouped = defaultdict(dict)
+    
+    for m in metrics:
+        key = (m.captured_on.isoformat(), m.dimension_key, m.dimension_value)
+        grouped[key][m.metric_key] = float(m.value)
+        
+    results = []
+    for (cap_on, dim_key, dim_val), data in grouped.items():
+        results.append({
+            "captured_on": cap_on,
+            "dimension_key": dim_key,
+            "dimension_value": dim_val,
+            "clicks": data.get("clicks", 0.0),
+            "impressions": data.get("impressions", 0.0),
+            "ctr": data.get("ctr", 0.0),
+            "position": data.get("position", 0.0)
+        })
+        
+    results.sort(key=lambda x: x["captured_on"], reverse=True)
+    
+    total = len(results)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated = results[start_idx:end_idx]
+    
+    return {"items": paginated, "total": total, "page": page, "page_size": page_size}
 
 @router.get("/{month_str}")
 def get_search_performance(client_id: uuid.UUID, month_str: str, db: Session = Depends(get_db)):

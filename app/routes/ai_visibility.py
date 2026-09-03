@@ -19,7 +19,7 @@ from app.services.ga4_service import get_ai_referrals
 router = APIRouter(
     prefix="/clients/{client_id}/ai-visibility",
     tags=["ai_visibility"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 
 def get_month_boundaries(year: int, month: int) -> tuple[datetime.date, datetime.date]:

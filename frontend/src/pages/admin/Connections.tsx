@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import api from '../../api/client';
-import LoadingSpinner from '../../components/LoadingSpinner';
-import { toast } from 'sonner';
+import { useParams, Link } from 'react-router-dom';
+import PageHeader from '../../components/ui/PageHeader';
+import PageSkeleton from '../../components/ui/PageSkeleton';
 
-import { AdminShell } from '../../components/layout/AdminShell';
-import {
-  EmptyState,
-  Panel,
-  StatusPill,
-  btnPrimary,
-  btnGhost,
-  inputCls
-} from '../../components/kit';
+import api from '../../api/client';
+import { toast } from 'sonner';
 
 interface Connection {
   id: string;
@@ -27,11 +18,8 @@ interface Connection {
   last_error?: string;
 }
 
-const COLUMNS = ["Provider", "Property / Mode", "Status", "Last Verified", "Actions / Feedback"];
-
 const Connections: React.FC = () => {
   const { clientId } = useParams<{ clientId: string }>();
-  const { user } = useAuth();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [client, setClient] = useState<any>(null);
@@ -45,17 +33,14 @@ const Connections: React.FC = () => {
     provider: 'gsc',
     property_id: '',
     property_tz: '',
-    access_mode: 'platform_shared',
-    login: '',
-    password: ''
   });
 
-  const isAgencyAdmin = user?.role === 'agency_admin';
+  const isAgencyAdmin = true;
 
   const fetchConnections = async () => {
     try {
       const { data } = await api.get(`/clients/${clientId}/connections`);
-      setConnections(data);
+      setConnections(data.filter((c: Connection) => c.provider !== 'dataforseo'));
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed to fetch connections');
     } finally {
@@ -84,10 +69,10 @@ const Connections: React.FC = () => {
     try {
       await api.post(`/connections/${connId}/verify`);
       setVerifyStatus(prev => ({...prev, [connId]: {type: 'success', msg: 'Connection verified successfully.'}}));
-      fetchConnections(); // Refresh status
+      fetchConnections(); 
     } catch (err: any) {
       setVerifyStatus(prev => ({...prev, [connId]: {type: 'error', msg: err.response?.data?.detail || 'Verification failed.'}}));
-      fetchConnections(); // Refresh status
+      fetchConnections(); 
     } finally {
       setVerifyingId(null);
     }
@@ -96,22 +81,14 @@ const Connections: React.FC = () => {
   const addConnection = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (formData.provider === 'dataforseo') {
-        await api.post(`/clients/${clientId}/connections/dataforseo`, {
-          access_mode: formData.access_mode,
-          login: formData.access_mode === 'client_owned' ? formData.login : undefined,
-          password: formData.access_mode === 'client_owned' ? formData.password : undefined,
-        });
-      } else {
-        await api.post(`/clients/${clientId}/connections`, {
-          provider: formData.provider,
-          property_id: formData.property_id,
-          property_tz: (formData.provider === 'ga4' || formData.provider === 'gbp') ? formData.property_tz || undefined : undefined
-        });
-      }
-      toast.success(`${formData.provider.toUpperCase()} connected.`);
+      await api.post(`/clients/${clientId}/connections`, {
+        provider: formData.provider,
+        property_id: formData.property_id,
+        property_tz: (formData.provider === 'ga4' || formData.provider === 'gbp') ? formData.property_tz || undefined : undefined
+      });
+      toast.success(`${formData.provider.toUpperCase()} mapped successfully.`);
       setFormData({
-        provider: 'gsc', property_id: '', property_tz: '', access_mode: 'platform_shared', login: '', password: ''
+        provider: 'gsc', property_id: '', property_tz: ''
       });
       fetchConnections();
     } catch (err: any) {
@@ -122,224 +99,147 @@ const Connections: React.FC = () => {
   const deleteConnection = async (connId: string) => {
     try {
       await api.delete(`/connections/${connId}`);
-      toast.success('Connection disconnected.');
+      toast.success('Connection unmapped.');
       fetchConnections();
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'An error occurred while deleting connection');
     }
   };
 
-  if (loading || !client) return <AdminShell breadcrumb="Loading..." title="Loading..."><div className="flex h-64 items-center justify-center"><LoadingSpinner label="Loading connections…" /></div></AdminShell>;
+  if (loading && !client) return <PageSkeleton />;
 
   return (
-    <AdminShell
-      breadcrumb={`${client.name} / Connections`}
-      title="Connections"
-      subtitle="Data sources feeding this client's monthly reports."
-      actions={
-        isAgencyAdmin && (
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={() =>
-              document
-                .getElementById("add-connection")
-                ?.scrollIntoView({ behavior: "smooth", block: "center" })
-            }
-          >
-            Add Connection
-          </button>
-        )
-      }
-    >
-      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-        <section className="overflow-hidden rounded-lg border border-border bg-card lg:col-span-8">
-          <header className="flex items-center justify-between border-b border-border px-6 py-4">
-            <h2 className="font-serif text-xl leading-none">Connected Sources</h2>
-            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-              {connections.length} active
-            </span>
-          </header>
-          <div className="flex flex-wrap gap-x-8 gap-y-2 border-b border-border bg-secondary px-6 py-3">
-            {COLUMNS.map((col) => (
-              <span
-                key={col}
-                className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground"
-              >
-                {col}
-              </span>
-            ))}
-          </div>
-          {connections.length === 0 ? (
-            <EmptyState>No connections found for this client.</EmptyState>
-          ) : (
-            <ul className="divide-y divide-border">
-              {connections.map((conn) => {
-                const vState = verifyStatus[conn.id];
-                const isGoogle = ['gsc', 'ga4', 'gbp'].includes(conn.provider);
-                return (
-                  <li
-                    key={conn.id}
-                    className="flex flex-col gap-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex flex-1 items-center justify-between gap-4">
-                      <span className="text-sm font-medium uppercase min-w-[80px]">{conn.provider}</span>
-                      <div className="flex-1 min-w-[120px]">
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {conn.provider === 'dataforseo' ? conn.access_mode : conn.property_id}
-                        </span>
-                        {conn.property_tz && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5">TZ: {conn.property_tz}</div>
-                        )}
-                      </div>
-                      <div className="w-[80px]">
-                        <StatusPill status={conn.status === 'connected' ? 'Active' : conn.status === 'error' ? 'Paused' : 'Churned'} />
-                        {conn.status === 'error' && conn.last_error && (
-                          <div className="text-[10px] text-red-500 mt-1 max-w-[150px] truncate" title={conn.last_error}>
-                            {conn.last_error}
-                          </div>
-                        )}
-                      </div>
-                      <span className="font-mono text-[11px] text-muted-foreground w-[100px]">
-                        {conn.last_verified_at ? new Date(conn.last_verified_at).toLocaleDateString() : 'Never'}
-                      </span>
-                    </div>
+    <>
+      <div style={{ marginBottom: 16 }}>
+        <Link to={`/admin/clients/${clientId}`} style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-tertiary)', textDecoration: 'none' }}>← Back to {client?.name}</Link>
+      </div>
+      <PageHeader 
+        title="Google Connections"
+        subtitle="Map Google properties to the Agency Master Service Account."
+      />
 
-                    <div className="flex w-full flex-col sm:w-auto sm:items-end mt-2 sm:mt-0">
-                      <div className="flex items-center gap-3">
-                        {isAgencyAdmin && isGoogle && (
-                          <button
-                            type="button"
-                            onClick={() => handleVerify(conn.id)}
-                            disabled={verifyingId === conn.id}
-                            className="rounded border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            {verifyingId === conn.id ? 'Verifying...' : 'Verify'}
-                          </button>
-                        )}
-                        {isAgencyAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => deleteConnection(conn.id)}
-                            className="text-[11px] font-medium text-status-churned-text hover:underline"
-                          >
-                            Disconnect
-                          </button>
-                        )}
-                      </div>
-                      {vState && (
-                        <div className={`mt-1.5 text-[11px] font-medium ${vState.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>
-                          {vState.msg}
-                        </div>
+      <div style={{ display: 'grid', gap: 24 }}>
+        <div className="card">
+          <div className="card-header">
+            <h3 className="h2">Mapped Properties</h3>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Property ID</th>
+                <th>Status</th>
+                <th className="hide-s">Verified</th>
+                {isAgencyAdmin && <th className="num">Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {connections.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)' }}>No Google properties mapped.</td></tr>
+              ) : connections.map(conn => {
+                const vState = verifyStatus[conn.id];
+                return (
+                  <tr key={conn.id}>
+                    <td style={{ textTransform: 'uppercase' }}><b>{conn.provider}</b></td>
+                    <td>
+                      <div className="mono" style={{ fontSize: 12 }}>{conn.property_id}</div>
+                      {conn.property_tz && <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)' }}>TZ: {conn.property_tz}</div>}
+                    </td>
+                    <td>
+                      <span className={`badge ${conn.status === 'connected' ? 'badge-success' : 'badge-error'}`}>
+                        {conn.status === 'connected' ? 'Active' : 'Error'}
+                      </span>
+                      {conn.status === 'error' && conn.last_error && (
+                        <div style={{ fontSize: 10, color: 'var(--down)', marginTop: 4, maxWidth: 150 }}>{conn.last_error}</div>
                       )}
-                    </div>
-                  </li>
+                      {vState && (
+                        <div style={{ fontSize: 10, color: vState.type === 'error' ? 'var(--down)' : 'var(--up)', marginTop: 4 }}>{vState.msg}</div>
+                      )}
+                    </td>
+                    <td className="hide-s mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                      {conn.last_verified_at ? new Date(conn.last_verified_at).toLocaleDateString() : 'Never'}
+                    </td>
+                    {isAgencyAdmin && (
+                      <td className="num">
+                        <button className="btn btn-secondary btn-sm" style={{ marginRight: 6 }} onClick={() => handleVerify(conn.id)} disabled={verifyingId === conn.id}>
+                          {verifyingId === conn.id ? '...' : 'Verify'}
+                        </button>
+                        <button className="btn btn-secondary btn-sm" style={{ color: 'var(--down)', borderColor: 'var(--down-soft)' }} onClick={() => deleteConnection(conn.id)}>
+                          Delete
+                        </button>
+                      </td>
+                    )}
+                  </tr>
                 );
               })}
-            </ul>
-          )}
-        </section>
+            </tbody>
+          </table>
+        </div>
 
         {isAgencyAdmin && (
-          <div id="add-connection" className="lg:col-span-4">
-            <Panel title="Add Connection">
-              <form onSubmit={addConnection}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Provider</label>
-                    <select
-                      value={formData.provider}
-                      onChange={e => setFormData({ ...formData, provider: e.target.value })}
-                      className={inputCls}
-                    >
-                      <option value="gsc">Google Search Console (GSC)</option>
-                      <option value="ga4">Google Analytics 4 (GA4)</option>
-                      <option value="gbp">Google Business Profile (GBP)</option>
-                      <option value="dataforseo">DataForSEO</option>
-                    </select>
-                  </div>
+          <div className="card">
+            <div className="card-header">
+              <h3 className="h2">Map Property</h3>
+            </div>
+            <div className="card-body">
+              <p className="text-subtle" style={{ marginBottom: 24 }}>
+                Ensure you have shared the client's Google Property with your Agency's master Service Account email before mapping.
+              </p>
+            <form onSubmit={addConnection} style={{ display: 'grid', gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">Google Provider</label>
+                <select
+                  value={formData.provider}
+                  onChange={e => setFormData({ ...formData, provider: e.target.value })}
+                  className="form-select"
+                >
+                  <option value="gsc">Google Search Console (GSC)</option>
+                  <option value="ga4">Google Analytics 4 (GA4)</option>
+                </select>
+              </div>
 
-                  {formData.provider !== 'dataforseo' ? (
-                    <>
-                      <div>
-                        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Property ID</label>
-                        <input
-                          type="text"
-                          required value={formData.property_id}
-                          onChange={e => setFormData({ ...formData, property_id: e.target.value })}
-                          placeholder={formData.provider === 'gsc' ? "sc-domain:example.com" : "properties/123456"}
-                          className={inputCls}
-                        />
-                      </div>
-                      {(formData.provider === 'ga4' || formData.provider === 'gbp') && (
-                        <div>
-                          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Property Timezone</label>
-                          <input
-                            type="text"
-                            required value={formData.property_tz}
-                            onChange={e => setFormData({ ...formData, property_tz: e.target.value })}
-                            placeholder="America/New_York"
-                            className={inputCls}
-                          />
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Access Mode</label>
-                        <select
-                          value={formData.access_mode}
-                          onChange={e => setFormData({ ...formData, access_mode: e.target.value })}
-                          className={inputCls}
-                        >
-                          <option value="platform_shared">Platform Shared (Default)</option>
-                          <option value="client_owned">Client Owned</option>
-                        </select>
-                      </div>
-                      {formData.access_mode === 'client_owned' && (
-                        <>
-                          <div>
-                            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Login ID</label>
-                            <input
-                              type="text"
-                              required value={formData.login}
-                              onChange={e => setFormData({ ...formData, login: e.target.value })}
-                              className={inputCls}
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Password (API Key)</label>
-                            <input
-                              type="password"
-                              required value={formData.password}
-                              onChange={e => setFormData({ ...formData, password: e.target.value })}
-                              className={inputCls}
-                            />
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
+              <div className="form-group">
+                <label className="form-label">Property ID</label>
+                <input
+                  type="text"
+                  required value={formData.property_id}
+                  onChange={e => setFormData({ ...formData, property_id: e.target.value })}
+                  placeholder={formData.provider === 'gsc' ? "sc-domain:example.com" : "properties/123456"}
+                  className="form-input"
+                />
+              </div>
+              
+              {(formData.provider === 'ga4') && (
+                <div className="form-group">
+                  <label className="form-label">Property Timezone</label>
+                  <input
+                    type="text"
+                    required value={formData.property_tz}
+                    onChange={e => setFormData({ ...formData, property_tz: e.target.value })}
+                    placeholder="America/New_York"
+                    className="form-input"
+                  />
                 </div>
-                <div className="mt-5 flex justify-end gap-2">
-                  <button
-                    type="reset"
-                    onClick={() => setFormData({ provider: 'gsc', property_id: '', property_tz: '', access_mode: 'platform_shared', login: '', password: '' })}
-                    className={btnGhost}
-                  >
-                    Clear
-                  </button>
-                  <button type="submit" className={btnPrimary}>
-                    Add Connection
-                  </button>
-                </div>
-              </form>
-            </Panel>
+              )}
+              
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button
+                  type="reset"
+                  onClick={() => setFormData({ provider: 'gsc', property_id: '', property_tz: '' })}
+                  className="btn btn-secondary"
+                >
+                  Clear
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Map Connection
+                </button>
+              </div>
+            </form>
+            </div>
           </div>
         )}
       </div>
-    </AdminShell>
+    </>
   );
 }
 

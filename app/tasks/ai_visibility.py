@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from datetime import datetime, timezone.utc
+from datetime import datetime, timezone
 import httpx
 from tenacity import retry, wait_exponential, stop_after_attempt
 import uuid
@@ -17,7 +17,7 @@ from app.models.connection import Connection
 from app.models.enums import AiPlatform, AiMentionSource, ConnectionStatus, ProviderType, SyncStatus
 from app.models.sync_run import SyncRun
 from app.services.dataforseo_auth import get_dataforseo_credentials
-from app.services.groq_service import extract_mention_and_citations
+from app.services.openai_service import extract_mention_and_citations
 from app.tasks.rankings import alert_agency
 
 logger = logging.getLogger(__name__)

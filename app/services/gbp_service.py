@@ -99,9 +99,9 @@ def _fetch_gbp_metrics(
 def pull_gbp_data(
     db: Session,
     connection_id: uuid.UUID,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    trigger_time: Optional[datetime] = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    trigger_time: datetime | None = None,
 ) -> int:
     """Pull GBP performance data for a connection."""
     conn = db.get(Connection, connection_id)

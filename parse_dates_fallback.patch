@@ -1,0 +1,75 @@
+--- app/routes/manual_metrics.py
++++ app/routes/manual_metrics.py
+@@ -109,14 +109,20 @@
+             date_str = row.get("date", "").strip()
+             if not date_str:
+                 continue
+             captured_on = None
+-            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
+-                try:
+-                    captured_on = datetime.strptime(date_str.split(" ")[0].split("T")[0], fmt).date()
+-                    break
+-                except ValueError:
+-                    pass
++            if date_str.isdigit() and int(date_str) > 30000:
++                # Excel serial date fallback
++                from datetime import timedelta
++                captured_on = (datetime(1899, 12, 30) + timedelta(days=int(date_str))).date()
++            else:
++                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
++                    try:
++                        captured_on = datetime.strptime(date_str.split(" ")[0].split("T")[0], fmt).date()
++                        break
++                    except ValueError:
++                        pass
+             if not captured_on: raise ValueError(f"Invalid date {date_str}")
+             
+             for metric_key in ["clicks", "impressions", "ctr", "position"]:
+@@ -155,14 +161,20 @@
+             date_str = row.get("date", "").strip()
+             if not date_str:
+                 continue
+             captured_on = None
+-            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
+-                try:
+-                    captured_on = datetime.strptime(date_str.split(" ")[0].split("T")[0], fmt).date()
+-                    break
+-                except ValueError:
+-                    pass
++            if date_str.isdigit() and int(date_str) > 30000:
++                from datetime import timedelta
++                captured_on = (datetime(1899, 12, 30) + timedelta(days=int(date_str))).date()
++            else:
++                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
++                    try:
++                        captured_on = datetime.strptime(date_str.split(" ")[0].split("T")[0], fmt).date()
++                        break
++                    except ValueError:
++                        pass
+             if not captured_on: raise ValueError(f"Invalid date {date_str}")
+             
+             for metric_key in ["sessions", "users", "engaged_sessions", "conversions", "revenue"]:
+@@ -202,14 +214,20 @@
+             date_str = row.get("date", "").strip()
+             if not date_str:
+                 continue
+             captured_on = None
+-            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
+-                try:
+-                    captured_on = datetime.strptime(date_str.split(" ")[0].split("T")[0], fmt).date()
+-                    break
+-                except ValueError:
+-                    pass
++            if date_str.isdigit() and int(date_str) > 30000:
++                from datetime import timedelta
++                captured_on = (datetime(1899, 12, 30) + timedelta(days=int(date_str))).date()
++            else:
++                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
++                    try:
++                        captured_on = datetime.strptime(date_str.split(" ")[0].split("T")[0], fmt).date()
++                        break
++                    except ValueError:
++                        pass
+             if not captured_on: raise ValueError(f"Invalid date {date_str}")
+             
+             for metric_key in ["impressions_desktop_maps", "impressions_desktop_search", "impressions_mobile_maps", "impressions_mobile_search", "calls", "direction_requests", "website_clicks", "bookings"]:

@@ -1,4 +1,3 @@
-from __future__ import annotations
 import pytest
 from app.models.user import User
 from sqlalchemy import select

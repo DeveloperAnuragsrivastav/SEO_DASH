@@ -1,0 +1,48 @@
+{
+    "property": "https://seoindiaonline.com",
+    "period": "2026-07-25 to 2026-08-25",
+    "totals": {
+        "clicks": 145,
+        "impressions": 101001,
+        "ctr": 0.0014356293502044534,
+        "position": 39.325729448223285
+    },
+    "top_pages": [
+        {
+            "page": "https://seoindiaonline.com/",
+            "clicks": 97,
+            "impressions": 30078,
+            "ctr": 0.32,
+            "position": 20.4
+        },
+        {
+            "page": "https://seoindiaonline.com/contact-us/",
+            "clicks": 10,
+            "impressions": 1613,
+            "ctr": 0.62,
+            "position": 12.9
+        },
+        {
+            "page": "https://seoindiaonline.com/auto-clicker-for-chromebook/",
+            "clicks": 7,
+            "impressions": 300,
+            "ctr": 2.33,
+            "position": 34.3
+        },
+        {
+            "page": "https://seoindiaonline.com/top-aeo-answer-engine-optimization-agencies/",
+            "clicks": 5,
+            "impressions": 20738,
+            "ctr": 0.02,
+            "position": 26.1
+        },
+        {
+            "page": "https://seoindiaonline.com/online-reputation-management-agencies-in-india/",
+            "clicks": 4,
+            "impressions": 2405,
+            "ctr": 0.17,
+            "position": 59.3
+        }
+    ],
+    "top_queries": []
+}

@@ -1,6 +1,5 @@
-from __future__ import annotations
 import pytest
-from datetime import datetime, timezone.utc, timedelta
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from unittest.mock import patch, MagicMock
 

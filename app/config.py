@@ -1,8 +1,7 @@
-from __future__ import annotations
 """Application configuration — all settings from environment variables."""
 
+from __future__ import annotations
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -22,11 +21,11 @@ class Settings(BaseSettings):
     app_env: str = "development"
 
     # ── Google Service Account ─────────────────────────────────────────
-    google_service_account_json: Optional[str] = None
-    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
+    google_service_account_json: str | None = None
+    GOOGLE_APPLICATION_CREDENTIALS: str | None = None
 
-    # ── Groq API ───────────────────────────────────────────────────────
-    GROQ_API_KEY: Optional[str] = None
+    # ── OpenAI API ───────────────────────────────────────────────────────
+    OPENAI_API_KEY: str | None = None
 
     # DataForSEO Configuration
     DATAFORSEO_MASTER_KEY: str = ""

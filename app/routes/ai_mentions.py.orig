@@ -1,0 +1,156 @@
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models.ai_mention import AiMention
+from app.models.client import Client
+from app.models.enums import AiMentionSource
+from app.schemas.ai_mention import AIMentionManualCreate, AIMentionResponse
+
+from app.dependencies import RequireRole
+from app.models.enums import UserRole
+
+router = APIRouter(
+    prefix="/clients/{client_id}/ai_mentions",
+    tags=["ai_mentions"],
+    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff, UserRole.client_manager]))]
+)
+
+@router.post("/manual", response_model=AIMentionResponse, status_code=status.HTTP_201_CREATED)
+def create_manual_ai_mention(
+    client_id: uuid.UUID, mention_in: AIMentionManualCreate, db: Session = Depends(get_db)
+):
+    """Manually enter an AI mention record for a client."""
+    client = db.execute(select(Client).where(Client.id == client_id)).scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    mention = AiMention(
+        client_id=client_id,
+        prompt_id=mention_in.prompt_id,
+        platform=mention_in.platform,
+        captured_on=mention_in.captured_on,
+        mentioned=mention_in.mentioned,
+        cited_pages=[page.model_dump() for page in mention_in.cited_pages] if mention_in.cited_pages else None,
+        source=AiMentionSource.manual,
+        raw_response=None
+    )
+    db.add(mention)
+    db.commit()
+    db.refresh(mention)
+    return mention
+
+@router.post("/bulk", status_code=status.HTTP_201_CREATED)
+def create_bulk_ai_mentions(
+    client_id: uuid.UUID, mentions_in: list[AIMentionManualCreate], db: Session = Depends(get_db)
+):
+    """Manually enter multiple AI mention records via bulk upload."""
+    client = db.execute(select(Client).where(Client.id == client_id)).scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    mentions = []
+    for mention_in in mentions_in:
+        mention = AiMention(
+            client_id=client_id,
+            prompt_id=mention_in.prompt_id,
+            platform=mention_in.platform,
+            captured_on=mention_in.captured_on,
+            mentioned=mention_in.mentioned,
+            cited_pages=[page.model_dump() for page in mention_in.cited_pages] if mention_in.cited_pages else None,
+            source=AiMentionSource.manual,
+            raw_response=None
+        )
+        mentions.append(mention)
+
+    if mentions:
+        db.add_all(mentions)
+        db.commit()
+
+    return {"status": "success", "rows_inserted": len(mentions)}
+
+import csv
+import io
+from fastapi import File, UploadFile
+from datetime import datetime
+
+@router.post("/upload_csv", status_code=201)
+def upload_ai_mentions_csv(
+    client_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Must be a CSV file")
+    
+    content = file.file.read().decode("utf-8")
+    reader = csv.DictReader(io.StringIO(content))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="Empty CSV")
+        
+    required_cols = {"date", "platform", "prompt", "mentioned", "cited_pages"}
+    actual_cols = {col.lower() for col in reader.fieldnames}
+    if not required_cols.issubset(actual_cols):
+        raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_cols)}")
+        
+    mentions_to_insert = []
+    success_count = 0
+    errors = []
+    
+    for row_num, row in enumerate(reader, start=2):
+        try:
+            date_str = row.get("date", "").strip()
+            if not date_str:
+                continue
+            captured_on = datetime.strptime(date_str, "%Y-%m-%d").date()
+            platform_val = row.get("platform", "").strip().lower()
+            prompt = row.get("prompt", "").strip()
+            mentioned_str = row.get("mentioned", "").strip().lower()
+            mentioned = mentioned_str in ["true", "1", "yes", "y"]
+            cited_pages_str = row.get("cited_pages", "").strip()
+            
+            cited_pages = None
+            if cited_pages_str:
+                urls = [u.strip() for u in cited_pages_str.split(",") if u.strip()]
+                cited_pages = [{"url": u, "position": i+1} for i, u in enumerate(urls)]
+                
+            from app.models.enums import AiPlatform
+            # Handle platform enum parsing carefully
+            platform = None
+            for p in AiPlatform:
+                if p.value.lower() == platform_val:
+                    platform = p
+                    break
+            if not platform:
+                errors.append({"row": row_num, "error": f"Invalid platform: {platform_val}"})
+                continue
+                
+            mentions_to_insert.append(
+                AiMention(
+                    client_id=client_id,
+                    prompt_id=None,
+                    platform=platform,
+                    captured_on=captured_on,
+                    mentioned=mentioned,
+                    cited_pages=cited_pages,
+                    source=AiMentionSource.manual,
+                    raw_response=None
+                )
+            )
+            success_count += 1
+        except Exception as e:
+            errors.append({"row": row_num, "error": str(e)})
+            
+    if mentions_to_insert:
+        db.add_all(mentions_to_insert)
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
+        
+    return {"status": "success", "rows_processed": success_count, "errors": errors}

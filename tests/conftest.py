@@ -6,7 +6,6 @@ indexes) are exercised exactly as they would be in production.
 """
 
 
-from __future__ import annotations
 
 import os
 from collections.abc import Generator

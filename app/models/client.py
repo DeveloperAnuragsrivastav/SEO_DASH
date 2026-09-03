@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.enums import BusinessType, ClientStatus
+from app.models.enums import ClientStatus
 
 
 class Client(Base):
@@ -22,13 +22,14 @@ class Client(Base):
     account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False
     )
+    manager_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     domain: Mapped[str] = mapped_column(Text, nullable=False)
     logo_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    business_type: Mapped[BusinessType] = mapped_column(
-        Enum(BusinessType, name="business_type", native_enum=True, create_constraint=False),
-        nullable=False,
-    )
+    theme_color: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    business_type: Mapped[str] = mapped_column(Text, nullable=False)
     locale: Mapped[str] = mapped_column(Text, nullable=False)
     package_keywords: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[ClientStatus] = mapped_column(
@@ -39,6 +40,7 @@ class Client(Base):
 
     # Relationships
     account = relationship("Account", back_populates="clients")
+    manager = relationship("User", foreign_keys=[manager_id], back_populates="managed_clients")
     sections = relationship("ClientSection", back_populates="client")
     connections = relationship("Connection", back_populates="client")
     keywords = relationship("Keyword", back_populates="client")
@@ -47,5 +49,6 @@ class Client(Base):
     links = relationship("Link", back_populates="client")
     activities = relationship("Activity", back_populates="client")
     screenshots = relationship("Screenshot", back_populates="client")
-    report_months = relationship("ReportMonth", back_populates="client")
+    report_snapshots = relationship("ReportSnapshot", back_populates="client")
     sync_runs = relationship("SyncRun", back_populates="client")
+    user_assignments = relationship("UserProjectAssignment", back_populates="client")

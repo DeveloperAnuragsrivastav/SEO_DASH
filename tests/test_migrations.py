@@ -1,4 +1,3 @@
-from __future__ import annotations
 """Migration tests — verify every table exists with correct columns and constraints.
 
 These tests run against a real Postgres instance (via conftest.py's Alembic

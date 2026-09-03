@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 """Shared date utilities for timezone-aware month-boundary computation."""
 
 from calendar import monthrange
@@ -8,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 
 def calculate_previous_month(
-    property_tz: Optional[str],
+    property_tz: str | None,
     trigger_time: datetime,
 ) -> tuple[date, date]:
     """Calculate the previous month's start and end date in the property's timezone.

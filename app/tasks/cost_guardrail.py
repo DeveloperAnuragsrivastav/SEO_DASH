@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import datetime
 import logging
 from decimal import Decimal
@@ -26,7 +25,7 @@ def alert_agency(subject: str, message: str):
 
 
 @celery_app.task(name="aggregate_daily_cost")
-def aggregate_daily_cost(target_date_str: Optional[str] = None):
+def aggregate_daily_cost(target_date_str: str | None = None):
     """
     Computes daily cost per provider, upserts to daily_provider_costs,
     and runs the cost guardrail check.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from datetime import date, datetime, timedelta, timezone.utc
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session

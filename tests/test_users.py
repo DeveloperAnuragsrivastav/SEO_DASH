@@ -1,4 +1,3 @@
-from __future__ import annotations
 import pytest
 import uuid
 from fastapi.testclient import TestClient

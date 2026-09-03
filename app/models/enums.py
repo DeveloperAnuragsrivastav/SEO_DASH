@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 """PostgreSQL native ENUM types — one per enum in architecture.md §11.
 
 These are used by both SQLAlchemy models and Alembic migrations.
@@ -10,16 +11,10 @@ import enum
 
 # ── users.role ─────────────────────────────────────────────────────────
 class UserRole(str, enum.Enum):
-    agency_admin = "agency_admin"
-    agency_staff = "agency_staff"
+    super_admin = "super_admin"
+    manager = "manager"
+    user = "user"
 
-
-# ── clients.business_type ──────────────────────────────────────────────
-class BusinessType(str, enum.Enum):
-    ecommerce = "ecommerce"
-    leadgen = "leadgen"
-    local = "local"
-    saas = "saas"
 
 
 # ── clients.status ─────────────────────────────────────────────────────
@@ -70,6 +65,8 @@ class AiPlatform(str, enum.Enum):
     claude = "claude"
     gemini = "gemini"
     perplexity = "perplexity"
+    grok = "grok"
+    google_ai_overview = "google_ai_overview"
 
 
 # ── ai_mentions.source ────────────────────────────────────────────────

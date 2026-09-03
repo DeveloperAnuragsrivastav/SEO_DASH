@@ -1,7 +1,9 @@
 from __future__ import annotations
 import logging
 import uuid
+from collections import defaultdict
 from datetime import date, datetime, timezone
+from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -18,15 +20,19 @@ logger = logging.getLogger(__name__)
 
 
 def _execute_gsc_query(
-    service, property_id: str, start_date: date, end_date: date, dimensions: list[str]
+    service, property_id: str, start_date: date, end_date: date,
+    dimensions: list[str] | None = None, row_limit: int = 25000,
 ) -> list[dict]:
     """Execute a single Search Console query and return the rows."""
-    request = {
+    body: dict[str, Any] = {
         "startDate": start_date.strftime("%Y-%m-%d"),
         "endDate": end_date.strftime("%Y-%m-%d"),
-        "dimensions": dimensions,
+        "rowLimit": row_limit,
+        "dataState": "all",
     }
-    response = service.searchanalytics().query(siteUrl=property_id, body=request).execute()
+    if dimensions:
+        body["dimensions"] = dimensions
+    response = service.searchanalytics().query(siteUrl=property_id, body=body).execute()
     return response.get("rows", [])  # type: ignore
 
 
@@ -36,39 +42,69 @@ def _execute_gsc_query(
     retry=retry_if_exception_type(Exception),
     reraise=True,
 )
-def _pull_gsc_data_with_retry(property_id: str, start_date: date, end_date: date) -> list[dict]:
-    """Pull GSC data. Retries on ANY exception (network, API, etc) up to 3 times."""
+def _pull_gsc_data_with_retry(property_id: str, start_date: date, end_date: date) -> dict:
+    """Pull GSC data with retries. Returns a structured dict with totals + breakdowns."""
     creds = get_google_credentials()
     service = build("webmasters", "v3", credentials=creds, cache_discovery=False)
 
-    all_rows = []
+    # ── 1. TRUE TOTALS: dimension-less query ─────────────────────────
+    # This gives us the exact same numbers as the GSC dashboard.
+    # No dimensions = no anonymization filtering = accurate totals.
+    totals_rows = _execute_gsc_query(service, property_id, start_date, end_date, dimensions=None)
+    if totals_rows:
+        row = totals_rows[0]  # Single row with aggregate data
+        totals = {
+            "clicks": row.get("clicks", 0),
+            "impressions": row.get("impressions", 0),
+            "ctr": row.get("ctr", 0),
+            "position": row.get("position", 0),
+        }
+    else:
+        totals = {"clicks": 0, "impressions": 0, "ctr": 0, "position": 0}
 
-    # 1. Overall site metrics (just date)
+    # ── 2. Per-date rows (for daily trends + DB storage) ─────────────
     date_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["date"])
     for row in date_rows:
         row["dimension_key"] = None
         row["dimension_value"] = None
-        all_rows.append(row)
 
-    # 2. Page-level metrics
-    page_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["date", "page"])
-    for row in page_rows:
+    # ── 3. Page-level breakdown ──────────────────────────────────────
+    page_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["page"])
+    top_pages = sorted(page_rows, key=lambda r: r.get("clicks", 0), reverse=True)[:10]
+    top_pages_clean = [
+        {
+            "page": r["keys"][0],
+            "clicks": r.get("clicks", 0),
+            "impressions": r.get("impressions", 0),
+            "ctr": round(r.get("ctr", 0) * 100, 2),
+            "position": round(r.get("position", 0), 1),
+        }
+        for r in top_pages
+    ]
+
+    # ── 4. Removed Query-level and Device-level breakdown as requested ──
+
+    # Prepare dimension-level rows for DB storage (page by date)
+    all_dimension_rows = []
+    page_date_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["date", "page"])
+    for row in page_date_rows:
         row["dimension_key"] = "page"
         row["dimension_value"] = row["keys"][1]
-        all_rows.append(row)
+        all_dimension_rows.append(row)
 
-    # 3. Query-level metrics
-    query_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["date", "query"])
-    for row in query_rows:
-        row["dimension_key"] = "query"
-        row["dimension_value"] = row["keys"][1]
-        all_rows.append(row)
+    return {
+        "totals": totals,
+        "top_pages": top_pages_clean,
+        "date_rows": date_rows,
+        "dimension_rows": all_dimension_rows,
+    }
 
-    return all_rows
-
-
-def pull_gsc_data(db: Session, connection_id: uuid.UUID, start_date: date, end_date: date) -> int:
-    """Pull GSC data for a connection, managing SyncRun and retries."""
+def pull_gsc_data(db: Session, connection_id: uuid.UUID, start_date: date, end_date: date) -> dict:
+    """Pull GSC data for a connection, managing SyncRun and retries.
+    
+    Returns a structured dict with totals, top_pages, top_queries, devices
+    for direct use in snapshot generation.
+    """
     conn = db.get(Connection, connection_id)
     if not conn:
         raise ValueError("Connection not found")
@@ -79,10 +115,13 @@ def pull_gsc_data(db: Session, connection_id: uuid.UUID, start_date: date, end_d
     started_at = datetime.now(timezone.utc)
 
     try:
-        raw_rows = _pull_gsc_data_with_retry(conn.property_id, start_date, end_date)
+        result = _pull_gsc_data_with_retry(conn.property_id, start_date, end_date)
 
+        # Store per-date rows + dimension rows in DB for historical tracking / SearchConsole admin page
         metrics_to_insert = []
-        for row in raw_rows:
+        all_raw_rows = result["date_rows"] + result["dimension_rows"]
+
+        for row in all_raw_rows:
             captured_on = datetime.strptime(row["keys"][0], "%Y-%m-%d").date()
 
             for metric_key in ["clicks", "impressions", "ctr", "position"]:
@@ -92,8 +131,8 @@ def pull_gsc_data(db: Session, connection_id: uuid.UUID, start_date: date, end_d
                         client_id=conn.client_id,
                         provider="gsc",
                         metric_key=metric_key,
-                        dimension_key=row["dimension_key"],
-                        dimension_value=row["dimension_value"],
+                        dimension_key=row.get("dimension_key"),
+                        dimension_value=row.get("dimension_value"),
                         captured_on=captured_on,
                         value=float(val),
                         source=MetricSource.api,
@@ -126,7 +165,13 @@ def pull_gsc_data(db: Session, connection_id: uuid.UUID, start_date: date, end_d
         conn.last_error = None
 
         db.commit()
-        return len(metrics_to_insert)
+
+        # Return the structured data for snapshot use
+        return {
+            "totals": result["totals"],
+            "top_pages": result["top_pages"],
+            "rows_stored": len(metrics_to_insert),
+        }
 
     except Exception as e:
         error_msg = str(e)

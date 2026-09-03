@@ -10,14 +10,14 @@ celery_app = Celery(
     "ez_rankings",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.rankings", "app.tasks.ai_visibility", "app.tasks.cost_guardrail", "app.tasks.links"]
+    include=["app.tasks.rankings", "app.tasks.ai_visibility", "app.tasks.cost_guardrail", "app.tasks.links", "app.tasks.reports"]
 )
 
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    timezone="timezone.utc",
+    timezone="UTC",
     enable_utc=True,
     beat_schedule={
         "dummy-task-every-minute": {

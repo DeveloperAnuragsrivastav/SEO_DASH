@@ -1,23 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { usePermissions } from '../../hooks/usePermissions';
 import api from '../../api/client';
-import LoadingSpinner from '../../components/LoadingSpinner';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { AdminShell } from '../../components/layout/AdminShell';
-import {
-  Bento,
-  StatCard,
-  StatusPill,
-  TablePanel,
-  Td,
-  Th,
-  btnPrimary,
-  btnGhost,
-  inputCls
-} from '../../components/kit';
 
-interface User {
+import PageHeader from '../../components/ui/PageHeader';
+import PageSkeleton from '../../components/ui/PageSkeleton';
+
+interface NestedUser {
   id: string;
   email: string;
   role: string;
@@ -25,21 +15,44 @@ interface User {
   last_login_at: string | null;
 }
 
+interface NestedClient {
+  id: string;
+  name: string;
+  domain: string;
+}
+
+interface Manager {
+  id: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  last_login_at: string | null;
+  managed_users: NestedUser[];
+  managed_clients: NestedClient[];
+}
+
 export default function Users() {
-  const { user } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
+  const { isSuperAdmin } = usePermissions();
+  const [managers, setManagers] = useState<Manager[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   
   // Modals state
   const [showAdd, setShowAdd] = useState(false);
-  const [newUser, setNewUser] = useState({ email: '', password: '', role: 'agency_staff' });
-  const [error, setError] = useState('');
-  const [userToDeactivate, setUserToDeactivate] = useState<string | null>(null);
+  const [modalStep, setModalStep] = useState<'manager' | 'project'>('manager');
+  const [newManagerId, setNewManagerId] = useState<string | null>(null);
+  const [newManager, setNewManager] = useState({ email: '', password: '', role: 'manager' });
+  const [newProject, setNewProject] = useState({ name: '', domain: '', business_type: 'ecommerce', locale: 'en-GB', package_keywords: '10' });
+  const [creating, setCreating] = useState(false);
+  
+  // Client deletion state
+  const [deletingClient, setDeletingClient] = useState<NestedClient | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
 
-  const loadUsers = async () => {
+  const loadManagers = async () => {
     try {
-      const res = await api.get('/users');
-      setUsers(res.data);
+      const res = await api.get('/admin/managers');
+      setManagers(res.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -48,206 +61,323 @@ export default function Users() {
   };
 
   useEffect(() => {
-    if (user?.role === 'agency_admin') {
-      loadUsers();
+    if (isSuperAdmin) {
+      loadManagers();
     }
-  }, [user]);
+  }, [isSuperAdmin]);
 
-  if (user?.role !== 'agency_admin') {
+  if (!isSuperAdmin) {
     return <Navigate to="/" replace />;
   }
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleAddManager = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCreating(true);
     try {
-      await api.post('/users', newUser);
-      setShowAdd(false);
-      setNewUser({ email: '', password: '', role: 'agency_staff' });
-      setError('');
-      toast.success('User created successfully');
-      loadUsers();
+      const res = await api.post('/admin/managers', newManager);
+      setNewManagerId(res.data.id);
+      setModalStep('project');
+      toast.success('Manager created successfully');
+      loadManagers();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create user');
+      toast.error(err.response?.data?.detail || 'Failed to create manager');
+    } finally {
+      setCreating(false);
     }
   };
 
-  const handleToggleRole = async (userId: string, currentRole: string) => {
-    const newRole = currentRole === 'agency_admin' ? 'agency_staff' : 'agency_admin';
+  const handleAddProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
     try {
-      await api.put(`/users/${userId}/role`, { role: newRole });
-      toast.success(`Role updated`);
-      loadUsers();
-    } catch (err) {
-      toast.error('Failed to update role');
-      console.error(err);
+      // 1. Create Project
+      const res = await api.post('/clients', {
+        ...newProject,
+        package_keywords: parseInt(newProject.package_keywords, 10),
+        status: 'active',
+        onboarded_at: new Date().toISOString().slice(0, 10),
+      });
+      
+      // 2. Assign to Manager
+      if (newManagerId) {
+        await api.put(`/admin/clients/${res.data.id}/reassign`, {
+          manager_id: newManagerId
+        });
+      }
+
+      toast.success('Project created and assigned successfully');
+      closeModal();
+      loadManagers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to create project');
+    } finally {
+      setCreating(false);
     }
   };
 
-  const confirmDeactivate = async () => {
-    if (!userToDeactivate) return;
+  const closeModal = () => {
+    setShowAdd(false);
+    setModalStep('manager');
+    setNewManagerId(null);
+    setNewManager({ email: '', password: '', role: 'manager' });
+    setNewProject({ name: '', domain: '', business_type: 'ecommerce', locale: 'en-GB', package_keywords: '10' });
+  };
+
+  const handleDeleteClient = async () => {
+    if (!deletingClient) return;
     try {
-      await api.put(`/users/${userToDeactivate}/deactivate`);
-      setUserToDeactivate(null);
-      toast.success('User deactivated');
-      loadUsers();
-    } catch (err) {
-      toast.error('Failed to deactivate user');
-      console.error(err);
+      await api.delete(`/clients/${deletingClient.id}`);
+      toast.success('Client completely deleted.');
+      setDeletingClient(null);
+      setDeleteConfirmation('');
+      loadManagers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to delete client.');
     }
   };
 
-  const active = users.filter((u) => u.is_active).length;
+  const activeCount = managers.filter((m) => m.is_active).length;
 
-  if (loading) return <AdminShell breadcrumb="Loading..." title="Loading..."><div className="flex h-64 items-center justify-center"><LoadingSpinner label="Loading users…" /></div></AdminShell>;
+  if (loading) return <PageSkeleton stats={3} />;
 
   return (
-    <AdminShell
-      breadcrumb="Users"
-      title="User Management"
-      subtitle="Agency admins and staff with access to client accounts and monthly reports."
-      actions={
-        <button
-          type="button"
-          className={btnPrimary}
-          onClick={() => setShowAdd(true)}
-        >
-          Add User
-        </button>
-      }
-    >
-      <Bento>
-        <StatCard label="Total Users" value={users.length} source="Agency · live" />
-        <StatCard label="Active" value={active} source="Agency · live" />
-        <StatCard label="Deactivated" value={users.length - active} source="Agency · live" />
-        <StatCard
-          label="Agency Admins"
-          value={users.filter((u) => u.role === "agency_admin").length}
-          source="Agency · live"
-        />
-      </Bento>
-
-      <TablePanel
-        title="Agency Users"
-        head={
-          <>
-            <Th>Email</Th>
-            <Th>Role</Th>
-            <Th>Status</Th>
-            <Th>Last Login</Th>
-            <Th align="right">Actions</Th>
-          </>
+    <>
+      <PageHeader 
+        title="Manager Directory" 
+        subtitle="Super Admins can create isolated Manager accounts here."
+        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Manager Directory' }]}
+        actions={
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+            Add Manager
+          </button>
         }
-      >
-        {users.map((u) => (
-          <tr key={u.id} className="transition-colors hover:bg-secondary">
-            <Td>
-              <span className="font-medium">{u.email}</span>
-            </Td>
-            <Td>
-              <span
-                className={
-                  u.role === "agency_admin"
-                    ? "rounded-full bg-brand px-2.5 py-0.5 text-[11px] font-semibold text-ink uppercase"
-                    : "rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground uppercase"
-                }
+      />
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-label">Total Managers</div>
+          <div className="stat-value">{managers.length}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Active</div>
+          <div className="stat-value" style={{ color: 'var(--up)' }}>{activeCount}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Deactivated</div>
+          <div className="stat-value">{managers.length - activeCount}</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: '16px' }}>
+        {managers.length === 0 ? (
+          <div className="page-card" style={{ textAlign: 'center', padding: '48px' }}>
+            <p className="text-subtle">No managers found. Create one to get started.</p>
+          </div>
+        ) : (
+          managers.map(manager => (
+            <div key={manager.id} className="page-card-flush">
+              <div 
+                style={{ padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                onClick={() => setExpandedId(expandedId === manager.id ? null : manager.id)}
               >
-                {u.role.replace('_', ' ')}
-              </span>
-            </Td>
-            <Td>
-              <StatusPill status={u.is_active ? "Active" : "Deactivated"} />
-            </Td>
-            <Td className="font-mono text-xs text-muted-foreground">
-              {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : 'Never'}
-            </Td>
-            <Td align="right">
-              <div className="flex justify-end gap-2">
-                {u.is_active && user?.id !== u.id && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRole(u.id, u.role)}
-                      className="rounded-full border border-border px-3 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {u.role === "agency_admin" ? "Make Staff" : "Make Admin"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUserToDeactivate(u.id)}
-                      className="px-2 py-1 text-[11px] font-medium text-status-churned-text hover:underline"
-                    >
-                      Deactivate
-                    </button>
-                  </>
-                )}
+                <div>
+                  <h3 className="h2" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                    {manager.email}
+                    {manager.is_active ? (
+                      <span className="badge badge-success">ACTIVE</span>
+                    ) : (
+                      <span className="badge badge-neutral">INACTIVE</span>
+                    )}
+                  </h3>
+                  <div className="text-subtle text-xs mono">
+                    Last Login: {manager.last_login_at ? new Date(manager.last_login_at).toLocaleDateString() : 'Never'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px', color: 'var(--text-tertiary)' }}>
+                  <div className="text-sm">
+                    <strong>{manager.managed_users?.length || 0}</strong> Users
+                  </div>
+                  <div className="text-sm">
+                    <strong>{manager.managed_clients?.length || 0}</strong> Projects
+                  </div>
+                  <div style={{ transform: expandedId === manager.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'var(--bg-app)', borderRadius: '50%' }}>
+                    ↓
+                  </div>
+                </div>
               </div>
-            </Td>
-          </tr>
-        ))}
-      </TablePanel>
+              
+              {expandedId === manager.id && (
+                <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+                  
+                  {/* Assigned Users */}
+                  <div>
+                    <h4 className="h2" style={{ fontSize: '15px', marginBottom: '16px' }}>Assigned Users</h4>
+                    {manager.managed_users?.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {manager.managed_users.map(u => (
+                          <div key={u.id} style={{ padding: '12px 16px', background: 'var(--neutral-bg)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 500 }}>{u.email}</span>
+                            <span className={`badge ${u.is_active ? 'badge-success' : 'badge-neutral'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-subtle text-sm italic">No users assigned.</div>
+                    )}
+                  </div>
+                  
+                  {/* Assigned Clients */}
+                  <div>
+                    <h4 className="h2" style={{ fontSize: '15px', marginBottom: '16px' }}>Assigned Projects</h4>
+                    {manager.managed_clients?.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {manager.managed_clients.map(c => (
+                          <div key={c.id} style={{ padding: '12px 16px', background: 'var(--neutral-bg)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
+                              <div className="text-subtle text-xs">{c.domain}</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <Link to={`/admin/clients/${c.id}`} className="btn btn-secondary btn-sm">
+                                Dashboard
+                              </Link>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingClient(c);
+                                  setDeleteConfirmation('');
+                                }}
+                                className="btn btn-secondary btn-sm"
+                                style={{ color: 'var(--down)' }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-subtle text-sm italic">No projects assigned.</div>
+                    )}
+                  </div>
+
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-[0_12px_24px_-4px_rgba(0,0,0,0.15)]">
-            <h2 className="mb-4 font-serif text-xl">Add New User</h2>
-            {error && <div className="mb-4 rounded border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-500">{error}</div>}
-            <form onSubmit={handleAdd} className="flex flex-col gap-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Email</label>
-                <input 
-                  type="email" 
-                  required 
-                  value={newUser.email}
-                  onChange={e => setNewUser({...newUser, email: e.target.value})}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Temporary Password</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={newUser.password}
-                  onChange={e => setNewUser({...newUser, password: e.target.value})}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Role</label>
-                <select 
-                  value={newUser.role}
-                  onChange={e => setNewUser({...newUser, role: e.target.value})}
-                  className={inputCls}
-                >
-                  <option value="agency_staff">Agency Staff</option>
-                  <option value="agency_admin">Agency Admin</option>
-                </select>
-              </div>
-              <div className="mt-2 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowAdd(false)} className={btnGhost}>Cancel</button>
-                <button type="submit" className={btnPrimary}>Create User</button>
-              </div>
-            </form>
+        <div className="modal-backdrop">
+          <div className="modal" style={{ maxWidth: modalStep === 'project' ? '500px' : '400px' }}>
+            {modalStep === 'manager' ? (
+              <>
+                <h3 className="h2" style={{ marginBottom: 20 }}>Create New Manager</h3>
+                <form onSubmit={handleAddManager} style={{ display: 'grid', gap: 16 }}>
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input 
+                      type="email" 
+                      required 
+                      value={newManager.email}
+                      onChange={e => setNewManager({...newManager, email: e.target.value})}
+                      className="form-input"
+                      placeholder="manager@agency.com"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Temporary Password</label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={newManager.password}
+                      onChange={e => setNewManager({...newManager, password: e.target.value})}
+                      className="form-input"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16 }}>
+                    <button type="button" onClick={closeModal} className="btn btn-secondary" disabled={creating}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={creating}>
+                      {creating ? 'Creating...' : 'Next: Assign Project'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <h3 className="h2" style={{ marginBottom: 4 }}>Up next: Create Project</h3>
+                <p className="text-subtle" style={{ marginBottom: 20, fontSize: '14px' }}>Assign an initial SEO project to this new manager.</p>
+                <form onSubmit={handleAddProject} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label className="form-label">Client Name</label>
+                    <input className="form-input" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} required placeholder="Acme Corp" autoFocus />
+                  </div>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label className="form-label">Primary Domain</label>
+                    <input className="form-input" value={newProject.domain} onChange={e => setNewProject({...newProject, domain: e.target.value})} required placeholder="acme.com" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Business Type</label>
+                    <input className="form-input" type="text" value={newProject.business_type} onChange={e => setNewProject({...newProject, business_type: e.target.value})} required placeholder="E-commerce, SaaS..." />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Tracked Keywords</label>
+                    <input className="form-input" type="number" min="0" value={newProject.package_keywords} onChange={e => setNewProject({...newProject, package_keywords: e.target.value})} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                    <button type="button" onClick={closeModal} className="btn btn-secondary" disabled={creating}>Skip for now</button>
+                    <button type="submit" className="btn btn-primary" disabled={creating}>
+                      {creating ? 'Creating...' : 'Create & Assign'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {userToDeactivate && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-[0_12px_24px_-4px_rgba(0,0,0,0.15)]">
-            <h2 className="mb-4 font-serif text-xl text-status-churned-text">Deactivate User</h2>
-            <p className="mb-6 text-sm text-muted-foreground">
-              Are you sure you want to deactivate this user? They will immediately lose access and be logged out.
+      {deletingClient && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16, marginBottom: 20 }}>
+              <h3 className="h2" style={{ color: 'var(--down)' }}>Delete {deletingClient.name}?</h3>
+            </div>
+            <p style={{ marginBottom: '16px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              This action <strong>cannot be undone</strong>. This will permanently delete the <strong>{deletingClient.name}</strong> project, including all keyword rankings, metrics, backlink data, and user assignments.
             </p>
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setUserToDeactivate(null)} className={btnGhost}>Cancel</button>
-              <button type="button" onClick={confirmDeactivate} className="inline-flex items-center gap-2 rounded-md bg-status-churned-text px-4 py-2 text-sm font-medium text-white transition-all hover:brightness-95">
-                Yes, Deactivate
+            <div className="form-group" style={{ marginBottom: '24px' }}>
+              <label className="form-label" style={{ fontWeight: 500 }}>
+                Please type <strong>{deletingClient.name}</strong> to confirm.
+              </label>
+              <input 
+                type="text" 
+                className="form-input" 
+                value={deleteConfirmation}
+                onChange={e => setDeleteConfirmation(e.target.value)}
+                placeholder={deletingClient.name}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setDeletingClient(null)}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary"
+                style={{ background: 'var(--down)', borderColor: 'var(--down)' }}
+                disabled={deleteConfirmation !== deletingClient.name}
+                onClick={handleDeleteClient}
+              >
+                Permanently Delete
               </button>
             </div>
           </div>
         </div>
       )}
-    </AdminShell>
+    </>
   );
 }

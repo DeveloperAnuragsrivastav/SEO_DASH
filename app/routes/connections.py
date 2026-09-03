@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 """Routes for Connection management and verification."""
 
 import uuid
@@ -22,28 +21,28 @@ from app.models.enums import UserRole
 router = APIRouter(
     prefix="/clients/{client_id}/connections",
     tags=["connections"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 read_router = APIRouter(
     prefix="/clients/{client_id}/connections",
     tags=["connections"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 verify_router = APIRouter(
     prefix="/connections",
     tags=["connections_verify"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 
 # Schemas
 class ConnectionCreate(BaseModel):
     provider: ProviderType
     property_id: str
-    property_tz: Optional[str] = None
+    property_tz: str | None = None
 
 class ConnectionUpdate(BaseModel):
-    property_id: Optional[str] = None
-    property_tz: Optional[str] = None
+    property_id: str | None = None
+    property_tz: str | None = None
 
 class ConnectionResponse(BaseModel):
     id: uuid.UUID
@@ -51,23 +50,23 @@ class ConnectionResponse(BaseModel):
     provider: ProviderType
     access_mode: AccessMode
     property_id: str
-    property_tz: Optional[str]
+    property_tz: str | None
     status: ConnectionStatus
-    last_verified_at: Optional[datetime]
-    last_error: Optional[str]
+    last_verified_at: datetime | None
+    last_error: str | None
 
     model_config = {"from_attributes": True}
 
 
 class DataForSEOConnectionCreate(BaseModel):
     access_mode: AccessMode
-    login: Optional[str] = None
-    password: Optional[str] = None
+    login: str | None = None
+    password: str | None = None
 
 class DataForSEOConnectionUpdate(BaseModel):
     access_mode: AccessMode
-    login: Optional[str] = None
-    password: Optional[str] = None
+    login: str | None = None
+    password: str | None = None
 
 
 @router.post("", response_model=ConnectionResponse, status_code=201)
@@ -201,15 +200,15 @@ def trigger_pull(
     if conn.provider == ProviderType.gsc:
         from app.services.gsc_service import pull_gsc_data
         try:
-            rows_inserted = pull_gsc_data(db, connection_id, sd, ed)
-            return {"status": "success", "rows_inserted": rows_inserted}
+            result = pull_gsc_data(db, connection_id, sd, ed)
+            return {"status": "success", "rows_inserted": result.get("rows_stored", 0)}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     elif conn.provider == ProviderType.ga4:
         from app.services.ga4_service import pull_ga4_data
         try:
-            rows_inserted = pull_ga4_data(db, connection_id, sd, ed)
-            return {"status": "success", "rows_inserted": rows_inserted}
+            result = pull_ga4_data(db, connection_id, sd, ed)
+            return {"status": "success", "rows_inserted": result.get("rows_stored", 0)}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     elif conn.provider == ProviderType.gbp:

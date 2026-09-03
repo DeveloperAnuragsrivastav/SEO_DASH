@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 """SQLAlchemy models — import all models here so Alembic and the app can
 find them from a single import of this package."""
 
@@ -14,10 +15,11 @@ from app.models.link import Link
 from app.models.metric import Metric
 from app.models.provider_task import ProviderTask
 from app.models.ranking import Ranking
-from app.models.report_month import ReportMonth
+from app.models.report_snapshot import ReportSnapshot
 from app.models.screenshot import Screenshot
 from app.models.sync_run import SyncRun
 from app.models.user import User
+from app.models.user_project import UserProjectAssignment
 from app.models.cost import ProviderState, DailyProviderCost
 
 __all__ = [
@@ -33,10 +35,11 @@ __all__ = [
     "Metric",
     "ProviderTask",
     "Ranking",
-    "ReportMonth",
+    "ReportSnapshot",
     "Screenshot",
     "SyncRun",
     "User",
+    "UserProjectAssignment",
     "ProviderState",
     "DailyProviderCost",
 ]

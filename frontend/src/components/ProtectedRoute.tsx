@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import LoadingSpinner from './LoadingSpinner';
+
 
 interface Props {
   allowedRoles?: string[];
@@ -11,7 +11,7 @@ const ProtectedRoute: React.FC<Props> = ({ allowedRoles }) => {
   const { token, user, isLoading } = useAuth();
 
   if (isLoading) {
-    return <LoadingSpinner label="Verifying session..." fullscreen />;
+    return <div className="loader"><div className="loader-ring" /></div>;
   }
 
   if (!token) {

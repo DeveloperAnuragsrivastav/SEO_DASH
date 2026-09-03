@@ -1,4 +1,3 @@
-from __future__ import annotations
 """Health-check route tests."""
 
 import os

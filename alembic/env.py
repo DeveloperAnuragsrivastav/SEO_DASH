@@ -41,7 +41,7 @@ from app.models import (  # noqa: E402, F401
     Metric,
     ProviderTask,
     Ranking,
-    ReportMonth,
+    ReportSnapshot,
     Screenshot,
     SyncRun,
     User,

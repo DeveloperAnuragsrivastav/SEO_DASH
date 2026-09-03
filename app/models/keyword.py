@@ -24,8 +24,8 @@ class Keyword(Base):
     term: Mapped[str] = mapped_column(Text, nullable=False)
     group_tag: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     target_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    search_volume: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     initial_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    search_volume: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), nullable=False)
     added_at: Mapped[date] = mapped_column(Date, nullable=False)
 

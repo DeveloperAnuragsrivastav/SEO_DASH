@@ -6,20 +6,21 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
 from app.models.activity import Activity
 from app.models.screenshot import Screenshot
-from app.models.report_month import ReportMonth
+from app.models.report_snapshot import ReportSnapshot
 from app.models.enums import UserRole, ReportStatus
 from app.dependencies import RequireRole
 
 router = APIRouter(
     prefix="/clients/{client_id}/work",
     tags=["work"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 
 # Directory for screenshots
@@ -30,29 +31,49 @@ class ActivityCreate(BaseModel):
     month: datetime.date
     activity_type: str
     count: int
-    notes: Optional[str] = None
+    notes: str | None = None
 
 class ActivityResponse(BaseModel):
     id: uuid.UUID
     month: datetime.date
     activity_type: str
     count: int
-    notes: Optional[str]
+    notes: str | None
 
 class ScreenshotResponse(BaseModel):
     id: uuid.UUID
     month: datetime.date
-    keyword_id: Optional[uuid.UUID]
+    keyword_id: uuid.UUID | None
     file_url: str
-    caption: Optional[str]
+    caption: str | None
 
 class WorkMonthResponse(BaseModel):
     activities: List[ActivityResponse]
     screenshots: List[ScreenshotResponse]
-    next_month_plan: Optional[dict]
+    next_month_plan: dict | None
 
 class PlanUpdate(BaseModel):
-    next_month_plan: Optional[dict]
+    next_month_plan: dict | None
+
+@router.get("")
+def get_all_activities(
+    client_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    start_date: datetime.date | None = None,
+    end_date: datetime.date | None = None,
+    db: Session = Depends(get_db)
+):
+    from sqlalchemy import func
+    query = select(Activity).where(Activity.client_id == client_id)
+    if start_date:
+        query = query.where(Activity.month >= start_date)
+    if end_date:
+        query = query.where(Activity.month <= end_date)
+        
+    total = db.execute(select(func.count()).select_from(query.subquery())).scalar() or 0
+    activities = db.execute(query.order_by(Activity.month.desc()).offset((page - 1) * page_size).limit(page_size)).scalars().all()
+    return {"items": activities, "total": total, "page": page, "page_size": page_size}
 
 @router.get("/{month_str}", response_model=WorkMonthResponse)
 def get_work_done(client_id: uuid.UUID, month_str: str, db: Session = Depends(get_db)):
@@ -78,12 +99,17 @@ def get_work_done(client_id: uuid.UUID, month_str: str, db: Session = Depends(ge
         )
     ).scalars().all()
 
-    # Next Month Plan from ReportMonth
+    # Next Month Plan from ReportSnapshot (find latest snapshot ending in this month)
+    import calendar
+    _, last_day = calendar.monthrange(target_month.year, target_month.month)
+    month_end = target_month.replace(day=last_day)
+    
     report = db.execute(
-        select(ReportMonth).where(
-            ReportMonth.client_id == client_id,
-            ReportMonth.month == target_month
-        )
+        select(ReportSnapshot).where(
+            ReportSnapshot.client_id == client_id,
+            ReportSnapshot.end_date >= target_month,
+            ReportSnapshot.end_date <= month_end
+        ).order_by(ReportSnapshot.end_date.desc())
     ).scalar_one_or_none()
 
     next_month_plan = report.next_month_plan if report else None
@@ -97,24 +123,31 @@ def get_work_done(client_id: uuid.UUID, month_str: str, db: Session = Depends(ge
 @router.post("/activities", response_model=ActivityResponse, status_code=status.HTTP_201_CREATED)
 def create_activity(client_id: uuid.UUID, payload: ActivityCreate, db: Session = Depends(get_db)):
     """Create a manual activity entry."""
-    activity = Activity(
+    stmt = insert(Activity).values(
         client_id=client_id,
         month=payload.month,
         activity_type=payload.activity_type,
         count=payload.count,
         notes=payload.notes
     )
-    db.add(activity)
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_activity_client_month_type",
+        set_={
+            "count": stmt.excluded.count,
+            "notes": stmt.excluded.notes
+        }
+    )
+    result = db.execute(stmt.returning(Activity))
+    activity = result.scalar_one()
     db.commit()
-    db.refresh(activity)
     return activity
 
 @router.post("/screenshots", response_model=ScreenshotResponse, status_code=status.HTTP_201_CREATED)
 def upload_screenshot(
     client_id: uuid.UUID,
     month: str = Form(...),
-    caption: Optional[str] = Form(None),
-    keyword_id: Optional[str] = Form(None),
+    caption: str | None = Form(None),
+    keyword_id: str | None = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -144,16 +177,23 @@ def upload_screenshot(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid keyword_id format")
 
-    screenshot = Screenshot(
+    stmt = insert(Screenshot).values(
         client_id=client_id,
         month=target_month,
         keyword_id=parsed_kw_id,
         file_url=file_url,
         caption=caption
     )
-    db.add(screenshot)
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_screenshot_client_month_kw",
+        set_={
+            "file_url": stmt.excluded.file_url,
+            "caption": stmt.excluded.caption
+        }
+    )
+    result = db.execute(stmt.returning(Screenshot))
+    screenshot = result.scalar_one()
     db.commit()
-    db.refresh(screenshot)
     return screenshot
 
 @router.delete("/screenshots/{screenshot_id}")
@@ -186,8 +226,17 @@ def update_plan(client_id: uuid.UUID, month_str: str, payload: PlanUpdate, db: S
     """Edit the next_month_plan of a draft/review report."""
     target_month = datetime.date.fromisoformat(f"{month_str}-01")
     
+    # Find the snapshot for the month
+    import calendar
+    _, last_day = calendar.monthrange(target_month.year, target_month.month)
+    month_end = target_month.replace(day=last_day)
+    
     report = db.execute(
-        select(ReportMonth).where(ReportMonth.client_id == client_id, ReportMonth.month == target_month)
+        select(ReportSnapshot).where(
+            ReportSnapshot.client_id == client_id,
+            ReportSnapshot.end_date >= target_month,
+            ReportSnapshot.end_date <= month_end
+        ).order_by(ReportSnapshot.end_date.desc())
     ).scalar_one_or_none()
     
     if not report:
@@ -200,3 +249,94 @@ def update_plan(client_id: uuid.UUID, month_str: str, payload: PlanUpdate, db: S
     db.commit()
     
     return {"status": "success", "next_month_plan": report.next_month_plan}
+
+
+import csv
+import io
+
+@router.post("/upload_csv", status_code=201)
+def upload_work_csv(
+    client_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not (file.filename.endswith(".csv") or file.filename.endswith(".xlsx")):
+        raise HTTPException(status_code=400, detail="Must be a CSV or Excel file")
+    
+    rows = []
+    if file.filename.endswith(".xlsx"):
+        import openpyxl
+        content = file.file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        ws = wb.active
+        if not ws or ws.max_row < 1:
+            raise HTTPException(status_code=400, detail="Empty Excel file")
+        raw_headers = [str(c.value).strip() if c.value else "" for c in ws[1]]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            row_dict = {}
+            for k, v in zip(raw_headers, row):
+                row_dict[k] = v
+            rows.append(row_dict)
+    else:
+        content = file.file.read().decode("utf-8")
+        reader = csv.reader(io.StringIO(content))
+        header_row = next(reader, None)
+        if not header_row:
+            raise HTTPException(status_code=400, detail="Empty CSV")
+        raw_headers = [c.strip() for c in header_row]
+        for row in reader:
+            row_dict = {}
+            for k, v in zip(raw_headers, row):
+                row_dict[k] = v
+            rows.append(row_dict)
+            
+    required_cols = {"activity_type", "count", "notes"}
+    actual_cols = {col.lower() for col in raw_headers}
+        
+    work_to_insert = []
+    success_count = 0
+    errors = []
+    
+    for row_num, row in enumerate(rows, start=2):
+        try:
+            row_norm = {k.lower().replace(" ", "_"): v for k, v in row.items() if k}
+            month = datetime.datetime.today().date().replace(day=1)
+            activity_type = str(row_norm.get("activity_type") or "").strip()
+            count_str = str(row_norm.get("count") or "1").strip()
+            count = int(float(count_str)) if count_str else 1
+            notes = str(row_norm.get("notes") or "").strip()
+            if not notes: notes = None
+            existing = db.execute(
+                select(Activity).where(
+                    Activity.client_id == client_id,
+                    Activity.month == month,
+                    Activity.activity_type == activity_type
+                )
+            ).scalar_one_or_none()
+
+            if existing:
+                existing.count = count
+                existing.notes = notes
+            else:
+                db.add(
+                    Activity(
+                        client_id=client_id,
+                        month=month,
+                        activity_type=activity_type,
+                        count=count,
+                        notes=notes
+                    )
+                )
+            db.flush()
+            success_count += 1
+        except Exception as e:
+            errors.append({"row": row_num, "error": str(e)})
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
+        
+    return {"status": "success", "rows_processed": success_count, "errors": errors}
+

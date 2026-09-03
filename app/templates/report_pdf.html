@@ -1,0 +1,1753 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="{{ client_name }} monthly SEO report — {{ display_label }}" />
+    <title>{{ client_name }} — {{ display_label }} SEO Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <style>
+        :root {
+            --ink: #121212;
+            --yellow: {{ client_theme_color or '#f5c400' }};
+            --yellow-soft: #fff8d8;
+            --blue: #11559b;
+            --blue-soft: #edf6ff;
+            --line: #deded9;
+            --muted: #687075;
+            --green: #16724e;
+            --paper: #fff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            background: #e5e5e1;
+        }
+
+        body {
+            margin: 0;
+            color: var(--ink);
+            background: #e5e5e1;
+            font-family: "Poppins", Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.45;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .report-page {
+            width: 794px;
+            min-height: 1123px;
+            margin: 24px auto;
+            position: relative;
+            overflow: hidden;
+            background: var(--paper);
+            box-shadow: 0 12px 42px rgba(0, 0, 0, .14);
+            page-break-after: always;
+        }
+
+        .page-inner {
+            padding: 55px 54px 48px;
+        }
+
+        .brandline {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-mark {
+            width: 60px;
+            height: 60px;
+            display: grid;
+            place-items: center;
+            border: 2px solid var(--yellow);
+            border-radius: 50%;
+            background: linear-gradient(135deg, #fff 0 47%, var(--yellow) 47% 100%);
+            color: var(--ink);
+            font-size: 15px;
+            font-weight: 800;
+            font-style: italic;
+            letter-spacing: -2px;
+        }
+
+        .client-logo {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            border-radius: 50%;
+            background: #fff;
+            padding: 4px;
+        }
+
+        .brandcopy {
+            display: grid;
+            gap: 2px;
+            padding-left: 14px;
+            border-left: 1px solid rgba(255, 255, 255, .4);
+        }
+
+        .brandcopy strong {
+            font-size: 14px;
+        }
+
+        .brandcopy small {
+            color: #aab1b1;
+            font-size: 8px;
+            letter-spacing: .11em;
+            text-transform: uppercase;
+        }
+
+        .ez-logo {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+        }
+
+        .ez-logo img {
+            height: 52px;
+            object-fit: contain;
+        }
+
+
+
+        .cover {
+            min-height: 200px;
+            padding-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+            color: #fff;
+            background: var(--ink);
+        }
+
+        .cover::before {
+            content: "";
+            width: 355px;
+            height: 355px;
+            position: absolute;
+            top: -184px;
+            right: -124px;
+            border: 1px solid rgba(245, 196, 0, .45);
+            border-radius: 50%;
+        }
+
+        .cover::after {
+            content: "";
+            width: 280px;
+            height: 280px;
+            position: absolute;
+            top: -128px;
+            right: -66px;
+            border: 1px solid rgba(17, 85, 155, .86);
+            border-radius: 50%;
+        }
+
+        .cover-inner {
+            position: relative;
+            z-index: 1;
+            padding: 31px 54px;
+        }
+
+        .report-label {
+            margin: 36px 0 6px;
+            color: var(--yellow);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+        }
+
+        .cover h1 {
+            max-width: 565px;
+            margin: 0;
+            font-size: 37px;
+            line-height: .99;
+            letter-spacing: -.075em;
+        }
+
+        .cover h1 span {
+            color: var(--yellow);
+        }
+
+        .date-row {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            margin-top: 13px;
+            color: #ccd4d3;
+            font-size: 9px;
+        }
+
+        .status {
+            padding: 5px 9px;
+            border-radius: 20px;
+            background: rgba(245, 196, 0, .16);
+            color: var(--yellow);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+        }
+
+        .status::before {
+            content: "";
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            margin-right: 5px;
+            border-radius: 50%;
+            background: var(--yellow);
+            vertical-align: middle;
+        }
+
+        .eyebrow {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--blue);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .17em;
+            text-transform: uppercase;
+        }
+
+        .section-heading {
+            margin: 0;
+            font-size: 23px;
+            line-height: 1.08;
+            letter-spacing: -.055em;
+        }
+
+        .section-rule {
+            height: 2px;
+            margin: 14px 0 20px;
+            background: var(--ink);
+        }
+
+        .page-note {
+            margin: 0;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.6;
+            display: -webkit-box;
+            -webkit-line-clamp: 10;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .notice {
+            margin-top: 22px;
+            padding: 15px 15px 15px 17px;
+            border-left: 4px solid var(--yellow);
+            background: var(--yellow-soft);
+            color: #554c11;
+            font-size: 10px;
+        }
+
+        .notice b {
+            color: var(--ink);
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        .metric {
+            min-height: 111px;
+            padding: 13px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .metric::after {
+            content: "";
+            height: 3px;
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            background: var(--yellow);
+        }
+
+        .metric.blue::after {
+            background: var(--blue);
+        }
+
+        .metric span {
+            display: block;
+            color: var(--muted);
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .metric strong {
+            display: block;
+            margin-top: 18px;
+            font-size: 29px;
+            line-height: 1;
+            letter-spacing: -.07em;
+        }
+
+        .metric small {
+            display: block;
+            margin-top: 5px;
+            color: #7c8588;
+            font-size: 8px;
+        }
+
+        .metric small.good {
+            color: var(--green);
+            font-weight: 700;
+        }
+
+        .chart-shelf {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 17px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .visual-card {
+            min-height: 156px;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: linear-gradient(135deg, #fff 0%, #fbfcfb 100%);
+        }
+
+        .visual-card::after {
+            content: "";
+            width: 84px;
+            height: 84px;
+            position: absolute;
+            right: -36px;
+            bottom: -36px;
+            border: 1px solid rgba(17, 85, 155, .16);
+            border-radius: 50%;
+        }
+
+        .chart-caption {
+            margin: 0;
+            color: #687075;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+        }
+
+        .ring-layout {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 11px;
+        }
+
+        .ring {
+            width: 82px;
+            height: 82px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: conic-gradient(var(--yellow) 0 48%, #eef0ed 48% 100%);
+        }
+
+        .ring::before {
+            content: "";
+            width: 62px;
+            height: 62px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: #fff;
+            color: var(--ink);
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -.06em;
+        }
+
+        .ring-copy strong {
+            display: block;
+            font-size: 17px;
+            letter-spacing: -.06em;
+        }
+
+        .ring-copy span {
+            display: block;
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 9px;
+            line-height: 1.4;
+        }
+
+        .signal-bars {
+            display: grid;
+            gap: 10px;
+            margin-top: 17px;
+        }
+
+        .signal-bar {
+            display: grid;
+            grid-template-columns: 73px 1fr 27px;
+            align-items: center;
+            gap: 8px;
+            color: #4d5558;
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .signal-bar .track {
+            height: 8px;
+        }
+
+        .signal-bar:nth-child(1) .fill {
+            background: var(--blue);
+        }
+
+        .signal-bar:nth-child(2) .fill {
+            background: var(--yellow);
+        }
+
+        .signal-bar:nth-child(3) .fill {
+            background: linear-gradient(90deg, var(--yellow), var(--blue));
+        }
+
+        .chart-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 17px;
+        }
+
+        .funnel {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            height: 103px;
+            padding: 13px 0 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .funnel-step {
+            flex: 1;
+            display: grid;
+            align-content: end;
+            gap: 5px;
+            text-align: center;
+        }
+
+        .funnel-step i {
+            display: block;
+            min-height: 8px;
+            background: var(--yellow);
+            border-radius: 3px 3px 0 0;
+        }
+
+        .funnel-step:nth-child(2) i {
+            background: var(--blue);
+        }
+
+        .funnel-step:nth-child(3) i {
+            background: var(--ink);
+        }
+
+        .funnel-step b {
+            font-size: 14px;
+            line-height: 1;
+            letter-spacing: -.06em;
+        }
+
+        .funnel-step span {
+            color: var(--muted);
+            font-size: 8px;
+            line-height: 1.2;
+        }
+
+        .stacked-activity {
+            display: flex;
+            height: 28px;
+            overflow: hidden;
+            margin: 17px 0 10px;
+            border-radius: 4px;
+            background: #f0f1ef;
+        }
+
+        .stacked-activity i {
+            display: block;
+            height: 100%;
+        }
+
+        .stacked-activity i:nth-child(1) {
+            background: var(--blue);
+        }
+
+        .stacked-activity i:nth-child(2) {
+            background: #4b83b7;
+        }
+
+        .stacked-activity i:nth-child(3) {
+            background: var(--yellow);
+        }
+
+        .tiny-key {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            color: var(--muted);
+            font-size: 8px;
+        }
+
+        .tiny-key span::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            display: inline-block;
+            margin-right: 4px;
+            border-radius: 50%;
+            background: var(--blue);
+        }
+
+        .tiny-key span:nth-child(2)::before {
+            background: #4b83b7;
+        }
+
+        .tiny-key span:nth-child(3)::before {
+            background: var(--yellow);
+        }
+
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            height: 150px;
+            margin-top: 14px;
+            padding: 0 2px 18px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .bar-chart .bar {
+            flex: 1;
+            min-width: 0;
+            display: grid;
+            align-content: end;
+            gap: 5px;
+            text-align: center;
+        }
+
+        .bar-chart .bar i {
+            display: block;
+            min-height: 4px;
+            border-radius: 3px 3px 0 0;
+            background: var(--blue);
+        }
+
+        .bar-chart .bar:nth-child(even) i {
+            background: var(--yellow);
+        }
+
+        .bar-chart .bar b {
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        .bar-chart .bar span {
+            color: var(--muted);
+            font-size: 7px;
+            line-height: 1.15;
+        }
+
+        .rate-bars {
+            display: grid;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .rate-bar {
+            display: grid;
+            grid-template-columns: 62px 1fr 28px;
+            align-items: center;
+            gap: 8px;
+            color: #4b5356;
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .rate-bar .track {
+            height: 8px;
+        }
+
+        .rate-bar:nth-child(1) .fill {
+            background: var(--yellow);
+        }
+
+        .rate-bar:nth-child(2) .fill {
+            background: var(--blue);
+        }
+
+        .rate-bar:nth-child(3) .fill {
+            background: #4b83b7;
+        }
+
+        .rate-bar:nth-child(4) .fill {
+            background: var(--ink);
+        }
+
+        .link-dial {
+            display: flex;
+            align-items: center;
+            gap: 17px;
+            margin-top: 15px;
+        }
+
+        .dial {
+            width: 84px;
+            height: 84px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: conic-gradient(var(--blue) 0 89%, var(--yellow) 89% 100%);
+        }
+
+        .dial::before {
+            content: "{{ unique_domains }} / {{ links|length }}";
+            width: 62px;
+            height: 62px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: #fff;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: -.06em;
+        }
+
+        .dial-copy {
+            color: var(--muted);
+            font-size: 9px;
+            line-height: 1.5;
+        }
+
+        .dial-copy b {
+            display: block;
+            color: var(--ink);
+            font-size: 11px;
+        }
+
+        .page-one-content {
+            padding-top: 39px;
+        }
+
+        .page-one-content .section-heading {
+            font-size: 26px;
+        }
+
+        .page-one-content .metric-grid {
+            margin-top: 30px;
+        }
+
+        .page-one .chart-shelf .visual-card {
+            min-height: 306px;
+        }
+
+        .page-one .ring-layout {
+            min-height: 236px;
+            justify-content: center;
+        }
+
+        .page-one .ring {
+            width: 142px;
+            height: 142px;
+        }
+
+        .page-one .ring::before {
+            width: 106px;
+            height: 106px;
+            font-size: 23px;
+        }
+
+        .page-one .ring-copy strong {
+            font-size: 23px;
+        }
+
+        .page-one .ring-copy span {
+            max-width: 122px;
+            font-size: 10px;
+        }
+
+        .page-one .signal-bars {
+            min-height: 236px;
+            justify-content: space-around;
+            margin-top: 10px;
+        }
+
+        .page-one .signal-bar {
+            grid-template-columns: 74px 1fr 28px;
+            font-size: 10px;
+        }
+
+        .page-one .signal-bar .track {
+            height: 15px;
+        }
+
+        .page-one .chart-shelf .visual-card:nth-child(2) .bar-chart {
+            height: 226px;
+            margin-top: 15px;
+            padding-top: 18px;
+        }
+
+        .number-source {
+            position: absolute;
+            right: 54px;
+            bottom: 52px;
+            color: #8b9395;
+            font-size: 8px;
+            letter-spacing: .09em;
+            text-transform: uppercase;
+        }
+
+        .heading-row {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .source {
+            color: #82898c;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .09em;
+            text-transform: uppercase;
+        }
+
+        .performance-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .small-metric {
+            min-height: 92px;
+            padding: 13px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+        }
+
+        .small-metric span {
+            display: block;
+            color: var(--muted);
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .small-metric strong {
+            display: block;
+            margin-top: 15px;
+            font-size: 25px;
+            line-height: 1;
+            letter-spacing: -.06em;
+        }
+
+        .gbp {
+            display: grid;
+            grid-template-columns: 1.25fr repeat(4, 1fr);
+            gap: 14px;
+            align-items: center;
+            margin-top: 13px;
+            padding: 16px;
+            border: 1px solid #eddc8c;
+            border-left: 5px solid var(--yellow);
+            border-radius: 6px;
+            background: #fffdf4;
+        }
+
+        .gbp-title {
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .gbp-stat span {
+            display: block;
+            color: var(--muted);
+            font-size: 8px;
+            font-weight: 600;
+        }
+
+        .gbp-stat strong {
+            font-size: 18px;
+            letter-spacing: -.05em;
+        }
+
+        .page-two .page-inner {
+            padding-top: 70px;
+        }
+
+        .page-two .section-heading {
+            font-size: 28px;
+        }
+
+        .page-two .chart-row .visual-card {
+            min-height: 278px;
+        }
+
+        .page-two .funnel {
+            height: 216px;
+            padding-top: 19px;
+        }
+
+        .page-two .bar-chart {
+            height: 216px;
+        }
+
+        .card {
+            padding: 19px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .pill {
+            padding: 4px 8px;
+            border: 1px solid #edd16a;
+            border-radius: 99px;
+            color: #665213;
+            background: var(--yellow-soft);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .position-row {
+            display: grid;
+            grid-template-columns: 64px 1fr 18px;
+            gap: 8px;
+            align-items: center;
+            margin: 11px 0;
+            font-size: 9px;
+        }
+
+        .track {
+            height: 7px;
+            overflow: hidden;
+            border-radius: 20px;
+            background: #f0f1ef;
+        }
+
+        .fill {
+            height: 100%;
+            border-radius: 20px;
+            background: linear-gradient(90deg, var(--yellow), var(--blue));
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            padding: 9px 6px;
+            color: #7d8588;
+            border-bottom: 1px solid var(--line);
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 9px 6px;
+            border-bottom: 1px solid #eeeeea;
+            font-size: 10px;
+        }
+
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .rank {
+            display: inline-block;
+            min-width: 23px;
+            padding: 2px 5px;
+            border-radius: 4px;
+            background: #e8f4eb;
+            color: #136643;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .ai-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 9px;
+            margin-bottom: 14px;
+        }
+
+        .ai-metric {
+            padding: 11px;
+            border: 1px solid #cfe4f8;
+            border-radius: 5px;
+            background: var(--blue-soft);
+        }
+
+        .ai-metric span {
+            display: block;
+            color: #5e7587;
+            font-size: 8px;
+            font-weight: 600;
+        }
+
+        .ai-metric strong {
+            display: block;
+            margin-top: 9px;
+            color: var(--blue);
+            font-size: 21px;
+            line-height: 1;
+            letter-spacing: -.06em;
+        }
+
+        .page-three .page-inner {
+            padding-top: 65px;
+        }
+
+        .page-three .section-heading {
+            font-size: 28px;
+        }
+
+        .page-three .card+.card {
+            margin-top: 20px;
+        }
+
+        .page-three .eyebrow:nth-of-type(2) {
+            margin-top: 36px;
+        }
+
+        .links-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 22px;
+        }
+
+        .links-layout {
+            display: grid;
+            grid-template-columns: 1.2fr .8fr;
+            gap: 18px;
+        }
+
+        .activity {
+            display: grid;
+            grid-template-columns: 99px 1fr 15px;
+            gap: 8px;
+            align-items: center;
+            margin: 12px 0;
+            color: #3f4649;
+            font-size: 9px;
+        }
+
+        .activity .fill {
+            background: var(--yellow);
+        }
+
+        .page-four .page-inner {
+            padding-top: 65px;
+        }
+
+        .page-four .section-heading {
+            font-size: 28px;
+        }
+
+        .delivery-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .delivery-table td:last-child {
+            color: var(--blue);
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .evidence-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .evidence {
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+            break-inside: avoid;
+        }
+
+        .evidence h3 {
+            margin: 0 0 13px;
+            font-size: 12px;
+        }
+
+        .evidence-image {
+            width: 100%;
+            height: auto;
+            max-height: 250px;
+            display: block;
+            object-fit: contain;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .evidence small {
+            display: block;
+            margin-top: 7px;
+            color: var(--muted);
+            font-size: 8px;
+        }
+
+        .provenance {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            padding: 33px 54px 37px;
+            color: #fff;
+            background: var(--ink);
+        }
+
+        .provenance .eyebrow {
+            color: var(--yellow);
+        }
+
+        .provenance h2 {
+            margin: 0 0 18px;
+            font-size: 16px;
+            letter-spacing: -.035em;
+        }
+
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+
+        .source-card {
+            min-height: 69px;
+            padding: 11px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, .035);
+        }
+
+        .source-card strong {
+            display: block;
+            font-size: 9px;
+            line-height: 1.35;
+        }
+
+        .source-card small {
+            display: block;
+            margin-top: 6px;
+            color: var(--yellow);
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .page-five .page-inner {
+            padding-top: 65px;
+            padding-bottom: 48px;
+        }
+
+        .page-five .section-heading {
+            font-size: 28px;
+        }
+
+        .page-five .visual-card {
+            min-height: 272px;
+        }
+
+        @media print {
+            @page {
+                size: A4;
+                margin: 48px 0;
+            }
+            
+            @page :first {
+                margin-top: 0;
+            }
+
+            html,
+            body {
+                background: #fff;
+            }
+
+            .report-page {
+                width: 794px;
+                min-height: auto !important;
+                margin: 0;
+                box-shadow: none;
+                break-after: page;
+                overflow: visible !important;
+            }
+            
+            .page-inner {
+                padding-top: 7px !important;
+                padding-bottom: 0 !important;
+            }
+            
+            .page-one .page-inner {
+                padding-top: 55px !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="report-wrapper">
+    {% set gsc = comparative_data.gsc %}
+    {% set ga4 = comparative_data.ga4 %}
+    {% set gbp = comparative_data.gbp %}
+    {% set rankings = comparative_data.rankings %}
+    {% set keywords = comparative_data.rankings.keywords %}
+    {% set deltas = comparative_data.kpi_deltas %}
+    {% set ai_visibility = comparative_data.ai_visibility %}
+    {% set ai_mentioned = comparative_data.ai_mentioned %}
+    {% set ai_total = comparative_data.ai_total %}
+    {% set ai_platforms = comparative_data.ai_platforms %}
+    {% set ai_by_platform = comparative_data.ai_by_platform %}
+    {% set links = comparative_data.links %}
+    {% set unique_domains = comparative_data.unique_domains %}
+    {% set months = comparative_data.months %}
+    
+    {% set display_label = months[0] if months|length == 1 else months[0] ~ " \u2013 " ~ months[-1] %}
+    {% set link_types = comparative_data.link_types %}
+    {% set activities = comparative_data.activities %}
+    {% set screenshots = comparative_data.screenshots %}
+    {% set month_label = display_label %}
+    {% set generated_at_display = generated_at %}
+    {% set narrative = comparative_data.narrative %}
+    {% set status = "Published" %}
+    
+    <!-- Page 1: Cover, Executive Summary, Key Metrics -->
+    <section class="report-page page-one">
+        <header class="cover">
+            <div class="cover-inner">
+                <div class="brandline">
+                    {% if client_logo_url %}
+                    <img src="{{ client_logo_url }}" class="client-logo" alt="Client Logo" />
+                    {% else %}
+                    <div class="brand-mark">{{ client_name[:2] | upper }}</div>
+                    {% endif %}
+                    <div class="brandcopy"><strong>{{ client_name }}</strong><small>{{ client_domain }}</small></div>
+                    <div class="ez-logo"><img src="{{ base_url }}/static/agency_logo.png" alt="Agency Logo" /></div>
+                </div>
+                <p class="report-label">Monthly SEO Report</p>
+                <h1 style="margin: 0; font-size: 37px; line-height: 1;">Performance Report<br /><span>{{ display_label }}</span></h1>
+                <div class="date-row">
+                    <span class="status">Report Generated</span>
+                    <span>Generated {{ generated_at_display }}</span>
+                </div>
+            </div>
+        </header>
+        <div class="page-inner page-one-content">
+            <span class="eyebrow">Executive summary</span>
+            <h2 class="section-heading">{{ display_label }} Insights</h2>
+            <div class="section-rule"></div>
+            {% if narrative %}
+            <div class="page-note">{{ narrative }}</div>
+            {% else %}
+            <div class="notice">Narrative auto-generation failed. Please draft manually.</div>
+            {% endif %}
+            
+            <span class="eyebrow" style="margin-top:55px">Performance at a glance</span>
+            <h2 class="section-heading">Key Metrics</h2>
+            <div class="section-rule"></div>
+            
+            {% set total_keywords = keywords | length %}
+            {% set ns = namespace(top10=0) %}
+            {% for kw in keywords %}
+              {% if kw.get('_sort_pos') and kw.get('_sort_pos') <= 10 %}
+                {% set ns.top10 = ns.top10 + 1 %}
+              {% endif %}
+            {% endfor %}
+            {% set top10 = ns.top10 %}
+            {% set clicks_delta = deltas.get('gsc', {}).get('clicks', 0) %}
+            <div class="metric-grid">
+                <div class="metric">
+                    <span>Search Clicks</span>
+                    <strong>{{ gsc.get('clicks', 0) | fmt }}</strong>
+                    <small {% if clicks_delta > 0 %}class="good"{% endif %}>
+                        {% if clicks_delta > 0 %}▲{% elif clicks_delta < 0 %}▼{% else %}—{% endif %} 
+                        {{ clicks_delta | abs | fmt }} vs prev
+                    </small>
+                </div>
+                <div class="metric blue">
+                    <span>Website Sessions</span>
+                    <strong>{{ ga4.get('sessions', 0) | fmt }}</strong>
+                    <small>{{ ga4.get('engaged_sessions', 0) | fmt }} engaged</small>
+                </div>
+                <div class="metric">
+                    <span>Top 10 Rankings</span>
+                    <strong>{{ top10 }}</strong>
+                    <small>of {{ total_keywords }} tracked</small>
+                </div>
+                <div class="metric blue">
+                    <span>AI Mentions</span>
+                    <strong>{{ ai_mentioned }}</strong>
+                    <small>of {{ ai_total }} tracked</small>
+                </div>
+            </div>
+            <div class="chart-shelf">
+                <div class="visual-card">
+                    <p class="chart-caption">AI visibility, tracked prompts</p>
+                    <div class="ring-layout">
+                        {% set mention_pct = ((ai_mentioned / ai_total) * 100) | round | int if ai_total > 0 else 0 %}
+                        <div class="ring" style="background: conic-gradient(var(--yellow) 0 {{ mention_pct }}%, #eef0ed {{ mention_pct }}% 100%);">
+                            <style>
+                                .ring::before { content: "{{ mention_pct }}%"; }
+                            </style>
+                        </div>
+                        <div class="ring-copy"><strong>{{ ai_mentioned }} / {{ ai_total }}</strong><span>Brand mentions across AI engines.</span></div>
+                    </div>
+                </div>
+                <div class="visual-card">
+                    <p class="chart-caption">Session quality snapshot</p>
+                    <div class="bar-chart">
+                        {% set max_sess = [ga4.get('sessions', 0), 1] | max %}
+                        {% set h_sess = 146 %}
+                        {% set h_eng = [((ga4.get('engaged_sessions', 0) / max_sess) * 146), 4] | max %}
+                        {% set h_conv = [((ga4.get('conversions', 0) / max_sess) * 146), 4] | max %}
+                        <div class="bar"><i style="height:{{ h_sess }}px"></i><b>{{ ga4.get('sessions', 0) | fmt }}</b><span>Sessions</span></div>
+                        <div class="bar"><i style="height:{{ h_eng }}px"></i><b>{{ ga4.get('engaged_sessions', 0) | fmt }}</b><span>Engaged</span></div>
+                        <div class="bar"><i style="height:{{ h_conv }}px"></i><b>{{ ga4.get('conversions', 0) | fmt }}</b><span>Conversions</span></div>
+                    </div>
+                </div>
+            </div>
+            <span class="number-source">{{ display_label }}</span>
+        </div>
+    </section>
+
+    <!-- Page 2: Search Performance & GBP -->
+    <section class="report-page page-two">
+        <div class="page-inner">
+            
+            <!-- GSC Section -->
+            <div class="heading-row">
+                <div><span class="eyebrow">Search Performance</span>
+                    <h2 class="section-heading">Google Search Console</h2>
+                </div><span class="source">GSC · auto</span>
+            </div>
+            <div class="section-rule"></div>
+            <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+                <div class="small-metric"><span>Search Clicks</span><strong>{{ gsc.get('clicks', 0) | fmt }}</strong></div>
+                <div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong></div>
+                <div class="small-metric"><span>Avg CTR</span><strong>{{ (gsc.get('ctr', 0) * 100) | round(1) }}%</strong></div>
+                <div class="small-metric"><span>Avg Position</span><strong>{{ gsc.get('position', 0) | fmt }}</strong></div>
+            </div>
+
+            <!-- GA4 Section -->
+            <div class="heading-row">
+                <div><span class="eyebrow">Website Traffic</span>
+                    <h2 class="section-heading">Google Analytics 4</h2>
+                </div><span class="source">GA4 · auto</span>
+            </div>
+            <div class="section-rule"></div>
+            {% set show_conv = ga4.get('conversions', 0) > 0 %}
+            {% set show_cart = ga4.get('add_to_carts', 0) > 0 %}
+            {% set show_dur = ga4.get('avg_session_duration', 0) > 0 %}
+            {% set ga4_cols = 2 + (1 if show_conv else 0) + (1 if show_cart else 0) + (1 if show_dur else 0) %}
+            <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat({{ ga4_cols }}, 1fr); gap: 12px;">
+                <div class="small-metric"><span>Sessions</span><strong>{{ ga4.get('sessions', 0) | fmt }}</strong></div>
+                <div class="small-metric"><span>Organic Sessions</span><strong>{{ ga4.get('organic_sessions', 0) | fmt }}</strong></div>
+                {% if show_conv %}
+                <div class="small-metric"><span>Conversions</span><strong>{{ ga4.get('conversions', 0) | fmt }}</strong></div>
+                {% endif %}
+                {% if show_cart %}
+                <div class="small-metric"><span>Add to Carts</span><strong>{{ ga4.get('add_to_carts', 0) | fmt }}</strong></div>
+                {% endif %}
+                {% if show_dur %}
+                <div class="small-metric"><span>Avg Duration</span>
+                    <strong>
+                        {% set s = ga4.get('avg_session_duration', 0) %}
+                        {{ (s // 60) | int }}m {{ (s % 60) | int }}s
+                    </strong>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- GBP Section -->
+            {% set show_calls = gbp.get('calls', 0) > 0 %}
+            {% set show_dir = gbp.get('directions', 0) > 0 %}
+            {% set show_clicks = gbp.get('website_clicks', 0) > 0 %}
+            {% set show_searches = gbp.get('searches', 0) > 0 %}
+            {% set gbp_cols = (1 if show_calls else 0) + (1 if show_dir else 0) + (1 if show_clicks else 0) + (1 if show_searches else 0) %}
+            {% if gbp_cols > 0 %}
+            <div class="gbp" style="grid-template-columns: 1.25fr repeat({{ gbp_cols }}, 1fr);">
+                <div class="gbp-title">Google Business Profile</div>
+                {% if show_calls %}<div class="gbp-stat"><span>Calls</span><strong>{{ gbp.get('calls', 0) | fmt }}</strong></div>{% endif %}
+                {% if show_dir %}<div class="gbp-stat"><span>Direction Requests</span><strong>{{ gbp.get('directions', 0) | fmt }}</strong></div>{% endif %}
+                {% if show_clicks %}<div class="gbp-stat"><span>Website Clicks</span><strong>{{ gbp.get('website_clicks', 0) | fmt }}</strong></div>{% endif %}
+                {% if show_searches %}<div class="gbp-stat"><span>Searches</span><strong>{{ gbp.get('searches', 0) | fmt }}</strong></div>{% endif %}
+            </div>
+            {% endif %}
+            <div class="chart-row">
+                <div class="visual-card">
+                    <p class="chart-caption">GA4 engagement funnel</p>
+                    <div class="funnel">
+                        <div class="funnel-step"><i style="height:90px"></i><b>{{ ga4.get('sessions', 0) | fmt }}</b><span>Sessions</span></div>
+                        <div class="funnel-step"><i style="height:{{ [((ga4.get('engaged_sessions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('engaged_sessions', 0) | fmt }}</b><span>Engaged</span></div>
+                        <div class="funnel-step"><i style="height:{{ [((ga4.get('conversions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('conversions', 0) | fmt }}</b><span>Conversions</span></div>
+                    </div>
+                </div>
+                <div class="visual-card">
+                    <p class="chart-caption">Google Business Profile actions</p>
+                    <div class="bar-chart">
+                        {% set max_gbp = [gbp.get('calls', 0), gbp.get('directions', 0), gbp.get('website_clicks', 0), gbp.get('searches', 0), 1] | max %}
+                        {% set h_c = [((gbp.get('calls', 0) / max_gbp) * 100), 4] | max %}
+                        {% set h_d = [((gbp.get('directions', 0) / max_gbp) * 100), 4] | max %}
+                        {% set h_w = [((gbp.get('website_clicks', 0) / max_gbp) * 100), 4] | max %}
+                        {% set h_s = [((gbp.get('searches', 0) / max_gbp) * 100), 4] | max %}
+                        
+                        <div class="bar"><i style="height:{{ h_c }}px"></i><b>{{ gbp.get('calls', 0) | fmt }}</b><span>Calls</span></div>
+                        <div class="bar"><i style="height:{{ h_d }}px"></i><b>{{ gbp.get('directions', 0) | fmt }}</b><span>Directions</span></div>
+                        <div class="bar"><i style="height:{{ h_w }}px"></i><b>{{ gbp.get('website_clicks', 0) | fmt }}</b><span>Clicks</span></div>
+                        <div class="bar"><i style="height:{{ h_s }}px"></i><b>{{ gbp.get('searches', 0) | fmt }}</b><span>Searches</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Page 2b: GSC Breakdown — Top Pages -->
+    <section class="report-page" style="page-break-before: always;">
+        <div class="page-inner">
+            
+            <div class="heading-row">
+                <div><span class="eyebrow">Page performance</span>
+                    <h2 class="section-heading">Top Pages (GSC)</h2>
+                </div><span class="source">GSC · auto</span>
+            </div>
+            <div class="section-rule"></div>
+            <div class="card" style="margin-bottom: 28px;">
+                <table class="data-table" style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="border-bottom:2px solid var(--line);text-align:left;">
+                            <th style="padding:8px 0;">Page</th>
+                            <th style="text-align:right;padding:8px 6px;">Clicks</th>
+                            <th style="text-align:right;padding:8px 6px;">Impressions</th>
+                            <th style="text-align:right;padding:8px 6px;">CTR</th>
+                            <th style="text-align:right;padding:8px 0;">Position</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if gsc_top_pages %}
+                            {% for p in gsc_top_pages %}
+                            <tr style="border-bottom:1px solid var(--line-2, #eee);">
+                                <td style="padding:6px 0;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--brand, #2563eb);">{{ p.page | replace('https://', '') | replace('http://', '') }}</td>
+                                <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ p.clicks | fmt }}</td>
+                                <td style="text-align:right;padding:6px;font-family:var(--mono);">{{ p.impressions | fmt }}</td>
+                                <td style="text-align:right;padding:6px;font-family:var(--mono);">{{ p.ctr | round(1) }}%</td>
+                                <td style="text-align:right;padding:6px 0;font-family:var(--mono);">{{ p.position }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="5" style="text-align:center;padding:24px 0;color:var(--muted);">No search console data available</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Page 2c: GA4 Breakdown — Sources, Pages, Devices -->
+    <section class="report-page" style="page-break-before: always;">
+        <div class="page-inner">
+            
+            <div class="heading-row">
+                <div><span class="eyebrow">Acquisition</span>
+                    <h2 class="section-heading">Top Traffic Sources (GA4)</h2>
+                </div><span class="source">GA4 · auto</span>
+            </div>
+            <div class="section-rule"></div>
+            <div class="card" style="margin-bottom: 28px;">
+                <table class="data-table" style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="border-bottom:2px solid var(--line);text-align:left;">
+                            <th style="padding:8px 0;">Source / Medium</th>
+                            <th style="text-align:right;padding:8px 6px;">Sessions</th>
+                            <th style="text-align:right;padding:8px 6px;">Users</th>
+                            <th style="text-align:right;padding:8px 0;">Conversions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if ga4_traffic_sources %}
+                            {% for s in ga4_traffic_sources %}
+                            <tr style="border-bottom:1px solid var(--line-2, #eee);">
+                                <td style="padding:6px 0;font-weight:600;">{{ s.source }}</td>
+                                <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ s.sessions | fmt }}</td>
+                                <td style="text-align:right;padding:6px;font-family:var(--mono);">{{ s.users | fmt }}</td>
+                                <td style="text-align:right;padding:6px 0;font-family:var(--mono);">{{ s.conversions | fmt }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="4" style="text-align:center;padding:24px 0;color:var(--muted);">No traffic sources available</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="heading-row">
+                <div><span class="eyebrow">Engagement</span>
+                    <h2 class="section-heading">Top Landing Pages (GA4)</h2>
+                </div><span class="source">GA4 · auto</span>
+            </div>
+            <div class="section-rule"></div>
+            <div class="card" style="margin-bottom: 28px;">
+                <table class="data-table" style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="border-bottom:2px solid var(--line);text-align:left;">
+                            <th style="padding:8px 0;">Page Path</th>
+                            <th style="text-align:right;padding:8px 6px;">Sessions</th>
+                            <th style="text-align:right;padding:8px 6px;">Users</th>
+                            <th style="text-align:right;padding:8px 0;">Conversions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if ga4_top_pages %}
+                            {% for p in ga4_top_pages %}
+                            <tr style="border-bottom:1px solid var(--line-2, #eee);">
+                                <td style="padding:6px 0;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--brand, #2563eb);">{{ p.page }}</td>
+                                <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ p.sessions | fmt }}</td>
+                                <td style="text-align:right;padding:6px;font-family:var(--mono);">{{ p.users | fmt }}</td>
+                                <td style="text-align:right;padding:6px 0;font-family:var(--mono);">{{ p.conversions | fmt }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="4" style="text-align:center;padding:24px 0;color:var(--muted);">No landing pages available</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="break-inside: avoid; page-break-inside: avoid; margin-top:28px;">
+                <div class="heading-row">
+                    <div><span class="eyebrow">Audience</span>
+                        <h2 class="section-heading">Device Breakdown (GA4)</h2>
+                    </div><span class="source">GA4 · auto</span>
+                </div>
+                <div class="section-rule"></div>
+                {% if ga4_devices %}
+                    {% set ns_dev_ga4 = namespace(total_sessions=0) %}
+                    {% for d in ga4_devices %}
+                        {% set ns_dev_ga4.total_sessions = ns_dev_ga4.total_sessions + d.sessions %}
+                    {% endfor %}
+                    <div class="performance-grid">
+                        {% for d in ga4_devices %}
+                        {% set pct = ((d.sessions / [ns_dev_ga4.total_sessions, 1] | max) * 100) | round | int %}
+                        <div class="small-metric" style="text-align:center;">
+                            <span>{{ d.device }}</span>
+                            <strong style="font-size:28px;">{{ pct }}%</strong>
+                            <span style="font-size:10px;color:var(--ink-3);">{{ d.sessions | fmt }} sessions · {{ d.users | fmt }} users</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div style="text-align:center;padding:24px 0;color:var(--muted);">No device data available</div>
+                {% endif %}
+            </div>
+
+            <div style="break-inside: avoid; page-break-inside: avoid; margin-top:28px; margin-bottom:28px;">
+                <div class="heading-row">
+                    <div><span class="eyebrow">Audience</span>
+                        <h2 class="section-heading">Top Countries (GA4)</h2>
+                    </div><span class="source">GA4 · auto</span>
+                </div>
+                <div class="section-rule"></div>
+                <div class="card">
+                    <table class="data-table" style="width:100%;border-collapse:collapse;font-size:11px;">
+                        <thead>
+                            <tr style="border-bottom:2px solid var(--line);text-align:left;">
+                                <th style="padding:8px 0;">Country</th>
+                                <th style="text-align:right;padding:8px 6px;">Sessions</th>
+                                <th style="text-align:right;padding:8px 6px;">Users</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if ga4_countries %}
+                                {% for c in ga4_countries %}
+                                <tr style="border-bottom:1px solid var(--line-2, #eee);">
+                                    <td style="padding:6px 0;font-weight:600;">{{ c.country }}</td>
+                                    <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ c.sessions | fmt }}</td>
+                                    <td style="text-align:right;padding:6px;font-family:var(--mono);">{{ c.users | fmt }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="3" style="text-align:center;padding:24px 0;color:var(--muted);">No country data available</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Page 3: Rankings & AI -->
+    <section class="report-page page-three">
+        <div class="page-inner">
+            <div class="heading-row">
+                <div><span class="eyebrow">Keyword performance</span>
+                    <h2 class="section-heading">Rankings</h2>
+                </div><span class="pill">Tracking</span>
+            </div>
+            <div class="section-rule"></div>
+            <div class="card">
+                <div class="card-title"><span>Positioning Summary</span></div>
+                
+                {% set ns_pos = namespace(t10=0, t20=0, t50=0, b50=0) %}
+                {% for kw in keywords %}
+                  {% set pos = kw.get('_sort_pos') %}
+                  {% if pos %}
+                    {% if pos <= 10 %}
+                      {% set ns_pos.t10 = ns_pos.t10 + 1 %}
+                    {% elif pos <= 20 %}
+                      {% set ns_pos.t20 = ns_pos.t20 + 1 %}
+                    {% elif pos <= 50 %}
+                      {% set ns_pos.t50 = ns_pos.t50 + 1 %}
+                    {% else %}
+                      {% set ns_pos.b50 = ns_pos.b50 + 1 %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+                {% set t10 = ns_pos.t10 %}
+                {% set t20 = ns_pos.t20 %}
+                {% set t50 = ns_pos.t50 %}
+                {% set b50 = ns_pos.b50 %}
+                
+                {% set w10 = ((t10 / total_keywords) * 100) if total_keywords > 0 else 0 %}
+                {% set w20 = ((t20 / total_keywords) * 100) if total_keywords > 0 else 0 %}
+                {% set w50 = ((t50 / total_keywords) * 100) if total_keywords > 0 else 0 %}
+                {% set wb50 = ((b50 / total_keywords) * 100) if total_keywords > 0 else 0 %}
+                
+                <div class="position-row"><span>Top 10</span>
+                    <div class="track"><div class="fill" style="width:{{ w10 }}%"></div></div><b>{{ t10 }}</b>
+                </div>
+                <div class="position-row"><span>11–20</span>
+                    <div class="track"><div class="fill" style="width:{{ w20 }}%"></div></div><b>{{ t20 }}</b>
+                </div>
+                <div class="position-row"><span>21–50</span>
+                    <div class="track"><div class="fill" style="width:{{ w50 }}%"></div></div><b>{{ t50 }}</b>
+                </div>
+                <div class="position-row"><span>Below 50</span>
+                    <div class="track"><div class="fill" style="width:{{ wb50 }}%"></div></div><b>{{ b50 }}</b>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-top:13px">
+                <div class="card-title"><span>Top Keywords ({{ total_keywords }})</span></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Keyword</th>
+                            <th>SV</th>
+                            <th>Initial</th>
+                            {% for m in months %}
+                              <th>{{ m[:3] }}'{{ m[-2:] }}</th>
+                            {% endfor %}
+                            <th>Change</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for kw in keywords[:10] %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td style="font-weight: 600">{{ kw.get('term', '') }}</td>
+                            <td>{{ "{:,}".format(kw.get('search_volume')) if kw.get('search_volume') else '-' }}</td>
+                            <td><span class="rank" style="background:#f0f1ef; color:#687075">{{ kw.get('initial_rank') or '-' }}</span></td>
+                            {% set hist = kw.get('positions', {}) %}
+                            {% for m in months %}
+                              <td><span class="rank">{{ hist.get(m) or '-' }}</span></td>
+                            {% endfor %}
+                            {% set pchg = kw.get('change') %}
+                            <td>{% if pchg != None %}{% if pchg > 0 %}<span style="color:var(--green)">▲ {{ pchg }}</span>{% elif pchg < 0 %}<span style="color:red">▼ {{ pchg | abs }}</span>{% else %}—{% endif %}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Page 4: AI Visibility -->
+    <section class="report-page page-ai">
+        <div class="page-inner">
+            <span class="eyebrow">Search generative experience</span>
+            <div class="heading-row">
+                <h2 class="section-heading">AI Visibility</h2><span class="pill">Tracking</span>
+            </div>
+            <div class="section-rule"></div>
+            <div class="ai-grid">
+                <div class="ai-metric"><span>Brand Mentions</span><strong>{{ ai_mentioned }}</strong></div>
+                <div class="ai-metric"><span>Total Prompts</span><strong>{{ ai_total }}</strong></div>
+                <div class="ai-metric"><span>Mention Rate</span><strong>{{ mention_pct }}%</strong></div>
+                <div class="ai-metric"><span>AI Engines</span><strong>{{ ai_platforms }}</strong></div>
+            </div>
+            <div class="card">
+                <div class="card-title"><span>Mentions by Platform</span></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Platform</th>
+                            <th>Mentioned</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for platform, stats in ai_by_platform.items() %}
+                        <tr>
+                            <td>{{ platform | capitalize }}</td>
+                            <td>{{ stats.mentioned }}</td>
+                            <td>{{ stats.total }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Page 4: Links & Activities -->
+    <section class="report-page page-four">
+        <div class="page-inner">
+            <div class="heading-row">
+                <div><span class="eyebrow">Off-page SEO</span>
+                    <h2 class="section-heading">Links Built</h2>
+                </div><span class="pill">Delivery</span>
+            </div>
+            <div class="section-rule"></div>
+            <div class="links-summary">
+                <div class="metric"><span>Links Created</span><strong>{{ links | length }}</strong><small>In {{ display_label }}</small></div>
+                <div class="metric blue"><span>Unique Domains</span><strong>{{ unique_domains }}</strong></div>
+                <div class="metric"><span>Activity Types</span><strong>{{ link_types.keys() | length }}</strong></div>
+            </div>
+            
+            <div class="links-layout">
+                <div class="card">
+                    <div class="card-title"><span>Live Links</span></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Month</th>
+                                <th>Activity</th>
+                                <th>URL</th>
+                                <th style="text-align:center;">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for l in links %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ l.get('_month', '') }}</td>
+                                <td>{{ l.get('activity_type', '') }}</td>
+                                <td>
+                                    {% if l.get('url') %}
+                                      <a href="{{ l.get('url') }}" style="color:var(--text); text-decoration:underline;">{{ l.get('domain', 'Link') }}</a>
+                                    {% else %}
+                                      <span style="color:#888;">—</span>
+                                    {% endif %}
+                                </td>
+                                <td style="text-align:center; font-weight:bold;">{{ l.get('count', 1) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span>By Activity Type</span></div>
+                    {% set max_link_type = link_types.values() | max if link_types else 1 %}
+                    {% for ltype, lcount in link_types.items() %}
+                    <div class="activity"><span>{{ ltype }}</span>
+                        <div class="track">
+                            <div class="fill" style="width:{{ ((lcount / max_link_type) * 100) }}%"></div>
+                        </div><b>{{ lcount }}</b>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Page 5: Work Delivery -->
+    <section class="report-page page-five">
+        <div class="page-inner">
+            <div class="heading-row">
+                <div><span class="eyebrow">Project delivery</span>
+                    <h2 class="section-heading">Work Done & Proof</h2>
+                </div><span class="pill">Delivery</span>
+            </div>
+            <div class="section-rule"></div>
+            
+            <div class="delivery-layout">
+                <div class="card">
+                    <div class="card-title"><span>Delivered in {{ display_label }}</span></div>
+                    <table class="delivery-table">
+                        <tbody>
+                            {% for act in activities %}
+                            <tr>
+                                <td>{{ act.activity_type }}</td>
+                                <td>{{ act.count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if screenshots and screenshots | length > 0 %}
+                <div>
+                    <h3 style="margin-bottom: 16px; font-size: 16px;">Screenshots & Evidence</h3>
+                    <div class="evidence-grid">
+                        {% for img in screenshots %}
+                        <div class="evidence">
+                            {% if img.base64_data %}
+                                <img class="evidence-image" src="{{ img.base64_data }}" alt="Proof" />
+                            {% else %}
+                                <img class="evidence-image" src="{{ base_url }}{{ img.file_url }}" alt="Proof" />
+                            {% endif %}
+                            <small>{{ img.caption }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

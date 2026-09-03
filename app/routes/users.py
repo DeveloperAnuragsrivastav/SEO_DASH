@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Optional
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
@@ -16,13 +16,14 @@ from app.core.security import get_password_hash
 router = APIRouter(
     prefix="/users",
     tags=["users"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin]))]
 )
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: UserRole
+    client_id: uuid.UUID | None = None
 
 class UserUpdateRole(BaseModel):
     role: UserRole
@@ -31,8 +32,9 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     role: UserRole
+    client_id: uuid.UUID | None = None
     is_active: bool
-    last_login_at: Optional[str] = None
+    last_login_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -49,6 +51,7 @@ def list_users(db: Session = Depends(get_db)):
             id=u.id,
             email=u.email,
             role=u.role,
+            client_id=u.client_id,
             is_active=u.is_active,
             last_login_at=u.last_login_at.isoformat() if u.last_login_at else None
         ) for u in users
@@ -71,6 +74,7 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
         role=user_in.role,
+        client_id=user_in.client_id if user_in.role == UserRole.manager else None,
         is_active=True
     )
     db.add(new_user)
@@ -80,6 +84,7 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
         id=new_user.id,
         email=new_user.email,
         role=new_user.role,
+        client_id=new_user.client_id,
         is_active=new_user.is_active,
         last_login_at=None
     )
@@ -98,6 +103,7 @@ def update_user_role(user_id: uuid.UUID, role_in: UserUpdateRole, db: Session = 
         id=user.id,
         email=user.email,
         role=user.role,
+        client_id=user.client_id,
         is_active=user.is_active,
         last_login_at=user.last_login_at.isoformat() if user.last_login_at else None
     )

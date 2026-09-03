@@ -18,8 +18,9 @@ from app.models.enums import UserRole
 router = APIRouter(
     prefix="/clients/{client_id}/keyword-research",
     tags=["keyword_research"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
+
 
 @router.get("")
 def get_keyword_research(

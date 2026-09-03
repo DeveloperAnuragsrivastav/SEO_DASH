@@ -3,7 +3,7 @@ from typing import Optional
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Integer, Text, text
+from sqlalchemy import Date, ForeignKey, Integer, Text, text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +14,9 @@ class Activity(Base):
     """Content activity entry — always manual. §11."""
 
     __tablename__ = "activities"
+    __table_args__ = (
+        UniqueConstraint("client_id", "month", "activity_type", name="uq_activity_client_month_type"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")

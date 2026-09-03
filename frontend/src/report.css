@@ -1,0 +1,418 @@
+/* ═══════════════════════════════════════════════════════════
+   REPORT VIEW — Scoped styles for /clients/:id/reports/:month
+   All selectors prefixed with .report-view to avoid global leaks.
+   ═══════════════════════════════════════════════════════════ */
+
+.report-view {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+.report-view .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(15, 17, 21, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  transition: all 0.3s ease;
+}
+
+.report-view .topbar .wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 66px;
+}
+
+.report-view .vr {
+  width: 1px;
+  height: 26px;
+  background: rgba(255, 255, 255, 0.15);
+  flex: none;
+}
+
+.report-view .clientmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.report-view .clientmark b {
+  display: block;
+  font-family: var(--disp);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.report-view .logoslot {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  min-width: 86px;
+  padding: 0 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  flex: none;
+  white-space: nowrap;
+}
+
+.report-view .logoslot img {
+  max-height: 26px;
+  width: auto;
+  display: block;
+}
+
+.report-view .dom {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  display: block;
+  line-height: 1.3;
+}
+
+.report-view .pill {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.report-view .pill.live {
+  background: rgba(22, 111, 82, 0.2);
+  color: #6FD1A9;
+  border-color: rgba(22, 111, 82, 0.4);
+}
+
+/* Buttons inside report topbar */
+.report-view .topbar .btn {
+  background: var(--amber);
+  color: var(--ink);
+  border: 0;
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.report-view .topbar .btn:hover {
+  filter: brightness(1.06);
+}
+
+.report-view .topbar .btn.ghost {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.report-view .topbar .btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  filter: none;
+}
+
+/* ── Section nav ─────────────────────────────────────────── */
+.report-view .nav {
+  position: sticky;
+  top: 66px;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.report-view .nav .wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.report-view .nav a {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.report-view .nav a:hover {
+  color: var(--ink);
+}
+
+.report-view .nav a.act {
+  color: var(--ink);
+  border-bottom-color: var(--brand);
+  font-weight: 600;
+}
+
+/* ── Section shell ───────────────────────────────────────── */
+.report-view .wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.report-view .report-section {
+  padding: 64px 0 24px;
+  scroll-margin-top: 150px;
+}
+
+.report-view .head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.report-view .head h2 {
+  font-size: 26px;
+}
+
+/* ── KPI overrides for report ───────────────────────────── */
+.report-view .kpi {
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.report-view .kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  border-color: var(--amber-border);
+}
+
+/* Add a subtle glow bar at the top of KPIs */
+.report-view .kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand), var(--amber-soft));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.report-view .kpi:hover::before {
+  opacity: 1;
+}
+
+.report-view .kpi .lab {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-view .kpi .val {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.report-view .kpi .sub {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* ── Report cards ────────────────────────────────────────── */
+.report-view .card {
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+/* ── Report tables ───────────────────────────────────────── */
+.report-view table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.report-view th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.report-view td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+  vertical-align: middle;
+  font-size: 14px;
+}
+
+.report-view tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.report-view tbody tr:hover {
+  background: var(--bg-surface-hover);
+}
+
+/* ── Shots grid ──────────────────────────────────────────── */
+.report-view .shots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.report-view .shot-card .thumb {
+  aspect-ratio: 16/9;
+  background: var(--bg-surface-hover);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+}
+
+.report-view .shot-card .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.report-view .shot-card .label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+.report-view .report-footer {
+  margin-top: 64px;
+  background: rgba(15, 17, 21, 0.95);
+  color: rgba(255, 255, 255, 0.55);
+  padding: 48px 0 64px;
+  border-top: 1px solid var(--line);
+}
+
+.report-view .report-footer h3 {
+  color: #fff;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.report-view .srcgrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.report-view .srccard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.report-view .srccard:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.report-view .srccard b {
+  display: block;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.report-view .srccard span {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.report-view .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--up);
+  display: inline-block;
+  margin-right: 5px;
+}
+
+.report-view .dot.man {
+  background: var(--amber);
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 980px) {
+  .report-view .srcgrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .report-view .wrap { padding: 0 14px; }
+  .report-view .kpi .val { font-size: 26px; }
+  .report-view .head h2 { font-size: 21px; }
+  .report-view .topbar .wrap { gap: 10px; }
+  .report-view .hide-s { display: none; }
+  .report-view .srcgrid { grid-template-columns: 1fr; }
+}
+
+/* ── Print ───────────────────────────────────────────────── */
+@media print {
+  @page { margin: 0; size: A4 portrait; }
+  body { background: white; }
+  .report-view .topbar, .report-view .nav { display: none !important; }
+  .report-view .report-section { padding: 32px 48px; page-break-inside: avoid; border-bottom: none; }
+  .report-view .report-section:not(:first-child) { page-break-before: always; }
+  .report-view .kpi, .report-view .card { border: 1px solid var(--line) !important; box-shadow: none !important; }
+  .report-view { background: white; }
+}

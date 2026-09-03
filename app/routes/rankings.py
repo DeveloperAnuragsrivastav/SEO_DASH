@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import csv
 import io
 import uuid
@@ -21,15 +20,15 @@ from app.models.enums import UserRole
 router = APIRouter(
     prefix="/clients/{client_id}/rankings",
     tags=["rankings"],
-    dependencies=[Depends(RequireRole([UserRole.agency_admin, UserRole.agency_staff]))]
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 )
 
 
 class ManualRankingInput(BaseModel):
     keyword_id: uuid.UUID
     captured_on: date
-    position: Optional[int] = Field(None, ge=1)
-    url: Optional[str] = None
+    position: int | None = Field(None, ge=1)
+    url: str | None = None
 
 
 from datetime import timedelta

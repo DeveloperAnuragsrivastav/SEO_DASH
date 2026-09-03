@@ -3,7 +3,7 @@ from typing import Optional
 import uuid
 from datetime import date
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Text, text
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Text, text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +15,9 @@ class AiMention(Base):
     """AI-visibility result per platform per prompt. §11, §6."""
 
     __tablename__ = "ai_mentions"
+    __table_args__ = (
+        UniqueConstraint("client_id", "month", "prompt_id", "platform", name="uq_aimention_client_month_prompt_plat"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
@@ -22,6 +25,7 @@ class AiMention(Base):
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False
     )
+    month: Mapped[date] = mapped_column(Date, nullable=False)
     prompt_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("ai_prompts.id"), nullable=True
     )

@@ -1,20 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import api from '../../api/client';
-import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
-import { AdminShell } from '../../components/layout/AdminShell';
-import {
-  Panel,
-  StatusPill,
-  TablePanel,
-  Td,
-  Th,
-  btnPrimary,
-  inputCls,
-  btnGhost
-} from '../../components/kit';
+import PageHeader from '../../components/ui/PageHeader';
+import PageSkeleton from '../../components/ui/PageSkeleton';
+import PaginationBar from '../../components/ui/PaginationBar';
 
 interface AIPrompt {
   id: string;
@@ -30,13 +22,17 @@ const AIPrompts: React.FC = () => {
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [draft, setDraft] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
 
   const fetchPrompts = async () => {
     try {
-      const { data } = await api.get(`/clients/${clientId}/ai_prompts`);
-      setPrompts(data);
+      const { data } = await api.get(`/clients/${clientId}/ai_prompts`, {
+        params: { page, page_size: pageSize }
+      });
+      setPrompts(data.items || []);
+      setTotal(data.total || 0);
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed to fetch AI Prompts');
     }
@@ -53,25 +49,13 @@ const AIPrompts: React.FC = () => {
 
   useEffect(() => {
     fetchClient();
-    fetchPrompts().finally(() => setLoading(false));
   }, [clientId]);
+  
+  useEffect(() => {
+    setLoading(true);
+    fetchPrompts().finally(() => setLoading(false));
+  }, [clientId, page, pageSize]);
 
-  const addPrompt = async () => {
-    const text = draft.trim();
-    if (!text) {
-      toast.error("Prompt text is required.");
-      textareaRef.current?.focus();
-      return;
-    }
-    try {
-      await api.post(`/clients/${clientId}/ai_prompts`, { prompt_text: text });
-      toast.success("Prompt added to the visibility run.");
-      setDraft('');
-      fetchPrompts();
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'An error occurred while adding prompt');
-    }
-  };
 
   const togglePrompt = async (promptId: string, currentStatus: boolean) => {
     try {
@@ -85,107 +69,98 @@ const AIPrompts: React.FC = () => {
     }
   };
 
-  if (loading || !client) return <AdminShell breadcrumb="Loading..." title="Loading..."><div className="flex h-64 items-center justify-center"><LoadingSpinner label="Loading AI prompts…" /></div></AdminShell>;
+  if (loading && !client) return <PageSkeleton />;
+
+  const exportExcel = async () => {
+    try {
+      const { data } = await api.get(`/clients/${clientId}/ai_prompts`, {
+        params: { page: 1, page_size: 100000 }
+      });
+      const ws = XLSX.utils.json_to_sheet(data.items);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "AI Prompts");
+      XLSX.writeFile(wb, `AI_Prompts_${clientId}.xlsx`);
+    } catch (err) {
+      toast.error('Failed to export data');
+    }
+  };
 
   return (
-    <AdminShell
-      breadcrumb={`${client.name} / AI Prompts`}
-      title="AI Prompts Management"
-      subtitle="Prompts replayed against LLMs to measure brand mentions."
-      backLink={{ to: "/admin/clients", label: "Back to Clients" }}
-      actions={
-        <button type="button" className={btnPrimary} onClick={() => textareaRef.current?.focus()}>
-          Add AI Prompt
-        </button>
-      }
-    >
-      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-        <div className="lg:col-span-8">
-          <TablePanel
-            title="Tracked Prompts"
-            head={
-              <>
-                <Th>Prompt Text</Th>
-                <Th>Added At</Th>
-                <Th>Status</Th>
-                <Th align="right">Actions</Th>
-              </>
-            }
-            footer={
-              <span className="text-xs text-muted-foreground">
-                {prompts.filter((p) => p.is_active).length} active prompts this month
-              </span>
-            }
-          >
-            {prompts.length === 0 ? (
-               <tr>
-                 <td colSpan={4} className="px-6 py-12 text-center text-sm text-muted-foreground">
-                   No AI prompts found for this client.
-                 </td>
-               </tr>
-            ) : (
-              prompts.map((prompt, i) => (
-                <tr key={prompt.id} className="transition-colors hover:bg-secondary">
-                  <Td>
-                    <span className="mr-3 font-mono text-[11px] text-muted-foreground">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span className="font-medium">{prompt.prompt_text}</span>
-                  </Td>
-                  <Td className="font-mono text-xs text-muted-foreground">{new Date(prompt.added_at).toLocaleDateString()}</Td>
-                  <Td>
-                    <StatusPill status={prompt.is_active ? "Active" : "Paused"} />
-                  </Td>
-                  <Td align="right">
-                    <button
-                      type="button"
-                      onClick={() => togglePrompt(prompt.id, prompt.is_active)}
-                      className={
-                        prompt.is_active
-                          ? "px-2 py-1 text-[11px] font-medium text-status-churned-text hover:underline"
-                          : "px-2 py-1 text-[11px] font-medium text-muted-foreground hover:underline"
-                      }
-                    >
-                      {prompt.is_active ? "Deactivate" : "Reactivate"}
-                    </button>
-                  </Td>
+    <>
+      <div style={{ marginBottom: 16 }}>
+        <Link to={`/admin/clients/${clientId}`} style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-tertiary)', textDecoration: 'none' }}>← Back to {client?.name}</Link>
+      </div>
+      <PageHeader 
+        title="AI Prompt Management"
+        subtitle="Manage prompts used for nightly AI Visibility checks."
+        actions={
+          <button className="btn btn-secondary" onClick={exportExcel} disabled={prompts.length === 0}>
+            Download Excel
+          </button>
+        }
+      />
+
+        <div className="card table-wrapper">
+          <div className="card-header">
+            <h3 className="h2">Tracked Prompts</h3>
+            <span className="text-subtle text-xs">
+              {prompts.filter(p => p.is_active).length} active prompts
+            </span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 34 }}>#</th>
+                <th>Prompt Text</th>
+                <th className="hide-s">Added At</th>
+                <th>Status</th>
+                <th className="num">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prompts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)' }}>
+                    No AI prompts found for this client.
+                  </td>
                 </tr>
-              ))
-            )}
-          </TablePanel>
+              ) : (
+                prompts.map((prompt, i) => (
+                  <tr key={prompt.id}>
+                    <td className="mono" style={{ color: 'var(--ink-3)', fontSize: 12 }}>{i + 1}</td>
+                    <td className="kwname">{prompt.prompt_text}</td>
+                    <td className="hide-s mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                      {new Date(prompt.added_at).toLocaleDateString()}
+                    </td>
+                    <td>
+                      <span className="st" style={{ background: prompt.is_active ? 'var(--up-soft)' : '#F1F3EF', color: prompt.is_active ? 'var(--up)' : 'var(--ink-3)', borderColor: 'transparent' }}>
+                        {prompt.is_active ? 'Active' : 'Paused'}
+                      </span>
+                    </td>
+                    <td className="num">
+                      <button
+                        className={prompt.is_active ? "btn-danger-ghost" : "btn ghost"}
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => togglePrompt(prompt.id, prompt.is_active)}
+                      >
+                        {prompt.is_active ? "Pause" : "Resume"}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
-        <div className="lg:col-span-4">
-          <Panel title="Add AI Prompt">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                Prompt Text
-              </span>
-              <textarea
-                ref={textareaRef}
-                rows={5}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="e.g. best seo agency in new york"
-                className={inputCls}
-              />
-            </label>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDraft("")}
-                className={btnGhost}
-              >
-                Cancel
-              </button>
-              <button type="button" className={btnPrimary} onClick={addPrompt}>
-                Add Prompt
-              </button>
-            </div>
-          </Panel>
-        </div>
-      </div>
-    </AdminShell>
+        <PaginationBar 
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
+    </>
   );
 };
 
