@@ -54,6 +54,7 @@ COPY --from=builder /root/.cache/ms-playwright /root/.cache/ms-playwright
 
 # Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONOPTIMIZE=2
