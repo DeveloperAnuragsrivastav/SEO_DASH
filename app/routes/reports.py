@@ -238,10 +238,27 @@ async def download_report_pdf(request: Request, client_id: uuid.UUID, count: int
     
     comparative_data = _build_comparative_report(snapshots)
     
+    client_logo_url = client.logo_url
+    client_logo_b64 = ""
+    if client_logo_url and client_logo_url.strip():
+        import httpx
+        import base64
+        fetch_url = base_url + client_logo_url if client_logo_url.startswith("/") else client_logo_url
+        try:
+            with httpx.Client(timeout=5.0) as c:
+                resp = c.get(fetch_url)
+                if resp.status_code == 200:
+                    b64 = base64.b64encode(resp.content).decode("utf-8")
+                    ctype = resp.headers.get("content-type", "image/png")
+                    client_logo_b64 = f"data:{ctype};base64,{b64}"
+        except Exception:
+            pass
+
     client_data = {
         "name": client.name,
         "domain": client.domain,
         "logo_url": client.logo_url,
+        "logo_b64": client_logo_b64,
         "theme_color": client.theme_color,
     }
     
@@ -324,10 +341,27 @@ async def download_single_report_pdf(request: Request, client_id: uuid.UUID, sna
 
     comparative_data = _build_comparative_report([snapshot])
 
+    client_logo_url = client.logo_url
+    client_logo_b64 = ""
+    if client_logo_url and client_logo_url.strip():
+        import httpx
+        import base64
+        fetch_url = base_url + client_logo_url if client_logo_url.startswith("/") else client_logo_url
+        try:
+            with httpx.Client(timeout=5.0) as c:
+                resp = c.get(fetch_url)
+                if resp.status_code == 200:
+                    b64 = base64.b64encode(resp.content).decode("utf-8")
+                    ctype = resp.headers.get("content-type", "image/png")
+                    client_logo_b64 = f"data:{ctype};base64,{b64}"
+        except Exception:
+            pass
+
     client_data = {
         "name": client.name,
         "domain": client.domain,
         "logo_url": client.logo_url,
+        "logo_b64": client_logo_b64,
         "theme_color": client.theme_color,
     }
 

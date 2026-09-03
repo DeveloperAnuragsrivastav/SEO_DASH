@@ -143,8 +143,9 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     # Convert agency_logo to base64
     agency_logo_b64 = ""
     try:
-        logo_path = os.path.join(os.getcwd(), "app", "static", "agency_logo.png")
-        if os.path.exists(logo_path):
+        from pathlib import Path
+        logo_path = Path(__file__).resolve().parent.parent / "static" / "agency_logo.png"
+        if logo_path.exists():
             with open(logo_path, "rb") as image_file:
                 encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
                 agency_logo_b64 = f"data:image/png;base64,{encoded_string}"
@@ -181,6 +182,7 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
         client_theme_color=client.get("theme_color", "#f5c400"),
         client_name=client.get("name", "Client"),
         client_logo_url=client.get("logo_url", ""),
+        client_logo_b64=client.get("logo_b64", ""), 
         client_domain=client.get("domain", ""),
         base_url=base_url,
         agency_logo_b64=agency_logo_b64
