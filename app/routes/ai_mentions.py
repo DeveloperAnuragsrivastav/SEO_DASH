@@ -160,7 +160,7 @@ def upload_ai_mentions_csv(
                 row_dict[k] = v
             rows.append(row_dict)
     else:
-        content = file.file.read().decode("utf-8")
+        content = file.file.read().decode("utf-8-sig", errors="replace")
         reader = csv.reader(io.StringIO(content))
         header_row = next(reader, None)
         if not header_row:
@@ -250,32 +250,23 @@ def upload_ai_mentions_csv(
                     existing.mentioned = mentioned
                     existing.captured_on = datetime.today().date()
                 else:
-                    mentions_to_insert.append({
-                        "client_id": client_id,
-                        "month": month,
-                        "prompt_id": prompt_obj.id,
-                        "platform": plat,
-                        "captured_on": datetime.today().date(),
-                        "mentioned": mentioned,
-                        "cited_pages": None,
-                        "source": AiMentionSource.manual,
-                        "raw_response": None
-                    })
+                    new_mention = AiMention(
+                        client_id=client_id,
+                        month=month,
+                        prompt_id=prompt_obj.id,
+                        platform=plat,
+                        captured_on=datetime.today().date(),
+                        mentioned=mentioned,
+                        cited_pages=None,
+                        source=AiMentionSource.manual,
+                        raw_response=None
+                    )
+                    db.add(new_mention)
+                    db.flush()
                 
             success_count += 1
         except Exception as e:
             errors.append({"row": row_num, "error": str(e)})
-            
-    if mentions_to_insert:
-        stmt = insert(AiMention).values(mentions_to_insert)
-        stmt = stmt.on_conflict_do_update(
-            constraint="uq_aimention_client_month_prompt_plat",
-            set_={
-                "mentioned": stmt.excluded.mentioned,
-                "captured_on": stmt.excluded.captured_on
-            }
-        )
-        db.execute(stmt)
     
     try:
         db.commit()
