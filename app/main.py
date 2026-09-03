@@ -84,3 +84,27 @@ app.include_router(work_router)
 app.include_router(clients_router)
 app.include_router(users_router)
 app.include_router(screenshots_router)
+
+# ── SPA Catch-All Route ────────────────────────────────────────────────
+from fastapi.responses import FileResponse
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    """
+    Serve the built React frontend.
+    If the requested file exists in frontend/dist, serve it.
+    Otherwise, fall back to index.html for client-side routing.
+    """
+    dist_dir = os.path.join(os.getcwd(), "frontend", "dist")
+    file_path = os.path.join(dist_dir, full_path)
+    
+    # If the file exists (e.g. /assets/main.js, /favicon.ico), serve it directly
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+        
+    # Otherwise, return index.html for React Router
+    index_path = os.path.join(dist_dir, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+        
+    return {"detail": "Frontend not built or index.html missing."}

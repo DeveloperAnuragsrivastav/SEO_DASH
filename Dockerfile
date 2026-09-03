@@ -1,4 +1,12 @@
-# ── Builder Stage ──────────────────────────────────────────────
+# ── Frontend Builder Stage ─────────────────────────────────────
+FROM node:20-slim AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN VITE_API_URL="" npm run build
+
+# ── Backend Builder Stage ──────────────────────────────────────
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
@@ -51,6 +59,11 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONOPTIMIZE=2
 
 COPY . .
+# Remove the raw frontend source code to save space
+RUN rm -rf frontend/
+
+# Copy the built React app from the frontend builder stage
+COPY --from=frontend-builder /frontend/dist /app/frontend/dist
 
 EXPOSE 8000
 
