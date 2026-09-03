@@ -16,7 +16,7 @@ interface ClientRow {
 }
 
 const Clients: React.FC = () => {
-  const { isStandardUser, isManager } = usePermissions();
+  const { isManager } = usePermissions();
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
 

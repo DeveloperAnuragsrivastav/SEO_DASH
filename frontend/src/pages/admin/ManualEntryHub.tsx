@@ -40,35 +40,6 @@ const GBPManualForm = ({ clientId, onComplete }: { clientId: string, onComplete:
   );
 };
 
-const AIMentionsManualForm = ({ clientId, onComplete }: { clientId: string, onComplete: () => void }) => {
-  const [form, setForm] = useState({ captured_on: '', platform: 'chatgpt', prompt: '', mentioned: false, cited_pages: '' });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const citedPagesArr = form.cited_pages ? form.cited_pages.split(',').map(u => ({ url: u.trim() })) : [];
-      await api.post(`/clients/${clientId}/ai_mentions/bulk`, [{
-        captured_on: form.captured_on, platform: form.platform, prompt_id: null, mentioned: form.mentioned, cited_pages: citedPagesArr
-      }]);
-      toast.success('AI Mention added successfully');
-      onComplete();
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add record');
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
-      <div className="form-group"><label className="form-label">Date</label><input type="date" max={new Date().toISOString().split('T')[0]} className="form-input" required value={form.captured_on} onChange={e => setForm({ ...form, captured_on: e.target.value })} /></div>
-      <div className="form-group"><label className="form-label">Platform</label><select className="form-input" value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}><option value="chatgpt">ChatGPT</option><option value="claude">Claude</option><option value="gemini">Gemini</option><option value="perplexity">Perplexity</option><option value="grok">Grok</option></select></div>
-      <div className="form-group"><label className="form-label">Prompt</label><input type="text" className="form-input" required placeholder="e.g. best seo tools" value={form.prompt} onChange={e => setForm({ ...form, prompt: e.target.value })} /></div>
-      <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><input type="checkbox" id="mentioned" checked={form.mentioned} onChange={e => setForm({ ...form, mentioned: e.target.checked })} /><label htmlFor="mentioned" className="form-label" style={{ margin: 0 }}>Brand Mentioned?</label></div>
-      <div className="form-group"><label className="form-label">Cited Pages (Comma separated URLs)</label><input type="text" className="form-input" placeholder="https://..., https://..." value={form.cited_pages} onChange={e => setForm({ ...form, cited_pages: e.target.value })} /></div>
-      <button type="submit" className="btn btn-primary" style={{ marginTop: '8px', width: '100%' }}>Save Record</button>
-    </form>
-  );
-};
-
 const LinksManualForm = ({ clientId, onComplete }: { clientId: string, onComplete: () => void }) => {
   const [form, setForm] = useState({ created_on: '', domain: '', url: '', activity_type: '', dr: '' });
 

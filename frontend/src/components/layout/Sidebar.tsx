@@ -11,7 +11,6 @@ import {
   LayoutDashboard, 
   Inbox, 
   Crosshair, 
-  Bot, 
   BarChart2, 
   MapPin, 
   TrendingUp, 
@@ -19,8 +18,7 @@ import {
   Link as LinkIcon, 
   CheckSquare, 
   Image as ImageIcon, 
-  Plug,
-  Zap
+  Plug
 } from 'lucide-react';
 
 export function Sidebar() {
