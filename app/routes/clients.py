@@ -113,7 +113,7 @@ def create_client(data: ClientCreate, db: Session = Depends(get_db), current_use
     return client
 
 
-@router.put("/{client_id}", response_model=ClientResponse, dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager]))])
+@router.put("/{client_id}", response_model=ClientResponse, dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))])
 def update_client(client_id: uuid.UUID, data: ClientUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> Client:
     """Update an existing client."""
     client = db.query(Client).filter(Client.id == client_id).first()
