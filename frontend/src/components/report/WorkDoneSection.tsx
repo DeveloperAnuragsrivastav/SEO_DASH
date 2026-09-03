@@ -1,5 +1,5 @@
-import React from 'react';
-import { ClipboardList } from 'lucide-react';
+import React, { useState } from 'react';
+import { ClipboardList, X } from 'lucide-react';
 import { API_BASE_URL } from '../../api/client';
 
 interface WorkDoneSectionProps {
@@ -9,6 +9,8 @@ interface WorkDoneSectionProps {
 }
 
 const WorkDoneSection: React.FC<WorkDoneSectionProps> = ({ activities, screenshots }) => {
+  const [selectedImg, setSelectedImg] = useState<string | null>(null);
+
   return (
     <section id="work" className="report-section">
       <div className="head">
@@ -53,7 +55,17 @@ const WorkDoneSection: React.FC<WorkDoneSectionProps> = ({ activities, screensho
                 {screenshots.map((s: any, i: number) => (
                   <div key={i} className="shot-card">
                     <div className="thumb">
-                      {s.file_url && <img src={`${API_BASE_URL}${s.file_url}`} alt={s.caption || `Screenshot ${i + 1}`} loading="lazy" />}
+                      {s.file_url && (
+                        <img 
+                          src={`${API_BASE_URL}${s.file_url}`} 
+                          alt={s.caption || `Screenshot ${i + 1}`} 
+                          loading="lazy" 
+                          onClick={() => setSelectedImg(`${API_BASE_URL}${s.file_url}`)}
+                          style={{ cursor: 'zoom-in', transition: 'transform 0.2s' }}
+                          onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                          onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                        />
+                      )}
                     </div>
                     <div className="label text-subtle">{s.caption || `Screenshot ${i + 1}`} <span style={{fontSize:'10px'}}>({s._month})</span></div>
                   </div>
@@ -62,6 +74,45 @@ const WorkDoneSection: React.FC<WorkDoneSectionProps> = ({ activities, screensho
             </div>
           )}
         </>
+      )}
+
+      {/* Fullscreen Image Modal */}
+      {selectedImg && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 99999,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '40px',
+            cursor: 'zoom-out'
+          }}
+          onClick={() => setSelectedImg(null)}
+        >
+          <button 
+            style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+            onClick={() => setSelectedImg(null)}
+          >
+            <X size={32} />
+          </button>
+          <img 
+            src={selectedImg} 
+            alt="Enlarged" 
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '100%', 
+              objectFit: 'contain', 
+              borderRadius: '8px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
+            }} 
+          />
+        </div>
       )}
     </section>
   );
