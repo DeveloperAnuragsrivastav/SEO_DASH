@@ -1161,12 +1161,18 @@
             <div class="cover-inner">
                 <div class="brandline">
                     {% if client_logo_url %}
-                    <img src="{{ client_logo_url }}" class="client-logo" alt="Client Logo" />
+                    <img src="{% if client_logo_url.startswith('/') %}{{ base_url }}{{ client_logo_url }}{% else %}{{ client_logo_url }}{% endif %}" class="client-logo" alt="Client Logo" />
                     {% else %}
                     <div class="brand-mark">{{ client_name[:2] | upper }}</div>
                     {% endif %}
                     <div class="brandcopy"><strong>{{ client_name }}</strong><small>{{ client_domain }}</small></div>
-                    <div class="ez-logo"><img src="{{ base_url }}/static/agency_logo.png" alt="Agency Logo" /></div>
+                    <div class="ez-logo">
+                    {% if agency_logo_b64 %}
+                    <img src="{{ agency_logo_b64 }}" alt="Agency Logo" />
+                    {% else %}
+                    <img src="{{ base_url }}/static/agency_logo.png" alt="Agency Logo" />
+                    {% endif %}
+                </div>
                 </div>
                 <p class="report-label">Monthly SEO Report</p>
                 <h1 style="margin: 0; font-size: 37px; line-height: 1;">Performance Report<br /><span>{{ display_label }}</span></h1>
@@ -1729,25 +1735,24 @@
                         </tbody>
                     </table>
                 </div>
-                {% if screenshots and screenshots | length > 0 %}
-                <div>
-                    <h3 style="margin-bottom: 16px; font-size: 16px;">Screenshots & Evidence</h3>
-                    <div class="evidence-grid">
-                        {% for img in screenshots %}
-                        <div class="evidence">
-                            {% if img.base64_data %}
-                                <img class="evidence-image" src="{{ img.base64_data }}" alt="Proof" />
-                            {% else %}
-                                <img class="evidence-image" src="{{ base_url }}{{ img.file_url }}" alt="Proof" />
-                            {% endif %}
-                            <small>{{ img.caption }}</small>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
+
             </div>
         </div>
     </div>
+
+    <!-- Screenshot Pages -->
+    {% if screenshots and screenshots | length > 0 %}
+    {% for img in screenshots %}
+    <section class="report-page" style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px; text-align: center;">
+        <h3 style="align-self: flex-start; margin-bottom: 24px; font-size: 18px;">Evidence: {{ img.caption or 'Screenshot' }}</h3>
+        {% if img.base64_data %}
+            <img src="{{ img.base64_data }}" alt="Proof" style="max-width: 100%; max-height: 850px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 4px;" />
+        {% else %}
+            <img src="{% if img.file_url.startswith('/') %}{{ base_url }}{{ img.file_url }}{% else %}{{ img.file_url }}{% endif %}" alt="Proof" style="max-width: 100%; max-height: 850px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 4px;" />
+        {% endif %}
+    </section>
+    {% endfor %}
+    {% endif %}
 </body>
+
 </html>

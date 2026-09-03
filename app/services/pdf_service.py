@@ -140,25 +140,16 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     import base64
     from pathlib import Path
     
-    # Process screenshots to base64 for reliable PDF rendering
-    processed_screenshots = []
-    for s in comparative_data.get("screenshots", []):
-        img_copy = dict(s)
-        try:
-            # s['file_url'] looks like '/static/screenshots/123.png'
-            # Convert to local path: app/static/screenshots/123.png
-            file_url = img_copy.get("file_url", "")
-            if file_url.startswith("/static/"):
-                local_path = os.path.join(os.getcwd(), "app", "static", file_url.replace("/static/", "", 1))
-                if os.path.exists(local_path):
-                    with open(local_path, "rb") as image_file:
-                        encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
-                        ext = os.path.splitext(local_path)[1].lower()
-                        mime_type = "image/png" if ext == ".png" else "image/jpeg"
-                        img_copy["base64_data"] = f"data:{mime_type};base64,{encoded_string}"
-        except Exception as e:
-            pass # fallback to regular URL if base64 fails
-        processed_screenshots.append(img_copy)
+    # Convert agency_logo to base64
+    agency_logo_b64 = ""
+    try:
+        logo_path = os.path.join(os.getcwd(), "app", "static", "agency_logo.png")
+        if os.path.exists(logo_path):
+            with open(logo_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+                agency_logo_b64 = f"data:image/png;base64,{encoded_string}"
+    except Exception:
+        pass
 
     return template.render(
         comparative_data=comparative_data,
@@ -183,7 +174,7 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
         unique_domains=comparative_data.get("unique_domains", 0),
         link_types=comparative_data.get("link_types", {}),
         activities=comparative_data.get("activities", []),
-        screenshots=processed_screenshots,
+        screenshots=comparative_data.get("screenshots", []),
         narrative=comparative_data.get("narrative", ""),
         display_label=display_label,
         generated_at=datetime.now().strftime("%d %b %Y, %H:%M"),
@@ -191,7 +182,8 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
         client_name=client.get("name", "Client"),
         client_logo_url=client.get("logo_url", ""),
         client_domain=client.get("domain", ""),
-        base_url=base_url
+        base_url=base_url,
+        agency_logo_b64=agency_logo_b64
     )
 
 

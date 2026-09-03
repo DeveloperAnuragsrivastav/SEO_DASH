@@ -117,16 +117,11 @@ def generate_report(client_id: uuid.UUID, background_tasks: BackgroundTasks, db:
             detail="Cannot generate report: Manual data is missing. Please upload your manual data first."
         )
 
-    # Dispatch to Celery or BackgroundTasks
+    # Dispatch to BackgroundTasks instead of Celery (since Railway doesn't run a Celery worker by default)
     from app.tasks.reports import generate_snapshot_report
-    from app.config import settings
-
-    if settings.app_env == "development":
-        task_id = str(uuid.uuid4())
-        background_tasks.add_task(generate_snapshot_report, str(client_id))
-    else:
-        task = generate_snapshot_report.delay(str(client_id))
-        task_id = task.id
+    
+    task_id = str(uuid.uuid4())
+    background_tasks.add_task(generate_snapshot_report, str(client_id))
     
     return {
         "status": "processing",
@@ -220,7 +215,7 @@ def get_multi_report(client_id: uuid.UUID, count: int = 1, db: Session = Depends
 
 
 @router.get("/multi/pdf")
-async def download_report_pdf(client_id: uuid.UUID, count: int = 1, snapshot_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
+async def download_report_pdf(request: Request, client_id: uuid.UUID, count: int = 1, snapshot_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
     """Generate and return a PDF of the report using Playwright/Chromium."""
     if snapshot_id:
         snapshots = db.execute(
@@ -250,8 +245,21 @@ async def download_report_pdf(client_id: uuid.UUID, count: int = 1, snapshot_id:
         "theme_color": client.theme_color,
     }
     
-    from app.config import settings
-    base_url = settings.webhook_base_url
+    base_url = str(request.base_url).rstrip("/")
+    
+    # Inject base64 screenshots directly to avoid Playwright network issues
+    import base64
+    for img in comparative_data.get("screenshots", []):
+        file_url = img.get("file_url")
+        if file_url:
+            parts = file_url.split("/")
+            if len(parts) >= 5 and parts[-1] == "image":
+                sid = parts[-2]
+                s_obj = db.execute(select(Screenshot).where(Screenshot.id == sid)).scalar_one_or_none()
+                if s_obj and s_obj.file_data:
+                    b64 = base64.b64encode(s_obj.file_data).decode("utf-8")
+                    img["base64_data"] = f"data:{s_obj.mime_type or 'image/png'};base64,{b64}"
+
     
     from app.services.pdf_service import generate_report_pdf as gen_pdf
     pdf_bytes = await gen_pdf(comparative_data, client_data, base_url)
@@ -302,7 +310,7 @@ def get_latest_report(client_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{snapshot_id}/pdf")
-async def download_single_report_pdf(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
+async def download_single_report_pdf(request: Request, client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
     """Generate and return a PDF of a single report snapshot."""
     snapshot = db.execute(
         select(ReportSnapshot).where(ReportSnapshot.client_id == client_id, ReportSnapshot.id == snapshot_id)
@@ -323,8 +331,21 @@ async def download_single_report_pdf(client_id: uuid.UUID, snapshot_id: uuid.UUI
         "theme_color": client.theme_color,
     }
 
-    from app.config import settings
-    base_url = settings.webhook_base_url
+    base_url = str(request.base_url).rstrip("/")
+    
+    # Inject base64 screenshots directly to avoid Playwright network issues
+    import base64
+    for img in comparative_data.get("screenshots", []):
+        file_url = img.get("file_url")
+        if file_url:
+            parts = file_url.split("/")
+            if len(parts) >= 5 and parts[-1] == "image":
+                sid = parts[-2]
+                s_obj = db.execute(select(Screenshot).where(Screenshot.id == sid)).scalar_one_or_none()
+                if s_obj and s_obj.file_data:
+                    b64 = base64.b64encode(s_obj.file_data).decode("utf-8")
+                    img["base64_data"] = f"data:{s_obj.mime_type or 'image/png'};base64,{b64}"
+
 
     from app.services.pdf_service import generate_report_pdf as gen_pdf
     pdf_bytes = await gen_pdf(comparative_data, client_data, base_url)
