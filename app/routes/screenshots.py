@@ -22,12 +22,10 @@ router = APIRouter(
     tags=["screenshots"]
 )
 
-# Still using standard auth for endpoints EXCEPT the raw image serving
-secured_router = APIRouter(
-    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
-)
+# Standard auth dependencies
+SECURED_DEPS = [Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))]
 
-@secured_router.get("")
+@router.get("", dependencies=SECURED_DEPS)
 def list_screenshots(client_id: uuid.UUID, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
     """List all screenshots for a client."""
     from sqlalchemy import func
@@ -55,7 +53,7 @@ def list_screenshots(client_id: uuid.UUID, page: int = 1, page_size: int = 25, d
     ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
-@secured_router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=SECURED_DEPS)
 def upload_screenshot(
     client_id: uuid.UUID,
     month: str = Form(...),
@@ -99,7 +97,7 @@ def upload_screenshot(
     }
 
 
-@secured_router.post("/bulk", status_code=status.HTTP_201_CREATED)
+@router.post("/bulk", status_code=status.HTTP_201_CREATED, dependencies=SECURED_DEPS)
 def upload_screenshots_bulk(
     client_id: uuid.UUID,
     month: str = Form(...),
@@ -166,7 +164,4 @@ def get_screenshot_image(client_id: uuid.UUID, screenshot_id: uuid.UUID, db: Ses
         raise HTTPException(status_code=404, detail="Image not found")
         
     return Response(content=screenshot.file_data, media_type=screenshot.mime_type or "image/png")
-
-# Include the secured routes in the main router
-router.include_router(secured_router)
 
