@@ -13,8 +13,7 @@ COPY requirements.txt .
 # Install Python dependencies to a virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Remove dev dependencies (mypy, ruff, pytest)
 RUN pip uninstall -y mypy ruff pytest pytest-cov 2>/dev/null || true
