@@ -4,6 +4,8 @@ from passlib.context import CryptContext
 
 from app.database import SessionLocal
 from app.models import User
+from app.models.account import Account
+from app.models.enums import UserRole
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,6 +18,14 @@ def get_password_hash(password: str) -> str:
 def init_db():
     db: Session = SessionLocal()
     try:
+        account = db.query(Account).first()
+        if not account:
+            logger.info("Creating default account")
+            account = Account(name="EZ Rankings HQ")
+            db.add(account)
+            db.commit()
+            db.refresh(account)
+
         email = "rajiv@ezrankings.com"
         admin = db.query(User).filter(User.email == email).first()
         
@@ -23,10 +33,10 @@ def init_db():
             logger.info(f"Creating super admin: {email}")
             admin = User(
                 email=email,
-                hashed_password=get_password_hash("password123"),
+                password_hash=get_password_hash("password123"),
                 is_active=True,
-                is_superuser=True,
-                full_name="Rajiv Admin"
+                role=UserRole.super_admin,
+                account_id=account.id
             )
             db.add(admin)
             db.commit()
