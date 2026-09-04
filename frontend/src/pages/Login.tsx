@@ -37,7 +37,7 @@ const Login: React.FC = () => {
       {/* Left: Branded Panel */}
       <div className="login-brand">
         <div className="login-brand-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <img src="/logo6.png" alt="EZ Insights" style={{ width: '100%', maxWidth: '360px', height: 'auto', marginBottom: '32px' }} />
+          <img src="/logo6.png" alt="EZ Insights" loading="eager" fetchPriority="high" style={{ width: '100%', maxWidth: '360px', height: 'auto', marginBottom: '32px' }} />
           <p>SEO intelligence, reporting & performance analytics</p>
         </div>
       </div>
