@@ -69,21 +69,21 @@ const ClientDashboard: React.FC = () => {
 
   const handleSync = async () => {
     setSyncing(true);
-    try {
-      await api.post(`/clients/${clientId}/connections/sync`);
-      toast.success('GA4 + GSC data synced successfully.');
-    } catch (err: any) {
-      let synced = 0;
-      for (const conn of connections) {
-        if (['gsc', 'ga4'].includes(conn.provider) && conn.status === 'connected') {
-          try {
-            await api.post(`/connections/${conn.id}/verify`);
-            synced++;
-          } catch {}
+    let synced = 0;
+    for (const conn of connections) {
+      if (['gsc', 'ga4'].includes(conn.provider) && conn.status === 'connected') {
+        try {
+          await api.post(`/connections/${conn.id}/verify`);
+          synced++;
+        } catch (err: any) {
+          err._toastHandled = true;
         }
       }
-      if (synced > 0) toast.success(`Verified ${synced} connection(s).`);
-      // Global interceptor will handle the initial error toast if any
+    }
+    if (synced > 0) {
+      toast.success(`Verified ${synced} connection(s).`);
+    } else {
+      toast.info('No active GA4 or GSC connections to sync.');
     }
     setSyncing(false);
   };
