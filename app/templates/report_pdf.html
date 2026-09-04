@@ -45,14 +45,12 @@
         .report-page {
             width: 794px;
             min-height: 1123px;
-            max-height: 1123px;
             margin: 24px auto;
             position: relative;
             overflow: hidden;
             background: var(--paper);
             box-shadow: 0 12px 42px rgba(0, 0, 0, .14);
             page-break-after: always;
-            break-after: page;
         }
 
         .page-inner {
@@ -220,8 +218,6 @@
         }
 
         .section-heading {
-            page-break-after: avoid;
-            break-after: avoid;
             margin: 0;
             font-size: 23px;
             line-height: 1.08;
@@ -259,8 +255,6 @@
         }
 
         .metric-grid {
-            page-break-inside: avoid;
-            break-inside: avoid;
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 10px;
@@ -402,8 +396,6 @@
         }
 
         .signal-bars {
-            page-break-inside: avoid;
-            break-inside: avoid;
             display: grid;
             gap: 10px;
             margin-top: 17px;
@@ -580,8 +572,6 @@
         }
 
         .rate-bars {
-            page-break-inside: avoid;
-            break-inside: avoid;
             display: grid;
             gap: 10px;
             margin-top: 16px;
@@ -747,10 +737,8 @@
 
         .performance-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 10px;
-            page-break-inside: avoid;
-            break-inside: avoid;
         }
 
         .small-metric {
@@ -827,8 +815,6 @@
         }
 
         .card {
-            page-break-inside: avoid;
-            break-inside: avoid;
             padding: 19px;
             border: 1px solid var(--line);
             border-radius: 6px;
@@ -879,11 +865,6 @@
         }
 
         table {
-            page-break-inside: auto;
-        }
-        tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
             width: 100%;
             border-collapse: collapse;
         }
@@ -921,8 +902,6 @@
         }
 
         .ai-grid {
-            page-break-inside: avoid;
-            break-inside: avoid;
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 9px;
@@ -976,8 +955,6 @@
         }
 
         .links-layout {
-            page-break-inside: avoid;
-            break-inside: avoid;
             display: grid;
             grid-template-columns: 1.2fr .8fr;
             gap: 18px;
@@ -1006,8 +983,6 @@
         }
 
         .delivery-layout {
-            page-break-inside: avoid;
-            break-inside: avoid;
             display: flex;
             flex-direction: column;
             gap: 24px;
@@ -1121,7 +1096,11 @@
         @media print {
             @page {
                 size: A4;
-                margin: 0;
+                margin: 48px 0;
+            }
+            
+            @page :first {
+                margin-top: 0;
             }
 
             html,
@@ -1131,37 +1110,20 @@
 
             .report-page {
                 width: 794px;
-                min-height: 1123px;
-                max-height: 1123px;
+                min-height: auto !important;
                 margin: 0;
                 box-shadow: none;
-                overflow: hidden;
                 break-after: page;
-                page-break-after: always;
+                overflow: visible !important;
             }
-
-            /* Chromium ignores break-inside:avoid inside flex/grid.
-               Override to block for print so fragmentation works. */
-            .chart-row,
-            .chart-shelf,
-            .links-layout,
-            .delivery-layout {
-                display: block !important;
+            
+            .page-inner {
+                padding-top: 7px !important;
+                padding-bottom: 0 !important;
             }
-
-            .chart-row > *,
-            .chart-shelf > * {
-                display: inline-block !important;
-                vertical-align: top !important;
-                width: 48% !important;
-                margin-right: 1% !important;
-            }
-
-            .links-layout > * {
-                display: inline-block !important;
-                vertical-align: top !important;
-                width: 48% !important;
-                margin-right: 1% !important;
+            
+            .page-one .page-inner {
+                padding-top: 55px !important;
             }
         }
     </style>
@@ -1387,7 +1349,6 @@
                 </div>
             </div>
         </div>
-    </section>
         <!-- Page 2b: GSC Breakdown — Top Pages -->
     <section class="report-page" style="page-break-before: always;">
         <div class="page-inner">
@@ -1411,7 +1372,7 @@
                     </thead>
                     <tbody>
                         {% if gsc_top_pages %}
-                            {% for p in gsc_top_pages[:10] %}
+                            {% for p in gsc_top_pages %}
                             <tr style="border-bottom:1px solid var(--line-2, #eee);">
                                 <td style="padding:6px 0;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--brand, #2563eb);">{{ p.page | replace('https://', '') | replace('http://', '') }}</td>
                                 <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ p.clicks | fmt }}</td>
@@ -1452,7 +1413,7 @@
                     </thead>
                     <tbody>
                         {% if ga4_traffic_sources %}
-                            {% for s in ga4_traffic_sources[:8] %}
+                            {% for s in ga4_traffic_sources %}
                             <tr style="border-bottom:1px solid var(--line-2, #eee);">
                                 <td style="padding:6px 0;font-weight:600;">{{ s.source }}</td>
                                 <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ s.sessions | fmt }}</td>
@@ -1485,7 +1446,7 @@
                     </thead>
                     <tbody>
                         {% if ga4_top_pages %}
-                            {% for p in ga4_top_pages[:8] %}
+                            {% for p in ga4_top_pages %}
                             <tr style="border-bottom:1px solid var(--line-2, #eee);">
                                 <td style="padding:6px 0;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--brand, #2563eb);">{{ p.page }}</td>
                                 <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ p.sessions | fmt }}</td>
@@ -1545,7 +1506,7 @@
                         </thead>
                         <tbody>
                             {% if ga4_countries %}
-                                {% for c in ga4_countries[:6] %}
+                                {% for c in ga4_countries %}
                                 <tr style="border-bottom:1px solid var(--line-2, #eee);">
                                     <td style="padding:6px 0;font-weight:600;">{{ c.country }}</td>
                                     <td style="text-align:right;padding:6px;font-family:var(--mono);font-weight:600;">{{ c.sessions | fmt }}</td>
@@ -1717,7 +1678,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for l in links[:12] %}
+                            {% for l in links %}
                             <tr>
                                 <td>{{ loop.index }}</td>
                                 <td>{{ l.get('_month', '') }}</td>
@@ -1779,45 +1740,16 @@
         </div>
     </div>
 
-    <!-- Screenshot Pages — 2 images per page, each pair in its own section -->
+    <!-- Screenshot Pages -->
     {% if screenshots and screenshots | length > 0 %}
-    {% for i in range(0, screenshots | length, 2) %}
-    <section class="report-page">
-        <div class="page-inner">
-            {% if i == 0 %}
-            <span class="eyebrow">Evidence</span>
-            <h2 class="section-heading">Screenshots & Proof</h2>
-            <div class="section-rule"></div>
-            {% else %}
-            <span class="eyebrow">Evidence (continued)</span>
-            <h2 class="section-heading" style="font-size: 20px;">Screenshots & Proof</h2>
-            <div class="section-rule"></div>
-            {% endif %}
-
-            <!-- Screenshot {{ i + 1 }} -->
-            {% set img = screenshots[i] %}
-            <div style="text-align: center; margin-bottom: 30px;">
-                {% if img.base64_data %}
-                    <img src="{{ img.base64_data }}" alt="Proof" style="max-width: 100%; max-height: 420px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px;" />
-                {% else %}
-                    <img src="{% if img.file_url.startswith('/') %}{{ base_url }}{{ img.file_url }}{% else %}{{ img.file_url }}{% endif %}" alt="Proof" style="max-width: 100%; max-height: 420px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px;" />
-                {% endif %}
-                <div style="margin-top: 8px; font-size: 11px; color: var(--muted); font-weight: 500;">{{ img.caption or 'Evidence' }}</div>
-            </div>
-
-            <!-- Screenshot {{ i + 2 }} (if exists) -->
-            {% if i + 1 < screenshots | length %}
-            {% set img2 = screenshots[i + 1] %}
-            <div style="text-align: center;">
-                {% if img2.base64_data %}
-                    <img src="{{ img2.base64_data }}" alt="Proof" style="max-width: 100%; max-height: 420px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px;" />
-                {% else %}
-                    <img src="{% if img2.file_url.startswith('/') %}{{ base_url }}{{ img2.file_url }}{% else %}{{ img2.file_url }}{% endif %}" alt="Proof" style="max-width: 100%; max-height: 420px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px;" />
-                {% endif %}
-                <div style="margin-top: 8px; font-size: 11px; color: var(--muted); font-weight: 500;">{{ img2.caption or 'Evidence' }}</div>
-            </div>
-            {% endif %}
-        </div>
+    {% for img in screenshots %}
+    <section class="report-page" style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px; text-align: center;">
+        <h3 style="align-self: flex-start; margin-bottom: 24px; font-size: 18px;">Evidence: {{ img.caption or 'Screenshot' }}</h3>
+        {% if img.base64_data %}
+            <img src="{{ img.base64_data }}" alt="Proof" style="max-width: 100%; max-height: 850px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 4px;" />
+        {% else %}
+            <img src="{% if img.file_url.startswith('/') %}{{ base_url }}{{ img.file_url }}{% else %}{{ img.file_url }}{% endif %}" alt="Proof" style="max-width: 100%; max-height: 850px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 4px;" />
+        {% endif %}
     </section>
     {% endfor %}
     {% endif %}
