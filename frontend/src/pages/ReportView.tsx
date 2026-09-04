@@ -112,7 +112,7 @@ const ReportView: React.FC = () => {
       }
     } catch (err: any) {
       toast.dismiss(toastId);
-      toast.error(err.response?.data?.detail || 'Failed to generate report.');
+      // Handled by global interceptor
     }
     setGenerating(false);
   };
@@ -124,7 +124,7 @@ const ReportView: React.FC = () => {
       setReport(full.data);
       toast.success('Report published!');
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to publish.');
+      // Handled by global interceptor
     }
   };
 
@@ -149,7 +149,7 @@ const ReportView: React.FC = () => {
       toast.success('PDF downloaded successfully!');
     } catch (err: any) {
       toast.dismiss(toastId);
-      toast.error('Failed to download PDF.');
+      // Handled by global interceptor
     }
     setDownloadingPDF(false);
   };
@@ -162,9 +162,7 @@ const ReportView: React.FC = () => {
       toast.success('Report deleted!');
       setReport(null);
     } catch (err: any) {
-      const detail = err.response?.data?.detail;
-      const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail[0]?.msg : 'Failed to delete report.');
-      toast.error(msg);
+      // Handled by global interceptor
     }
   };
 

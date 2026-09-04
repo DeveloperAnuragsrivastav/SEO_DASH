@@ -26,7 +26,9 @@ const Screenshots: React.FC = () => {
         setScreenshots(res.data.items || []);
         setTotal(res.data.total || 0);
       })
-      .catch(() => toast.error('Failed to load screenshots'))
+      .catch(() => {
+        // Handled by global interceptor
+      })
       .finally(() => setLoading(false));
   }, [clientId, page, pageSize]);
 

@@ -24,8 +24,8 @@ const WorkManagement: React.FC = () => {
       });
       setActivities(res.data.items || []);
       setTotal(res.data.total || 0);
-    } catch {
-      toast.error('Failed to load work activities');
+    } catch (err) {
+      // Handled by global interceptor
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ const WorkManagement: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "Work Activity");
       XLSX.writeFile(wb, `Work_Activity_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

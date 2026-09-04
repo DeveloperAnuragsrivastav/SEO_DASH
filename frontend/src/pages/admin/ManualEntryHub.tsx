@@ -20,7 +20,7 @@ const GBPManualForm = ({ clientId, onComplete }: { clientId: string, onComplete:
       toast.success('GBP Record added successfully');
       onComplete();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add record');
+      // Handled by global interceptor
     }
   };
 
@@ -50,7 +50,7 @@ const LinksManualForm = ({ clientId, onComplete }: { clientId: string, onComplet
       toast.success('Link added successfully');
       onComplete();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add link');
+      // Handled by global interceptor
     }
   };
 
@@ -76,7 +76,7 @@ const WorkManualForm = ({ clientId, onComplete }: { clientId: string, onComplete
       toast.success('Activity added successfully');
       onComplete();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add activity');
+      // Handled by global interceptor
     }
   };
 
@@ -107,7 +107,7 @@ const KeywordsManualForm = ({ clientId, onComplete }: { clientId: string, onComp
       toast.success('Keyword added successfully');
       onComplete();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add keyword');
+      // Handled by global interceptor
     }
   };
 
@@ -132,7 +132,7 @@ const AIPromptsManualForm = ({ clientId, onComplete }: { clientId: string, onCom
       toast.success('Prompt added successfully');
       onComplete();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add prompt');
+      // Handled by global interceptor
     }
   };
 
@@ -182,7 +182,7 @@ const ScreenshotsManualForm = ({ clientId }: { clientId: string }) => {
       setFiles([]);
       setMonth('');
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to upload screenshots');
+      // Handled by global interceptor
     }
     setUploading(false);
   };
@@ -284,7 +284,7 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
         setFile(csvFile);
         setDisplayFileName(f.name);
       } catch (err) {
-        toast.error('Failed to parse Excel file');
+        // Handled by global interceptor
       }
     } else {
       setFile(f);
@@ -344,7 +344,7 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
       setShowUploader(false);
       setShowManual(false);
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Upload failed');
+      // Handled by global interceptor
     }
     setUploading(false);
   };

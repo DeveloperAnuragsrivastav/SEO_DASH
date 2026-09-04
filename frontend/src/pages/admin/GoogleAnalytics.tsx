@@ -24,8 +24,8 @@ const GoogleAnalytics: React.FC = () => {
       });
       setRecords(res.data.items || []);
       setTotal(res.data.total || 0);
-    } catch {
-      toast.error('Failed to load Google Analytics data');
+    } catch (err) {
+      // Handled by global interceptor
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ const GoogleAnalytics: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "Google Analytics");
       XLSX.writeFile(wb, `GA4_Data_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

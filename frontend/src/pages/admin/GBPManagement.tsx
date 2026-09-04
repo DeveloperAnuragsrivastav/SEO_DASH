@@ -24,8 +24,8 @@ const GBPManagement: React.FC = () => {
       });
       setRecords(res.data.items || []);
       setTotal(res.data.total || 0);
-    } catch {
-      toast.error('Failed to load GBP records');
+    } catch (err) {
+      // Handled by global interceptor
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ const GBPManagement: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "GBP Data");
       XLSX.writeFile(wb, `GBP_Data_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

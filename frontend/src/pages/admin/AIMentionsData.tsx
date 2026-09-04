@@ -28,7 +28,7 @@ const AIMentionsData: React.FC = () => {
           setTotal(res.data.total || 0);
         })
         .catch(() => {
-          toast.error('Failed to load AI Mentions');
+          // Handled by global interceptor
         })
         .finally(() => {
           setLoading(false);
@@ -46,7 +46,7 @@ const AIMentionsData: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "AI Mentions");
       XLSX.writeFile(wb, `AI_Mentions_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

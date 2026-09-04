@@ -62,7 +62,7 @@ const ClientDashboard: React.FC = () => {
       setShowWhitelabel(false);
       toast.success('Settings saved successfully.');
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to save settings.');
+      // Handled by global interceptor
     }
     setSavingSettings(false);
   };
@@ -83,7 +83,7 @@ const ClientDashboard: React.FC = () => {
         }
       }
       if (synced > 0) toast.success(`Verified ${synced} connection(s).`);
-      else toast.error('No connected GA4/GSC sources to sync.');
+      // Global interceptor will handle the initial error toast if any
     }
     setSyncing(false);
   };
@@ -121,9 +121,7 @@ const ClientDashboard: React.FC = () => {
       }
     } catch (err: any) {
       toast.dismiss(toastId);
-      const detail = err.response?.data?.detail;
-      const msg = Array.isArray(detail) ? 'Invalid request data.' : (detail || 'Generation failed.');
-      toast.error(msg);
+      // Handled by global interceptor
     }
     setGenerating(false);
   };
@@ -146,7 +144,7 @@ const ClientDashboard: React.FC = () => {
       toast.success('PDF downloaded successfully!');
     } catch (err: any) {
       toast.dismiss(toastId);
-      toast.error('Failed to download PDF.');
+      // Handled by global interceptor
     }
     setDownloading(false);
   };
@@ -169,7 +167,7 @@ const ClientDashboard: React.FC = () => {
       toast.success('PDF downloaded successfully!');
     } catch (err: any) {
       toast.dismiss(toastId);
-      toast.error('Failed to download PDF.');
+      // Handled by global interceptor
     }
     setDownloading(false);
   };
@@ -182,7 +180,7 @@ const ClientDashboard: React.FC = () => {
         const res = await api.get(`/clients/${clientId}/reports/history`);
         setHistory(res.data || []);
       } catch (err) {
-        toast.error('Failed to load report history');
+        // Handled by global interceptor
       }
       setLoadingHistory(false);
     }

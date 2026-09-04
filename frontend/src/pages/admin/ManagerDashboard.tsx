@@ -98,7 +98,7 @@ export default function ManagerDashboard() {
       loadDashboard();
       setWizardStep(2); // Move to assignment step
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to create user');
+      // Handled by global interceptor
     } finally {
       setWizardSubmitting(false);
     }
@@ -125,7 +125,7 @@ export default function ManagerDashboard() {
       loadDashboard();
       closeWizard();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to create project');
+      // Handled by global interceptor
     } finally {
       setWizardSubmitting(false);
     }
@@ -143,7 +143,7 @@ export default function ManagerDashboard() {
       loadDashboard();
       closeWizard();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to assign project');
+      // Handled by global interceptor
     } finally {
       setWizardSubmitting(false);
     }

@@ -24,8 +24,8 @@ const Clients: React.FC = () => {
     try {
       const res = await api.get('/clients');
       setClients(res.data || []);
-    } catch { 
-      toast.error('Failed to load clients.'); 
+    } catch (err) {
+      // Handled by global interceptor
     } finally { 
       setLoading(false); 
     }

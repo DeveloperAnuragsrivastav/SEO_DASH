@@ -42,7 +42,7 @@ const Connections: React.FC = () => {
       const { data } = await api.get(`/clients/${clientId}/connections`);
       setConnections(data.filter((c: Connection) => c.provider !== 'dataforseo'));
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to fetch connections');
+      // Handled by global interceptor
     } finally {
       setLoading(false);
     }
@@ -71,6 +71,7 @@ const Connections: React.FC = () => {
       setVerifyStatus(prev => ({...prev, [connId]: {type: 'success', msg: 'Connection verified successfully.'}}));
       fetchConnections(); 
     } catch (err: any) {
+      err._toastHandled = true;
       setVerifyStatus(prev => ({...prev, [connId]: {type: 'error', msg: err.response?.data?.detail || 'Verification failed.'}}));
       fetchConnections(); 
     } finally {
@@ -92,7 +93,7 @@ const Connections: React.FC = () => {
       });
       fetchConnections();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'An error occurred while adding connection');
+      // Handled by global interceptor
     }
   };
 
@@ -102,7 +103,7 @@ const Connections: React.FC = () => {
       toast.success('Connection unmapped.');
       fetchConnections();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'An error occurred while deleting connection');
+      // Handled by global interceptor
     }
   };
 

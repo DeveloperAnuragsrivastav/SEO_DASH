@@ -43,7 +43,7 @@ const Keywords: React.FC = () => {
       // Sort months descending (newest first)
       setMonths(Array.from(allMonths).sort().reverse());
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to fetch keywords');
+      // Handled by global interceptor
     }
   };
 
@@ -77,7 +77,7 @@ const Keywords: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "Keywords");
       XLSX.writeFile(wb, `Keywords_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

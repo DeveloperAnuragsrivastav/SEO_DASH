@@ -34,7 +34,7 @@ const AIPrompts: React.FC = () => {
       setPrompts(data.items || []);
       setTotal(data.total || 0);
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to fetch AI Prompts');
+      // Handled by global interceptor
     }
   };
 
@@ -65,7 +65,7 @@ const AIPrompts: React.FC = () => {
       toast.success(`Prompt ${currentStatus ? "deactivated" : "reactivated"}.`);
       fetchPrompts();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to update prompt');
+      // Handled by global interceptor
     }
   };
 
@@ -81,7 +81,7 @@ const AIPrompts: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "AI Prompts");
       XLSX.writeFile(wb, `AI_Prompts_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

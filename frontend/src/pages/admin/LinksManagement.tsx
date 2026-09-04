@@ -24,8 +24,8 @@ const LinksManagement: React.FC = () => {
       });
       setLinks(res.data.items || []);
       setTotal(res.data.total || 0);
-    } catch {
-      toast.error('Failed to load links');
+    } catch (err) {
+      // Handled by global interceptor
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ const LinksManagement: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "Backlinks");
       XLSX.writeFile(wb, `Backlinks_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

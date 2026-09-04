@@ -24,8 +24,8 @@ const SearchConsole: React.FC = () => {
       });
       setRecords(res.data.items || []);
       setTotal(res.data.total || 0);
-    } catch {
-      toast.error('Failed to load Google Search Console data');
+    } catch (err) {
+      // Handled by global interceptor
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ const SearchConsole: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, "Search Console");
       XLSX.writeFile(wb, `GSC_Data_${clientId}.xlsx`);
     } catch (err) {
-      toast.error('Failed to export data');
+      // Handled by global interceptor
     }
   };
 

@@ -80,7 +80,7 @@ export default function Users() {
       toast.success('Manager created successfully');
       loadManagers();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to create manager');
+      // Handled by global interceptor
     } finally {
       setCreating(false);
     }
@@ -109,7 +109,7 @@ export default function Users() {
       closeModal();
       loadManagers();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to create project');
+      // Handled by global interceptor
     } finally {
       setCreating(false);
     }
@@ -132,7 +132,7 @@ export default function Users() {
       setDeleteConfirmation('');
       loadManagers();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to delete client.');
+      // Handled by global interceptor
     }
   };
 
