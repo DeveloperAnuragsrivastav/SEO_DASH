@@ -79,6 +79,14 @@ export default function ManagerDashboard() {
     setShowWizard(true);
   };
 
+  const openAssignWizard = (userId: string) => {
+    setCreatedUserId(userId);
+    setNewProject({ name: '', domain: '', business_type: 'ecommerce', locale: 'en-GB', package_keywords: '10' });
+    setExistingProjectId('');
+    setWizardStep(2);
+    setShowWizard(true);
+  };
+
   const closeWizard = () => {
     setShowWizard(false);
     setWizardStep(1);
@@ -199,8 +207,11 @@ export default function ManagerDashboard() {
                       Last Login: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
                     </div>
                   </div>
-                  <div className="text-sm text-subtle">
-                    <strong>{u.assigned_clients?.length || 0}</strong> Assigned Projects
+                  <div className="text-sm text-subtle" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span><strong>{u.assigned_clients?.length || 0}</strong> Assigned Projects</span>
+                    <button className="btn btn-secondary btn-sm" onClick={() => openAssignWizard(u.id)}>
+                      + Assign Project
+                    </button>
                   </div>
                 </div>
               </div>
@@ -306,7 +317,9 @@ export default function ManagerDashboard() {
                   <label className="form-label">Select Existing Project</label>
                   <select className="form-input" value={existingProjectId} onChange={e => setExistingProjectId(e.target.value)} required>
                     <option value="" disabled>Select a project</option>
-                    {clients.map(c => (
+                    {clients.filter(c => {
+                      return !users.some(u => u.assigned_clients?.some(ac => ac.id === c.id));
+                    }).map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
