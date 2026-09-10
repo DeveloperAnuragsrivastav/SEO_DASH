@@ -59,11 +59,12 @@ const App: React.FC = () => {
                 <Route element={<ProtectedRoute allowedRoles={['manager']} />}>
                   <Route path="/admin/manager-tools" element={<ManagerDashboard />} />
                 </Route>
-              </Route>
 
-              {/* Report view — full-width, no sidebar */}
-              <Route path="/clients/:clientId/reports/:snapshotId" element={<ReportView />} />
-              <Route path="/admin/clients/:clientId/reports/:snapshotId" element={<ReportView />} />
+                {/* Reports stay inside the app shell — leaving it to read a
+                    report made it feel like a different product. */}
+                <Route path="/clients/:clientId/reports/:snapshotId" element={<ReportView />} />
+                <Route path="/admin/clients/:clientId/reports/:snapshotId" element={<ReportView />} />
+              </Route>
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

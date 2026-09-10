@@ -34,7 +34,6 @@ const ReportView: React.FC = () => {
     ? (months.length === 1 ? months[0] : `${months[0]} – ${months[months.length - 1]}`)
     : (report ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' }) : '');
 
-
   const gsc = snap.gsc || {};
   const ga4 = snap.ga4 || {};
   const gbp = snap.gbp || {};
@@ -182,18 +181,6 @@ const ReportView: React.FC = () => {
     setDownloadingPDF(false);
   };
 
-  const handleDeleteReport = async () => {
-    if (!window.confirm("Are you sure you want to permanently delete this report snapshot? This cannot be undone.")) return;
-    
-    try {
-      await api.delete(`/clients/${clientId}/reports/${snapshotId}`);
-      toast.success('Report deleted!');
-      setReport(null);
-    } catch (err: any) {
-      // Handled by global interceptor
-    }
-  };
-
   if (loading) return <div className="loader-container"><div className="spinner" /></div>;
 
   // Build dynamic nav — only show sections with data
@@ -233,49 +220,42 @@ const ReportView: React.FC = () => {
         />
       )}
 
-      {/* Top bar */}
-      <div className="topbar">
-        <div className="wrap">
-          <Link to="/admin/clients" className="agencymark" style={{ textDecoration: 'none' }}>
-            <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--brand)', display: 'grid', placeItems: 'center', fontFamily: 'var(--disp)', fontSize: 13, fontWeight: 800, letterSpacing: '-0.02em', color: '#14140F' }}>EZ</span>
-          </Link>
-          <span className="vr" />
-          <div className="clientmark">
-            {client?.logo_url ? (
-              <span className="logoslot"><img src={client.logo_url} alt="" /></span>
-            ) : (
-              <span className="logoslot">Client logo</span>
-            )}
-            <span>
-              <b>{client?.name}</b>
-              <span className="dom hide-s">{client?.domain}</span>
-            </span>
+      {/* Report header — lives inside the app shell, so no second dark bar */}
+      <div className="report-head">
+        <div className="report-head-id">
+          {client?.logo_url
+            ? <span className="report-logo"><img src={client.logo_url} alt="" /></span>
+            : <span className="report-logo is-empty">Client logo</span>}
+          <div className="report-head-text">
+            <h1 className="page-title">{client?.name}</h1>
+            <p className="page-subtitle">
+              {client?.domain}
+              {windowLabel && <> · {windowLabel}</>}
+            </p>
           </div>
-          <span className="spacer" />
+          <span className={`badge ${report?.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
+            {(report?.status || 'no report').toUpperCase()}
+          </span>
+        </div>
 
-          <span className="pill live hide-s">{report?.status || 'no report'}</span>
+        <div className="report-head-actions">
+          <Link to={`/admin/clients/${clientId}`} className="btn ghost">Back to client</Link>
 
           {report && report.status === 'draft' && snapshotId !== 'multi' && (
-            <button className="btn ghost" onClick={() => setShowComposer(true)}>
+            <button className="btn btn-secondary" onClick={() => setShowComposer(true)}>
               <SlidersHorizontal size={14} /> Sections &amp; Data
             </button>
           )}
+
+          {report && (
+            <button className="btn btn-secondary" onClick={handleDownloadPDF} disabled={downloadingPDF}>
+              {downloadingPDF ? 'Generating PDF…' : 'Download PDF'}
+            </button>
+          )}
+
           {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (
             <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
           )}
-          {report && (
-            <>
-              <button className="btn btn-secondary" onClick={handleDownloadPDF} disabled={downloadingPDF}>
-                {downloadingPDF ? 'Generating PDF…' : 'Download PDF'}
-              </button>
-              {snapshotId !== 'multi' && (
-                <button className="btn ghost" style={{ color: 'var(--red)' }} onClick={handleDeleteReport}>
-                  Delete
-                </button>
-              )}
-            </>
-          )}
-          <Link to={`/admin/clients/${clientId}`} className="btn ghost" style={{ textDecoration: 'none' }}>Back to client</Link>
         </div>
       </div>
 

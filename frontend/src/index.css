@@ -1416,6 +1416,16 @@ textarea.form-input { height: auto; padding: 10px 12px; line-height: 1.6; resize
   border-radius: var(--radius-lg);
 }
 
+/* `.card` sets overflow:hidden, which otherwise wins over the rule above and
+   clips wide tables with no way to reach the rest — badly so on narrow
+   screens. Give the combination higher specificity so it can still scroll. */
+.card.table-wrapper,
+.page-card.table-wrapper,
+.page-card-flush.table-wrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 table {
   width: 100%;
   border-collapse: separate;

@@ -19,6 +19,7 @@ function sectionLabel(pathname: string): string {
   if (pathname.includes('/links')) return 'Backlinks Activities';
   if (pathname.includes('/work')) return 'On-Site SEO Activities';
   if (pathname.includes('/screenshots')) return 'Screenshots';
+  if (pathname.includes('/reports/')) return 'Report';
   if (/^\/admin\/clients\/[^/]+$/.test(pathname)) return 'Client Overview';
   if (pathname.startsWith('/admin/clients')) return 'Clients';
   return 'Dashboard';
