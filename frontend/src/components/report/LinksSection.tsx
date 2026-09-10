@@ -18,7 +18,7 @@ const LinksSection: React.FC<LinksSectionProps> = ({ links }) => {
   });
 
   return (
-    <section id="links" className="report-section" data-section-id="links">
+    <section id="links" className="report-section">
       <div className="head">
         <div>
           <div className="eyebrow">Off-Page SEO</div>
@@ -72,7 +72,7 @@ const LinksSection: React.FC<LinksSectionProps> = ({ links }) => {
                 </thead>
                 <tbody>
                   {links.map((l: any, i: number) => (
-                    <tr key={l.id || i} data-item-id={`links.${l.id ?? `i${i}`}`}>
+                    <tr key={l.id || i}>
                       <td className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 12, textAlign: 'center' }}>{i + 1}</td>
                       <td style={{ color: 'var(--text-subtle)', fontSize: '12px' }}>{l._month}</td>
                       <td className="hide-s" style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>{l.activity_type}</td>

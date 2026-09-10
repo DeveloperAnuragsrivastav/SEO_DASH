@@ -11,7 +11,7 @@ import AIVisibilitySection from '../components/report/AIVisibilitySection';
 import LinksSection from '../components/report/LinksSection';
 import WorkDoneSection from '../components/report/WorkDoneSection';
 import { MousePointerClick, Users, TrendingUp, Bot, SlidersHorizontal } from 'lucide-react';
-import ReportEditor from '../components/report/ReportEditor';
+import ReportComposer from '../components/ReportComposer';
 import '../report.css';
 
 const ReportView: React.FC = () => {
@@ -26,7 +26,7 @@ const ReportView: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [activeSection, setActiveSection] = useState('executive-summary');
-  const [editing, setEditing] = useState(searchParams.get('compose') === '1');
+  const [showComposer, setShowComposer] = useState(searchParams.get('compose') === '1');
 
   const snap = report?.snapshot || {};
   const months = snap.months || [];
@@ -215,13 +215,14 @@ const ReportView: React.FC = () => {
   ].filter(Boolean) as { icon: any; label: string; value: any; sub: any }[];
 
   return (
-    <div className={`report-view ${editing ? "is-editing" : ""}`}>
-      {editing && clientId && snapshotId && snapshotId !== 'multi' && (
-        <ReportEditor
+    <div className="report-view">
+      {showComposer && clientId && snapshotId && snapshotId !== 'multi' && (
+        <ReportComposer
           clientId={clientId}
           snapshotId={snapshotId}
-          onExit={() => setEditing(false)}
+          onClose={() => setShowComposer(false)}
           onSaved={async () => {
+            setShowComposer(false);
             try {
               const full = await api.get(`/clients/${clientId}/reports/${snapshotId}`);
               setReport(full.data);
@@ -254,9 +255,9 @@ const ReportView: React.FC = () => {
 
           <span className="pill live hide-s">{report?.status || 'no report'}</span>
 
-          {report && report.status === 'draft' && snapshotId !== 'multi' && !editing && (
-            <button className="btn btn-secondary" onClick={() => setEditing(true)}>
-              <SlidersHorizontal size={14} /> Edit report
+          {report && report.status === 'draft' && snapshotId !== 'multi' && (
+            <button className="btn ghost" onClick={() => setShowComposer(true)}>
+              <SlidersHorizontal size={14} /> Sections &amp; Data
             </button>
           )}
           {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (

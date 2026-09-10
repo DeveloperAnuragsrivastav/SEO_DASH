@@ -455,9 +455,8 @@ const ClientDashboard: React.FC = () => {
             </div>
 
             <div className="report-status-actions">
-              {/* One primary action: open this month's report. Everything else
-                  (older periods, PDF export, generating a new one) lives behind
-                  "All reports", so the two are no longer competing verbs. */}
+              {/* One primary action opens this month's report; older periods,
+                  PDF export and generating a new snapshot sit behind it. */}
               <button className="btn ghost" onClick={openGenerateModal}>
                 All reports
               </button>
