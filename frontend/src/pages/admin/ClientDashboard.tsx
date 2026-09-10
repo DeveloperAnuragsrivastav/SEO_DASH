@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../api/client';
 import { toast } from 'sonner';
+import { fmt, deltaEl } from '../../components/report/ReportUtils';
 import {
-  Palette, RefreshCw, FileText, Download, ArrowRight,
-  SearchX, Loader2, CalendarClock, Plug
+  Palette, RefreshCw, FileText, Download, ArrowRight, ArrowUpRight,
+  SearchX, Loader2, MousePointerClick, Users, TrendingUp, Bot,
+  Crosshair, BarChart2, MapPin, Search, Link as LinkIcon, CheckSquare,
+  Image as ImageIcon, Inbox, Plug
 } from 'lucide-react';
 
 import PageHeader from '../../components/ui/PageHeader';
@@ -36,9 +39,11 @@ const ClientDashboard: React.FC = () => {
     if (!clientId) return;
     Promise.all([
       api.get(`/clients/${clientId}`).catch(() => null),
-      api.get(`/clients/${clientId}/reports/latest`).catch(() => ({ data: null })),
+      // A client with no report yet is a normal first-run state, not an error —
+      // opt these two out of the global error toast.
+      api.get(`/clients/${clientId}/reports/latest`, { skipErrorToast: true } as any).catch(() => ({ data: null })),
       api.get(`/clients/${clientId}/connections`).catch(() => ({ data: [] })),
-      api.get(`/clients/${clientId}/reports/count`).catch(() => ({ data: { count: 0 } })),
+      api.get(`/clients/${clientId}/reports/count`, { skipErrorToast: true } as any).catch(() => ({ data: { count: 0 } })),
     ]).then(([c, r, conn, rCount]) => {
       if (!c) {
         setClient(null);
@@ -201,7 +206,7 @@ const ClientDashboard: React.FC = () => {
     }
   }
 
-  if (loading) return <PageSkeleton cards={2} header={true} stats={0} />;
+  if (loading) return <PageSkeleton cards={2} header={true} stats={4} />;
 
   if (!client) return (
     <div className="page-card" style={{ margin: '40px auto', maxWidth: '560px' }}>
@@ -214,6 +219,118 @@ const ClientDashboard: React.FC = () => {
     </div>
   );
 
+  // ── Read the headline numbers straight out of the latest report snapshot ──
+  // Same fields and same delta convention the report itself uses, so the
+  // overview and the report can never disagree.
+  const snap = report?.snapshot || {};
+  const gsc = snap.gsc || {};
+  const ga4 = snap.ga4 || {};
+  const gbp = snap.gbp || {};
+  const rankings = snap.rankings || { summary: {}, keywords: [] };
+  const aiVis = snap.ai_visibility || [];
+  const links = snap.links || [];
+  const activities = snap.activities || [];
+  const screenshots = snap.screenshots || [];
+  const deltas = snap.kpi_deltas || { gsc: {}, ga4: {}, gbp: {} };
+
+  const gscClicks = gsc.clicks || 0;
+  const ga4Sessions = ga4.sessions || 0;
+  const ga4Users = ga4.users || 0;
+  const aiMentioned = aiVis.filter((m: any) => m.mentioned).length;
+  const aiTotal = aiVis.length;
+  const rankSummary = rankings.summary || {};
+
+  const periodLabel = report?.end_date
+    ? new Date(report.end_date).toLocaleString('default', { month: 'long', year: 'numeric' })
+    : '';
+
+  const kpis = [
+    {
+      icon: <MousePointerClick size={15} />,
+      label: 'Search Clicks',
+      value: fmt(gscClicks),
+      sub: <>{deltaEl(gscClicks, gscClicks - (deltas.gsc?.clicks || 0))} vs previous period</>,
+    },
+    {
+      icon: <Users size={15} />,
+      label: 'Website Sessions',
+      value: fmt(ga4Sessions),
+      sub: <>{deltaEl(ga4Sessions, ga4Sessions - (deltas.ga4?.sessions || 0))} · {fmt(ga4Users)} users</>,
+    },
+    {
+      icon: <TrendingUp size={15} />,
+      label: 'Rankings Improved',
+      value: fmt(rankSummary.improved || 0),
+      sub: <>{fmt(rankSummary.top_10 || 0)} in top 10 · {fmt(rankSummary.declined || 0)} declined</>,
+    },
+    {
+      icon: <Bot size={15} />,
+      label: 'AI Brand Mentions',
+      value: fmt(aiMentioned),
+      sub: <>of {fmt(aiTotal)} tracked prompts</>,
+    },
+  ];
+
+  // Each area summarised in one line, with the full table one click away.
+  const areas = [
+    {
+      icon: <Crosshair size={15} />, label: 'Keyword Performance',
+      to: `/clients/${clientId}/keywords`,
+      value: fmt((rankings.keywords || []).length),
+      unit: 'keywords tracked',
+      detail: `${fmt(rankSummary.top_10 || 0)} in top 10 · ${fmt(rankSummary['11_20'] || 0)} in 11–20`,
+    },
+    {
+      icon: <Search size={15} />, label: 'Search Console',
+      to: `/clients/${clientId}/search-console`,
+      value: fmt(gsc.impressions || 0),
+      unit: 'impressions',
+      detail: `${fmt(gscClicks)} clicks · avg position ${(gsc.position || 0).toFixed(1)}`,
+    },
+    {
+      icon: <BarChart2 size={15} />, label: 'Google Analytics',
+      to: `/clients/${clientId}/google-analytics`,
+      value: fmt(ga4Sessions),
+      unit: 'sessions',
+      detail: `${fmt(ga4Users)} users · ${fmt(ga4.conversions || 0)} conversions`,
+    },
+    {
+      icon: <MapPin size={15} />, label: 'Google Business Profile',
+      to: `/clients/${clientId}/gbp`,
+      value: fmt(gbp.calls || 0),
+      unit: 'calls',
+      detail: `${fmt(gbp.direction_requests || 0)} directions · ${fmt(gbp.website_clicks || 0)} site clicks`,
+    },
+    {
+      icon: <Bot size={15} />, label: 'AI Visibility',
+      to: `/clients/${clientId}/ai-mentions-data`,
+      value: fmt(aiMentioned),
+      unit: 'prompts mentioning brand',
+      detail: `${fmt(aiTotal - aiMentioned)} not mentioned`,
+    },
+    {
+      icon: <LinkIcon size={15} />, label: 'Backlinks',
+      to: `/clients/${clientId}/links`,
+      value: fmt(links.length),
+      unit: 'links built',
+      detail: 'Recorded this period',
+    },
+    {
+      icon: <CheckSquare size={15} />, label: 'Work Done',
+      to: `/clients/${clientId}/work`,
+      value: fmt(activities.length),
+      unit: 'activities',
+      detail: 'On-site SEO performed',
+    },
+    {
+      icon: <ImageIcon size={15} />, label: 'Screenshots',
+      to: `/clients/${clientId}/screenshots`,
+      value: fmt(screenshots.length),
+      unit: 'uploaded',
+      detail: 'Evidence attached to the report',
+    },
+  ];
+
   return (
     <>
       <PageHeader
@@ -221,95 +338,139 @@ const ClientDashboard: React.FC = () => {
         subtitle={`${client.domain} · ${client.package_keywords} tracked keywords`}
         breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Clients', href: '/admin/clients' }, { label: client.name }]}
         actions={
-          <button className="btn btn-secondary" onClick={() => setShowWhitelabel(true)}>
-            <Palette size={15} /> Whitelabel Settings
-          </button>
+          <>
+            <Link to={`/admin/clients/${clientId}/manual-entry`} className="btn btn-secondary">
+              <Inbox size={15} /> Add Data
+            </Link>
+            <button className="btn btn-secondary" onClick={() => setShowWhitelabel(true)}>
+              <Palette size={15} /> Whitelabel Settings
+            </button>
+          </>
         }
       />
 
-      <div className="grid-cols-2" style={{ marginBottom: '24px', alignItems: 'stretch' }}>
-        {/* API Connections */}
-        <div className="page-card panel">
-          <div className="panel-head">
-            <h3 className="h2">API Connections</h3>
-            <Link to={`/admin/clients/${clientId}/connections`} className="btn ghost btn-sm">Manage</Link>
-          </div>
-
-          <div className="panel-body">
-            {['gsc', 'ga4'].map(p => {
-              const c = connections.find((x: any) => x.provider === p);
-              const isConnected = c?.status === 'connected';
-              return (
-                <div key={p} className="data-row">
-                  <div className="data-row-label">
-                    <span className={`dot ${isConnected ? 'on' : 'off'}`} />
-                    <span className="data-row-name">{p.toUpperCase()}</span>
-                  </div>
-                  <span className={`src ${isConnected ? '' : 'man'}`} title={c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}>
-                    {c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="panel-foot">
-            <button className="btn btn-secondary btn-block" onClick={handleSync} disabled={syncing}>
-              {syncing ? <><Loader2 size={15} className="spin" /> Syncing…</> : <><RefreshCw size={15} /> Sync Connected Sources</>}
-            </button>
+      {!report ? (
+        /* ── Nothing generated yet: state the next step plainly ───────── */
+        <div className="page-card" style={{ marginBottom: 24 }}>
+          <div className="empty-state">
+            <span className="empty-state-icon"><FileText size={22} /></span>
+            <h3>No report generated yet</h3>
+            <p>
+              Add this client's data, then generate the first report. Once generated,
+              this page shows headline performance at a glance.
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Link to={`/admin/clients/${clientId}/manual-entry`} className="btn btn-secondary">
+                <Inbox size={15} /> Add Data
+              </Link>
+              <button className="btn btn-primary" onClick={handleGenerate} disabled={generating}>
+                {generating ? <><Loader2 size={15} className="spin" /> Generating…</> : 'Generate First Report'}
+              </button>
+            </div>
           </div>
         </div>
+      ) : (
+        <>
+          {/* ── 1. The answer: headline performance ────────────────────── */}
+          <div className="section-title">
+            <h2 className="h2">Performance · {periodLabel}</h2>
+            <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="btn ghost btn-sm">
+              Open full report <ArrowUpRight size={14} />
+            </Link>
+          </div>
 
-        {/* Report Generation */}
-        <div className="page-card panel">
-          <div className="panel-head">
-            <h3 className="h2">Latest Report Snapshot</h3>
-            {report && (
+          <div className="kpi-row">
+            {kpis.map(k => (
+              <div key={k.label} className="kpi">
+                <span className="lab">{k.icon} {k.label}</span>
+                <span className="val">{k.value}</span>
+                <span className="sub">{k.sub}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* ── 2. Where the report stands ─────────────────────────────── */}
+          <div className="section-title"><h2 className="h2">This Month's Report</h2></div>
+
+          <div className="page-card report-status">
+            <div className="report-status-main">
               <span className={`badge ${report.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
                 {report.status.toUpperCase()}
               </span>
+              <div>
+                <div className="report-status-title">{periodLabel} report</div>
+                <div className="text-subtle text-xs">
+                  Generated {report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}
+                  {' · '}{reportCount} total {reportCount === 1 ? 'report' : 'reports'}
+                </div>
+              </div>
+            </div>
+
+            <div className="report-status-actions">
+              <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="btn btn-secondary">
+                <FileText size={15} /> View
+              </Link>
+              <button className="btn btn-primary" onClick={openGenerateModal}>
+                Generate / View Reports <ArrowRight size={14} />
+              </button>
+            </div>
+
+            {daysRemaining > 0 && report.status !== 'published' && (
+              <p className="text-xs report-status-note">
+                Generating a new snapshot is blocked for {daysRemaining} more day(s).
+              </p>
             )}
           </div>
 
-          {!report ? (
-            <div className="panel-body" style={{ justifyContent: 'center' }}>
-              <div className="empty-state" style={{ padding: '12px 0' }}>
-                <span className="empty-state-icon"><FileText size={22} /></span>
-                <h3>No snapshot yet</h3>
-                <p>Ensure all bulk data is uploaded before generating.</p>
-              </div>
-              <button className="btn btn-primary btn-block" onClick={handleGenerate} disabled={generating}>
-                {generating ? <><Loader2 size={15} className="spin" /> Generating…</> : 'Generate Snapshot'}
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="panel-body">
-                <div className="data-row">
-                  <div className="data-row-label"><Plug size={14} /> <span className="data-row-name">Total Snapshots</span></div>
-                  <span className="mono" style={{ fontWeight: 600 }}>{reportCount}</span>
-                </div>
-                <div className="data-row">
-                  <div className="data-row-label"><CalendarClock size={14} /> <span className="data-row-name">Latest Generated</span></div>
-                  <span className="mono text-xs" style={{ color: 'var(--ink-2)' }}>
-                    {report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}
-                  </span>
-                </div>
-              </div>
+          {/* ── 3. The detail, summarised — full tables one click away ─── */}
+          <div className="section-title"><h2 className="h2">Explore the Data</h2></div>
 
-              <div className="panel-foot">
-                <button className="btn btn-primary btn-block" onClick={openGenerateModal}>
-                  Generate / View Reports <ArrowRight size={14} />
-                </button>
+          <div className="area-grid">
+            {areas.map(a => (
+              <Link key={a.label} to={a.to} className="area-card">
+                <span className="area-label">{a.icon} {a.label}</span>
+                <span className="area-value">
+                  {a.value} <small>{a.unit}</small>
+                </span>
+                <span className="area-detail">{a.detail}</span>
+                <span className="area-cta">View all <ArrowRight size={13} /></span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
-                {daysRemaining > 0 && report.status !== 'published' && (
-                  <p className="text-xs" style={{ textAlign: 'center', marginTop: '10px', color: 'var(--ink-3)' }}>
-                    Generating a new snapshot is blocked for {daysRemaining} more day(s).
-                  </p>
-                )}
+      {/* ── 4. The machinery, last ───────────────────────────────────── */}
+      <div className="section-title"><h2 className="h2">Data Sources</h2></div>
+
+      <div className="page-card panel">
+        <div className="panel-head">
+          <h3 className="h2"><Plug size={15} style={{ verticalAlign: '-2px', marginRight: 6, color: 'var(--ink-3)' }} />API Connections</h3>
+          <Link to={`/admin/clients/${clientId}/connections`} className="btn ghost btn-sm">Manage</Link>
+        </div>
+
+        <div className="panel-body">
+          {['gsc', 'ga4'].map(p => {
+            const c = connections.find((x: any) => x.provider === p);
+            const isConnected = c?.status === 'connected';
+            return (
+              <div key={p} className="data-row">
+                <div className="data-row-label">
+                  <span className={`dot ${isConnected ? 'on' : 'off'}`} />
+                  <span className="data-row-name">{p.toUpperCase()}</span>
+                </div>
+                <span className={`src ${isConnected ? '' : 'man'}`} title={c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}>
+                  {c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}
+                </span>
               </div>
-            </>
-          )}
+            );
+          })}
+        </div>
+
+        <div className="panel-foot">
+          <button className="btn btn-secondary btn-block" onClick={handleSync} disabled={syncing}>
+            {syncing ? <><Loader2 size={15} className="spin" /> Syncing…</> : <><RefreshCw size={15} /> Sync Connected Sources</>}
+          </button>
         </div>
       </div>
 
@@ -355,7 +516,7 @@ const ClientDashboard: React.FC = () => {
 
       {showGenerateModal && (
         <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowGenerateModal(false); }}>
-          <div className="modal" style={{ maxWidth: '540px' }} role="dialog" aria-modal="true">
+          <div className="modal modal-lg" role="dialog" aria-modal="true">
             <h2 className="modal-title">Generate / View Reports</h2>
             <p className="modal-desc">Open a rolling multi-month view, or export any period as PDF.</p>
 
