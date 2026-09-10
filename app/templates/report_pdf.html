@@ -8,26 +8,28 @@
     <title>{{ client_name }} — {{ display_label }} SEO Report</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@400;500;600;700;800&display=swap"
         rel="stylesheet" />
     <style>
         :root {
             /* Palette taken from the approved report design: deep green as the
                structural colour, gold as the single accent. */
-            --ink: #14201E;
-            --forest: #1E3D37;
-            --forest-soft: #2A4F48;
-            --yellow: {{ client_theme_color or '#E8C64A' }};
-            --yellow-soft: #FBF3D3;
-            --blue: #1E3D37;
+            /* Exact palette from the approved report design. */
+            --ink: #12181A;
+            --forest: {{ client_theme_color or '#123F41' }};
+            --forest-soft: #1B5457;
+            --yellow: #E9DD8A;
+            --yellow-soft: #FAF6DF;
+            --blue: #123F41;
             --blue-soft: #EEF3F1;
-            --line: #E3E6E4;
-            --line-soft: #F1F3F2;
-            --muted: #6B7674;
-            --green: #2E9E6B;
-            --red: #D9556B;
-            --zebra: #F7F8F8;
+            --line: #E2E8E7;
+            --line-soft: #EEF2F1;
+            --muted: #5C6867;
+            --green: #2F8F6B;
+            --red: #D6455A;
+            --zebra: #F7F9F9;
             --paper: #fff;
+            --display: 'Anton', 'Poppins', sans-serif;
         }
 
         * {
@@ -174,6 +176,9 @@
         }
 
         .cover h1 {
+            font-family: var(--display);
+            font-weight: 400;
+            letter-spacing: .002em;
             max-width: 565px;
             margin: 0;
             font-size: 37px;
@@ -228,15 +233,85 @@
 
         .section-heading {
             margin: 0;
-            font-size: 23px;
-            line-height: 1.08;
-            letter-spacing: -.055em;
+            font-family: var(--display);
+            font-weight: 400;
+            font-size: 26px;
+            line-height: 1.1;
+            letter-spacing: .002em;
+            color: var(--ink);
+        }
+
+        /* A supporting line under every section title, as the design has. */
+        .section-desc {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 10.5px;
+        }
+
+        .callout-box {
+            margin: 4px 0 18px;
+            padding: 16px 20px;
+            border-radius: 10px;
+            background: var(--forest);
+            color: #fff;
+            box-shadow: 0 6px 20px rgba(18, 63, 65, .25);
+        }
+
+        .callout-box h3 {
+            margin: 0 0 8px;
+            color: var(--yellow);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .callout-box ul { margin: 0; padding-left: 14px; }
+        .callout-box li { margin-bottom: 4px; font-size: 10px; line-height: 1.45; color: #EEF2F1; }
+        .callout-box li::marker { color: var(--yellow); }
+
+        /* Per-section footer: a dot, the report line, and the page number in a
+           filled circle on the right. */
+        .sec-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 18px;
+            padding-top: 9px;
+            border-top: 1px solid var(--line);
+            font-size: 8px;
+            color: var(--muted);
+        }
+
+        .sec-footer .dot {
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            margin-right: 6px;
+            border-radius: 50%;
+            background: var(--forest);
+            vertical-align: middle;
+        }
+
+        .sec-footer .pageno {
+            display: inline-block;
+            min-width: 16px;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 4px;
+            border-radius: 50%;
+            background: var(--forest);
+            color: #fff;
+            font-size: 8px;
+            font-weight: 700;
+            text-align: center;
         }
 
         .section-rule {
-            height: 1.5px;
-            margin: 12px 0 20px;
-            background: linear-gradient(90deg, var(--yellow) 0%, var(--yellow) 22%, var(--line) 22%);
+            height: 3px;
+            margin: 12px 0 18px;
+            background: var(--yellow);
+            border-radius: 2px;
         }
 
         .page-note {
@@ -752,9 +827,11 @@
 
         .small-metric {
             min-height: 92px;
-            padding: 13px;
+            padding: 14px 14px 16px;
             border: 1px solid var(--line);
-            border-radius: 6px;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(18, 63, 65, .05);
         }
 
         .small-metric span {
