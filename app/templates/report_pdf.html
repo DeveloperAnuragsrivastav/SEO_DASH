@@ -12,14 +12,21 @@
         rel="stylesheet" />
     <style>
         :root {
-            --ink: #121212;
-            --yellow: {{ client_theme_color or '#f5c400' }};
-            --yellow-soft: #fff8d8;
-            --blue: #11559b;
-            --blue-soft: #edf6ff;
-            --line: #deded9;
-            --muted: #687075;
-            --green: #16724e;
+            /* Palette taken from the approved report design: deep green as the
+               structural colour, gold as the single accent. */
+            --ink: #14201E;
+            --forest: #1E3D37;
+            --forest-soft: #2A4F48;
+            --yellow: {{ client_theme_color or '#E8C64A' }};
+            --yellow-soft: #FBF3D3;
+            --blue: #1E3D37;
+            --blue-soft: #EEF3F1;
+            --line: #E3E6E4;
+            --line-soft: #F1F3F2;
+            --muted: #6B7674;
+            --green: #2E9E6B;
+            --red: #D9556B;
+            --zebra: #F7F8F8;
             --paper: #fff;
         }
 
@@ -124,7 +131,9 @@
             position: relative;
             overflow: hidden;
             color: #fff;
-            background: var(--ink);
+            /* Deep green rather than black — the reference uses green as the
+               structural colour so the gold accent reads as an accent. */
+            background: var(--forest);
         }
 
         .cover::before {
@@ -210,7 +219,7 @@
         .eyebrow {
             display: block;
             margin-bottom: 8px;
-            color: var(--blue);
+            color: var(--forest);
             font-size: 8px;
             font-weight: 700;
             letter-spacing: .17em;
@@ -225,9 +234,9 @@
         }
 
         .section-rule {
-            height: 2px;
-            margin: 14px 0 20px;
-            background: var(--ink);
+            height: 1.5px;
+            margin: 12px 0 20px;
+            background: linear-gradient(90deg, var(--yellow) 0%, var(--yellow) 22%, var(--line) 22%);
         }
 
         .page-note {
@@ -424,7 +433,7 @@
         }
 
         .signal-bar:nth-child(3) .fill {
-            background: linear-gradient(90deg, var(--yellow), var(--blue));
+            background: linear-gradient(90deg, var(--yellow), var(--forest));
         }
 
         .chart-row {
@@ -861,7 +870,7 @@
         .fill {
             height: 100%;
             border-radius: 20px;
-            background: linear-gradient(90deg, var(--yellow), var(--blue));
+            background: linear-gradient(90deg, var(--yellow), var(--forest));
         }
 
         table {
@@ -869,16 +878,30 @@
             border-collapse: collapse;
         }
 
+        /* Tables carry the report's structure: a solid deep-green header band
+           with white column labels, then quiet zebra rows underneath. */
+        thead {
+            background: var(--forest);
+        }
+
         th {
-            padding: 9px 6px;
-            color: #7d8588;
-            border-bottom: 1px solid var(--line);
+            padding: 10px 8px;
+            color: #fff;
+            border-bottom: 0;
             font-size: 7px;
             font-weight: 700;
-            letter-spacing: .1em;
+            letter-spacing: .12em;
             text-align: left;
             text-transform: uppercase;
         }
+
+        th:first-child { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+        th:last-child  { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+
+        tbody tr:nth-child(even) { background: var(--zebra); }
+
+        tbody td { border-bottom: 1px solid var(--line-soft); }
+        tbody tr:last-child td { border-bottom: 0; }
 
         td {
             padding: 9px 6px;
