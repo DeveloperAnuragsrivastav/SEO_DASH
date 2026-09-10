@@ -164,8 +164,8 @@ const ManualGSCUI: React.FC<ManualGSCUIProps> = ({ clientId, monthStr, onSuccess
 
         <form onSubmit={handleSingleSubmit} style={{ display: 'grid', gap: '14px' }}>
           <div>
-            <label>Page URL</label>
-            <input 
+            <label className="form-label">Page URL</label>
+            <input className="form-input" 
               required
               type="text" 
               value={pageUrl} 
@@ -174,8 +174,8 @@ const ManualGSCUI: React.FC<ManualGSCUIProps> = ({ clientId, monthStr, onSuccess
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label>Clicks</label>
-              <input 
+              <label className="form-label">Clicks</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 value={clicks} 
@@ -183,8 +183,8 @@ const ManualGSCUI: React.FC<ManualGSCUIProps> = ({ clientId, monthStr, onSuccess
               />
             </div>
             <div>
-              <label>Impressions</label>
-              <input 
+              <label className="form-label">Impressions</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 value={impressions} 
@@ -194,8 +194,8 @@ const ManualGSCUI: React.FC<ManualGSCUIProps> = ({ clientId, monthStr, onSuccess
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label>CTR (e.g. 0.05 for 5%)</label>
-              <input 
+              <label className="form-label">CTR (e.g. 0.05 for 5%)</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 step="0.001"
@@ -205,8 +205,8 @@ const ManualGSCUI: React.FC<ManualGSCUIProps> = ({ clientId, monthStr, onSuccess
               />
             </div>
             <div>
-              <label>Avg Position</label>
-              <input 
+              <label className="form-label">Avg Position</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 step="0.1"

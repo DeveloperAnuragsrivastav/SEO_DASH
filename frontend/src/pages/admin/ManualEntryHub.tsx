@@ -4,8 +4,11 @@ import api, { API_BASE_URL } from '../../api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
+import ManualGSCUI from '../../components/ManualGSCUI';
+import ManualGA4UI from '../../components/ManualGA4UI';
 import { FileSpreadsheet, X, Check, Circle, ChevronRight, Download,
-         MapPin, Link as LinkIcon, CheckSquare, Crosshair, Bot, Image as ImageIcon } from 'lucide-react';
+         MapPin, Link as LinkIcon, CheckSquare, Crosshair, Bot, Image as ImageIcon,
+         Search, BarChart2 } from 'lucide-react';
 
 // --- Manual Entry Forms ---
 
@@ -255,6 +258,50 @@ const ScreenshotsManualForm = ({ clientId }: { clientId: string }) => {
 // --- Main Components ---
 
 
+/**
+ * ManualGSCUI / ManualGA4UI are month-scoped, so wrap them with a month
+ * picker to match the { clientId, onComplete } shape the other forms use.
+ */
+const MonthScopedForm: React.FC<{
+  clientId: string;
+  onComplete: () => void;
+  render: (clientId: string, monthStr: string, onSuccess: () => void) => React.ReactNode;
+}> = ({ clientId, onComplete, render }) => {
+  const [monthStr, setMonthStr] = useState(() => new Date().toISOString().slice(0, 7));
+
+  return (
+    <div>
+      <div className="form-group">
+        <label className="form-label">Data Month</label>
+        <input
+          type="month"
+          className="form-input"
+          value={monthStr}
+          onChange={e => setMonthStr(e.target.value)}
+          required
+        />
+      </div>
+      {monthStr ? render(clientId, monthStr, onComplete) : null}
+    </div>
+  );
+};
+
+const GSCManualForm = ({ clientId, onComplete }: { clientId: string, onComplete: () => void }) => (
+  <MonthScopedForm
+    clientId={clientId}
+    onComplete={onComplete}
+    render={(cid, m, ok) => <ManualGSCUI clientId={cid} monthStr={m} onSuccess={ok} />}
+  />
+);
+
+const GA4ManualForm = ({ clientId, onComplete }: { clientId: string, onComplete: () => void }) => (
+  <MonthScopedForm
+    clientId={clientId}
+    onComplete={onComplete}
+    render={(cid, m, ok) => <ManualGA4UI clientId={cid} monthStr={m} onSuccess={ok} />}
+  />
+);
+
 interface SectionStatus {
   loading: boolean;
   total: number;
@@ -503,7 +550,10 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
   );
 };
 
-const SECTION_KEYS = ['gbp', 'links', 'work', 'keywords', 'ai', 'screenshots'] as const;
+const BASE_KEYS = ['keywords', 'links', 'work', 'gbp', 'ai', 'screenshots'] as const;
+/** Only listed when the client is set to hand-enter that traffic source. */
+const TRAFFIC_KEYS = ['gsc', 'ga4'] as const;
+const SECTION_KEYS = [...BASE_KEYS, ...TRAFFIC_KEYS] as const;
 type SectionKey = typeof SECTION_KEYS[number];
 
 /** Read-only presence check per data set — drives the checklist ticks. */
@@ -514,6 +564,8 @@ const STATUS_PATHS: Record<SectionKey, string> = {
   keywords: 'keywords/history',
   ai: 'ai_mentions',
   screenshots: 'screenshots',
+  gsc: 'search/history',
+  ga4: 'audience/history',
 };
 
 const DATE_FIELDS = ['captured_on', 'created_on', 'month', 'date'];
@@ -541,9 +593,20 @@ const ManualEntryHub: React.FC = () => {
     Object.fromEntries(SECTION_KEYS.map(k => [k, { loading: true, total: 0, latest: null }])) as Record<SectionKey, SectionStatus>
   );
 
+  // Which traffic sources this client hand-enters (null = still loading).
+  const [manualTraffic, setManualTraffic] = useState<Record<'gsc' | 'ga4', boolean> | null>(null);
+
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
+
+    api.get(`/clients/${clientId}/sections`, { skipErrorToast: true } as any)
+      .then((res) => {
+        if (cancelled) return;
+        const on = (k: string) => (res.data || []).some((r: any) => r.section_key === k && r.enabled);
+        setManualTraffic({ gsc: on('gsc_manual'), ga4: on('ga4_manual') });
+      })
+      .catch(() => { if (!cancelled) setManualTraffic({ gsc: false, ga4: false }); });
 
     SECTION_KEYS.forEach((key) => {
       api.get(`/clients/${clientId}/${STATUS_PATHS[key]}`, { skipErrorToast: true } as any)
@@ -567,9 +630,14 @@ const ManualEntryHub: React.FC = () => {
 
   if (!clientId) return null;
 
-  const checked = SECTION_KEYS.filter(k => !statuses[k].loading && statuses[k].total > 0).length;
-  const stillLoading = SECTION_KEYS.some(k => statuses[k].loading);
-  const total = SECTION_KEYS.length;
+  const activeKeys: SectionKey[] = [
+    ...BASE_KEYS,
+    ...TRAFFIC_KEYS.filter(k => manualTraffic?.[k]),
+  ];
+
+  const checked = activeKeys.filter(k => !statuses[k].loading && statuses[k].total > 0).length;
+  const stillLoading = manualTraffic === null || activeKeys.some(k => statuses[k].loading);
+  const total = activeKeys.length;
   const pct = Math.round((checked / total) * 100);
   const thisMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
@@ -661,6 +729,32 @@ Aug'26,100,50,300,150,5,2,10,1"
 Aug'26,Best pizza in NY,Yes,No,Yes,Yes,No"
           manualForm={<AIPromptsManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
         />
+
+        {manualTraffic?.gsc && (
+          <IngestionCard
+            title="Search Console"
+            icon={<Search size={15} />}
+            hint="Clicks, impressions, CTR and position"
+            status={statuses.gsc}
+            endpoint={`/clients/${clientId}/manual-gsc/upload_csv`}
+            templateColumns="date,clicks,impressions,ctr,position
+2026-08-01,120,4500,0.027,12.4"
+            manualForm={<GSCManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
+          />
+        )}
+
+        {manualTraffic?.ga4 && (
+          <IngestionCard
+            title="Google Analytics"
+            icon={<BarChart2 size={15} />}
+            hint="Sessions, users, engagement and conversions"
+            status={statuses.ga4}
+            endpoint={`/clients/${clientId}/manual-ga4/upload_csv`}
+            templateColumns="date,sessions,users,engaged_sessions,conversions,revenue
+2026-08-01,761,589,147,3,0"
+            manualForm={<GA4ManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
+          />
+        )}
 
         <IngestionCard
           title="Screenshots"

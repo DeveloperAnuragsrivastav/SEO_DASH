@@ -170,8 +170,8 @@ const ManualGA4UI: React.FC<ManualGA4UIProps> = ({ clientId, monthStr, onSuccess
         <form onSubmit={handleSingleSubmit} style={{ display: 'grid', gap: '14px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
             <div>
-              <label>Dimension</label>
-              <select 
+              <label className="form-label">Dimension</label>
+              <select className="form-select" 
                 value={dimensionKey} 
                 onChange={e => setDimensionKey(e.target.value as any)}
               >
@@ -181,8 +181,8 @@ const ManualGA4UI: React.FC<ManualGA4UIProps> = ({ clientId, monthStr, onSuccess
               </select>
             </div>
             <div>
-              <label>Value (e.g. 'Organic Search')</label>
-              <input 
+              <label className="form-label">Value (e.g. 'Organic Search')</label>
+              <input className="form-input" 
                 required
                 type="text" 
                 value={dimensionValue} 
@@ -193,8 +193,8 @@ const ManualGA4UI: React.FC<ManualGA4UIProps> = ({ clientId, monthStr, onSuccess
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label>Sessions</label>
-              <input 
+              <label className="form-label">Sessions</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 value={sessions} 
@@ -202,8 +202,8 @@ const ManualGA4UI: React.FC<ManualGA4UIProps> = ({ clientId, monthStr, onSuccess
               />
             </div>
             <div>
-              <label>Total Users (Count)</label>
-              <input 
+              <label className="form-label">Total Users (Count)</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 value={users} 
@@ -214,8 +214,8 @@ const ManualGA4UI: React.FC<ManualGA4UIProps> = ({ clientId, monthStr, onSuccess
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
             <div>
-              <label>Engaged</label>
-              <input 
+              <label className="form-label">Engaged</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 value={engagedSessions} 
@@ -223,8 +223,8 @@ const ManualGA4UI: React.FC<ManualGA4UIProps> = ({ clientId, monthStr, onSuccess
               />
             </div>
             <div>
-              <label>Conv.</label>
-              <input 
+              <label className="form-label">Conv.</label>
+              <input className="form-input" 
                 required
                 type="number" 
                 value={conversions} 
@@ -232,8 +232,8 @@ const ManualGA4UI: React.FC<ManualGA4UIProps> = ({ clientId, monthStr, onSuccess
               />
             </div>
             <div>
-              <label>Revenue</label>
-              <input 
+              <label className="form-label">Revenue</label>
+              <input className="form-input" 
                 type="number" 
                 step="0.01"
                 value={revenue} 

@@ -1811,6 +1811,51 @@ code {
 
 .area-card:hover .area-cta { color: var(--brand-600); gap: 8px; }
 
+/* ── Traffic-source setup card ───────────────────────────────────── */
+
+.setup-card { padding: 22px; }
+
+.setup-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 20px; }
+.setup-head .empty-state-icon { margin-bottom: 0; flex-shrink: 0; }
+
+.setup-title {
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.setup-desc { font-size: 13px; color: var(--ink-3); line-height: 1.6; max-width: 60ch; }
+
+.setup-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--canvas-2);
+}
+
+.setup-choice + .setup-choice { margin-top: 10px; }
+
+.setup-choice-label { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.setup-choice-label > svg { color: var(--ink-3); flex-shrink: 0; }
+
+.setup-choice-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* The "entered manually" chip on the resolved state is a link */
+a.src.man { text-decoration: none; }
+a.src.man:hover { border-color: var(--brand-400); }
+
+@media (max-width: 560px) {
+  .setup-choice-actions { width: 100%; }
+  .setup-choice-actions .btn { flex: 1; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    DATA CHECKLIST (Add Data)
    ═══════════════════════════════════════════════════════════════════ */

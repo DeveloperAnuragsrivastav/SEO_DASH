@@ -22,6 +22,8 @@ const ClientDashboard: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sections, setSections] = useState<any[] | null>(null);
+  const [savingMode, setSavingMode] = useState<string | null>(null);
 
   // Whitelabel Modal State
   const [showWhitelabel, setShowWhitelabel] = useState(false);
@@ -44,7 +46,8 @@ const ClientDashboard: React.FC = () => {
       api.get(`/clients/${clientId}/reports/latest`, { skipErrorToast: true } as any).catch(() => ({ data: null })),
       api.get(`/clients/${clientId}/connections`).catch(() => ({ data: [] })),
       api.get(`/clients/${clientId}/reports/count`, { skipErrorToast: true } as any).catch(() => ({ data: { count: 0 } })),
-    ]).then(([c, r, conn, rCount]) => {
+      api.get(`/clients/${clientId}/sections`, { skipErrorToast: true } as any).catch(() => ({ data: [] })),
+    ]).then(([c, r, conn, rCount, sec]) => {
       if (!c) {
         setClient(null);
         return;
@@ -53,6 +56,7 @@ const ClientDashboard: React.FC = () => {
       setReport(r.data);
       setConnections(conn.data || []);
       setReportCount(rCount.data?.count || 0);
+      setSections(sec.data || []);
       setEditName(c.data.name || '');
       setEditTheme(c.data.theme_color || '#2563eb');
       setEditLogo(c.data.logo_url || '');
@@ -74,6 +78,20 @@ const ClientDashboard: React.FC = () => {
       // Handled by global interceptor
     }
     setSavingSettings(false);
+  };
+
+  /** Record that this client's traffic source is hand-entered rather than API-linked. */
+  const chooseManual = async (provider: 'gsc' | 'ga4') => {
+    setSavingMode(provider);
+    try {
+      await api.put(`/clients/${clientId}/sections/${provider}_manual`, { enabled: true });
+      const res = await api.get(`/clients/${clientId}/sections`);
+      setSections(res.data || []);
+      toast.success(`${provider.toUpperCase()} set to manual entry. Add it under Add Data.`);
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setSavingMode(null);
   };
 
   const handleSync = async () => {
@@ -239,6 +257,33 @@ const ClientDashboard: React.FC = () => {
   const aiMentioned = aiVis.filter((m: any) => m.mentioned).length;
   const aiTotal = aiVis.length;
   const rankSummary = rankings.summary || {};
+
+  // How each traffic source is supplied. A connection row means the API path
+  // was taken; a `<provider>_manual` section toggle means it is hand-entered.
+  // Neither means nobody has said yet — so we ask.
+  const trafficMode = (provider: 'gsc' | 'ga4'): 'api' | 'manual' | 'unset' => {
+    if (connections.some((c: any) => c.provider === provider)) return 'api';
+    if ((sections || []).some((r: any) => r.section_key === `${provider}_manual` && r.enabled)) return 'manual';
+    return 'unset';
+  };
+
+  const TRAFFIC_SOURCES = [
+    {
+      key: 'ga4' as const,
+      name: 'Google Analytics',
+      icon: <BarChart2 size={16} />,
+      question: 'Can you sign in to this client\'s Google Analytics?',
+    },
+    {
+      key: 'gsc' as const,
+      name: 'Search Console',
+      icon: <Search size={16} />,
+      question: 'Can you sign in to this client\'s Search Console?',
+    },
+  ];
+
+  // Don't ask until the section preferences have actually loaded.
+  const unresolved = sections === null ? [] : TRAFFIC_SOURCES.filter(s => trafficMode(s.key) === 'unset');
 
   const periodLabel = report?.end_date
     ? new Date(report.end_date).toLocaleString('default', { month: 'long', year: 'numeric' })
@@ -440,39 +485,89 @@ const ClientDashboard: React.FC = () => {
         </>
       )}
 
-      {/* ── 4. The machinery, last ───────────────────────────────────── */}
-      <div className="section-title"><h2 className="h2">Data Sources</h2></div>
+      {/* ── 4. Where the traffic data comes from ─────────────────────── */}
+      <div className="section-title"><h2 className="h2">Traffic Data</h2></div>
 
-      <div className="page-card panel">
-        <div className="panel-head">
-          <h3 className="h2"><Plug size={15} style={{ verticalAlign: '-2px', marginRight: 6, color: 'var(--ink-3)' }} />API Connections</h3>
-          <Link to={`/admin/clients/${clientId}/connections`} className="btn ghost btn-sm">Manage</Link>
-        </div>
+      {unresolved.length > 0 ? (
+        /* Never answered for at least one source — ask, in plain language. */
+        <div className="page-card setup-card">
+          <div className="setup-head">
+            <span className="empty-state-icon"><Plug size={20} /></span>
+            <div>
+              <h3 className="setup-title">Where does this client's traffic data come from?</h3>
+              <p className="setup-desc">
+                We can pull it automatically if you can sign in to their Google accounts.
+                Otherwise you can type it in each month — the report works either way.
+              </p>
+            </div>
+          </div>
 
-        <div className="panel-body">
-          {['gsc', 'ga4'].map(p => {
-            const c = connections.find((x: any) => x.provider === p);
-            const isConnected = c?.status === 'connected';
-            return (
-              <div key={p} className="data-row">
-                <div className="data-row-label">
-                  <span className={`dot ${isConnected ? 'on' : 'off'}`} />
-                  <span className="data-row-name">{p.toUpperCase()}</span>
+          {unresolved.map(src => (
+            <div key={src.key} className="setup-choice">
+              <div className="setup-choice-label">
+                {src.icon}
+                <div>
+                  <div className="data-row-name">{src.name}</div>
+                  <div className="text-subtle text-xs">{src.question}</div>
                 </div>
-                <span className={`src ${isConnected ? '' : 'man'}`} title={c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}>
-                  {c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}
-                </span>
               </div>
-            );
-          })}
+              <div className="setup-choice-actions">
+                <Link to={`/admin/clients/${clientId}/connections`} className="btn btn-primary btn-sm">
+                  Yes, I can sign in
+                </Link>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => chooseManual(src.key)}
+                  disabled={savingMode === src.key}
+                >
+                  {savingMode === src.key
+                    ? <><Loader2 size={13} className="spin" /> Saving…</>
+                    : "No, I'll enter it manually"}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
+      ) : (
+        /* Both answered — a slim status line is enough. */
+        <div className="page-card panel">
+          <div className="panel-head">
+            <h3 className="h2">Data Sources</h3>
+            <Link to={`/admin/clients/${clientId}/connections`} className="btn ghost btn-sm">Manage</Link>
+          </div>
 
-        <div className="panel-foot">
-          <button className="btn btn-secondary btn-block" onClick={handleSync} disabled={syncing}>
-            {syncing ? <><Loader2 size={15} className="spin" /> Syncing…</> : <><RefreshCw size={15} /> Sync Connected Sources</>}
-          </button>
+          <div className="panel-body">
+            {TRAFFIC_SOURCES.map(src => {
+              const mode = trafficMode(src.key);
+              const c = connections.find((x: any) => x.provider === src.key);
+              const isConnected = c?.status === 'connected';
+              return (
+                <div key={src.key} className="data-row">
+                  <div className="data-row-label">
+                    <span className={`dot ${mode === 'api' ? (isConnected ? 'on' : 'warn') : 'off'}`} />
+                    <span className="data-row-name">{src.name}</span>
+                  </div>
+                  {mode === 'manual' ? (
+                    <Link to={`/admin/clients/${clientId}/manual-entry`} className="src man">
+                      Entered manually
+                    </Link>
+                  ) : (
+                    <span className="src" title={c ? (isConnected ? c.property_id : c.status) : ''}>
+                      {isConnected ? c.property_id : (c?.status || 'not connected')}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="panel-foot">
+            <button className="btn btn-secondary btn-block" onClick={handleSync} disabled={syncing}>
+              {syncing ? <><Loader2 size={15} className="spin" /> Syncing…</> : <><RefreshCw size={15} /> Sync Connected Sources</>}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {showWhitelabel && (
         <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowWhitelabel(false); }}>
