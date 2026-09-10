@@ -1,39 +1,48 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 import { toast } from 'sonner';
 import {
-  Sparkles, Loader2, X, Search, BarChart2, MapPin,
-  Crosshair, Bot, Link as LinkIcon, CheckSquare, Info, Pencil, Check,
+  Sparkles, Loader2, X, Info, Pencil, Check, ChevronDown,
+  Search, BarChart2, MapPin, Crosshair, Bot, Link as LinkIcon, CheckSquare,
 } from 'lucide-react';
 
-type SectionKey = 'traffic' | 'rankings' | 'ai_visibility' | 'links' | 'work';
-
-interface MetricDef { key: string; label: string; format: 'int' | 'percent' | 'decimal' }
+interface Item {
+  id: string;
+  section: string;
+  label: string;
+  value: number | boolean | null;
+  format: 'int' | 'percent' | 'decimal' | 'bool' | 'none';
+  editable: boolean;
+  kind: 'headline' | 'summary' | 'row';
+  unit?: string;
+}
 
 interface Props {
   clientId: string;
   snapshotId: string;
-  snapshot: any;
   onClose: () => void;
   onSaved: () => void;
 }
 
-const SECTION_META: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'traffic',       label: 'Traffic & Conversions', icon: <BarChart2 size={15} /> },
-  { key: 'rankings',      label: 'Rankings',              icon: <Crosshair size={15} /> },
-  { key: 'ai_visibility', label: 'AI Visibility',         icon: <Bot size={15} /> },
-  { key: 'links',         label: 'Links Built',           icon: <LinkIcon size={15} /> },
-  { key: 'work',          label: 'Work Done',             icon: <CheckSquare size={15} /> },
-];
-
-const PROVIDER_META: Record<string, { label: string; icon: React.ReactNode }> = {
-  gsc: { label: 'Search Console',   icon: <Search size={13} /> },
-  ga4: { label: 'Google Analytics', icon: <BarChart2 size={13} /> },
-  gbp: { label: 'Business Profile', icon: <MapPin size={13} /> },
+const SECTION_ICON: Record<string, React.ReactNode> = {
+  gsc: <Search size={15} />,
+  ga4: <BarChart2 size={15} />,
+  gbp: <MapPin size={15} />,
+  rankings: <Crosshair size={15} />,
+  ai_visibility: <Bot size={15} />,
+  links: <LinkIcon size={15} />,
+  work: <CheckSquare size={15} />,
 };
 
-/** Display form — compact for big counts, so "298,431" reads as "298K". */
-function formatValue(raw: number, format: string): string {
+const KIND_LABEL: Record<string, string> = {
+  headline: 'Figures',
+  summary: 'Summary',
+  row: 'Rows',
+};
+
+function formatValue(raw: Item['value'], format: Item['format']): string {
+  if (format === 'bool') return raw ? 'Mentioned' : 'Not found';
+  if (format === 'none' || raw === null) return '—';
   const n = Number(raw) || 0;
   if (format === 'percent') return `${(n * 100).toFixed(1)}%`;
   if (format === 'decimal') return n.toFixed(1);
@@ -43,51 +52,65 @@ function formatValue(raw: number, format: string): string {
   return Math.round(n).toLocaleString();
 }
 
-const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, snapshot, onClose, onSaved }) => {
+const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [asking, setAsking] = useState(false);
 
-  const [available, setAvailable] = useState<Record<SectionKey, boolean> | null>(null);
-  const [selected, setSelected] = useState<Record<SectionKey, boolean> | null>(null);
-
-  const [definitions, setDefinitions] = useState<Record<string, MetricDef[]>>({});
-  const [metricOn, setMetricOn] = useState<Record<string, boolean>>({});
+  const [sections, setSections] = useState<{ key: string; label: string }[]>([]);
+  const [available, setAvailable] = useState<Record<string, boolean>>({});
+  const [sectionOn, setSectionOn] = useState<Record<string, boolean>>({});
+  const [items, setItems] = useState<Item[]>([]);
+  const [itemOn, setItemOn] = useState<Record<string, boolean>>({});
   const [values, setValues] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<string | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const [instruction, setInstruction] = useState('');
   const [aiNote, setAiNote] = useState<{ text: string; ignored: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    api.get(`/clients/${clientId}/reports/${snapshotId}/sections`)
+    api.get(`/clients/${clientId}/reports/${snapshotId}/composer`)
       .then(res => {
         if (cancelled) return;
-        setAvailable(res.data.available);
-        setSelected(res.data.selected);
-        const m = res.data.metrics || {};
-        setDefinitions(m.definitions || {});
-        setMetricOn(m.selected || {});
-        setValues(
-          Object.fromEntries(
-            Object.entries(m.values || {}).map(([k, v]) => [k, String(v ?? 0)])
-          )
-        );
+        const d = res.data;
+        setSections(d.sections || []);
+        setAvailable(d.available || {});
+        setSectionOn(d.selectedSections || {});
+        setItems(d.items || []);
+        setItemOn(d.selectedItems || {});
+        setValues(Object.fromEntries((d.items || []).map((i: Item) => [i.id, String(i.value ?? '')])));
+        // Open the provider sections by default; long row lists start collapsed.
+        setOpen(Object.fromEntries((d.sections || []).map((s: any) => [s.key, ['gsc', 'ga4', 'gbp'].includes(s.key)])));
       })
       .catch(() => { /* Handled by global interceptor */ })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [clientId, snapshotId]);
 
-  const toggleSection = (key: SectionKey) => {
-    if (!selected || !available?.[key]) return;
-    setSelected({ ...selected, [key]: !selected[key] });
+  const bySection = useMemo(() => {
+    const map: Record<string, Item[]> = {};
+    for (const i of items) (map[i.section] ||= []).push(i);
+    return map;
+  }, [items]);
+
+  const toggleSection = (key: string) => {
+    if (!available[key]) return;
+    setSectionOn({ ...sectionOn, [key]: !sectionOn[key] });
     setAiNote(null);
   };
 
-  const toggleMetric = (id: string) => {
-    setMetricOn({ ...metricOn, [id]: !metricOn[id] });
+  const toggleItem = (id: string) => {
+    setItemOn({ ...itemOn, [id]: itemOn[id] === false });
+    setAiNote(null);
+  };
+
+  /** Tick or untick every row in one section at once. */
+  const setAllIn = (key: string, on: boolean) => {
+    const next = { ...itemOn };
+    for (const i of bySection[key] || []) next[i.id] = on;
+    setItemOn(next);
     setAiNote(null);
   };
 
@@ -96,9 +119,9 @@ const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, snapshot, onClo
     setAsking(true);
     setAiNote(null);
     try {
-      const res = await api.post(`/clients/${clientId}/reports/${snapshotId}/sections/suggest`, { instruction });
-      setSelected(res.data.sections);
-      if (res.data.metrics) setMetricOn(res.data.metrics);
+      const res = await api.post(`/clients/${clientId}/reports/${snapshotId}/composer/suggest`, { instruction });
+      setSectionOn(res.data.sections || {});
+      setItemOn(res.data.items || {});
       setAiNote({ text: res.data.note || '', ignored: !!res.data.ignored });
     } catch (err: any) {
       // Handled by global interceptor
@@ -107,18 +130,22 @@ const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, snapshot, onClo
   };
 
   const save = async () => {
-    if (!selected) return;
     setSaving(true);
     try {
-      const grouped: Record<string, Record<string, number>> = {};
-      for (const [id, v] of Object.entries(values)) {
-        const [provider, key] = id.split('.');
-        (grouped[provider] ||= {})[key] = Number(v) || 0;
+      const edits: Record<string, any> = {};
+      for (const i of items) {
+        if (!i.editable) continue;
+        const raw = values[i.id];
+        if (raw === undefined) continue;
+        const next = i.format === 'bool' ? raw === 'true' : Number(raw);
+        if (i.format === 'bool' ? next !== i.value : next !== Number(i.value)) edits[i.id] = next;
       }
-      await api.put(`/clients/${clientId}/reports/${snapshotId}/metrics`, { metrics: grouped });
-      await api.put(`/clients/${clientId}/reports/${snapshotId}/sections`, {
-        sections: selected,
-        metrics: metricOn,
+      if (Object.keys(edits).length > 0) {
+        await api.put(`/clients/${clientId}/reports/${snapshotId}/values`, { edits });
+      }
+      await api.put(`/clients/${clientId}/reports/${snapshotId}/composer`, {
+        sections: sectionOn,
+        items: itemOn,
       });
       toast.success('Report updated.');
       onSaved();
@@ -128,27 +155,8 @@ const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, snapshot, onClo
     setSaving(false);
   };
 
-  const summary = (key: SectionKey): string => {
-    const s = snapshot || {};
-    switch (key) {
-      case 'traffic': {
-        const on = Object.entries(metricOn).filter(([, v]) => v).length;
-        return `${on} of ${Object.keys(metricOn).length} figures shown`;
-      }
-      case 'rankings': {
-        const r = s.rankings || {};
-        return `${(r.keywords || []).length} keywords · ${(r.summary || {}).top_10 || 0} in top 10`;
-      }
-      case 'ai_visibility': {
-        const ai = s.ai_visibility || [];
-        return `${ai.filter((m: any) => m.mentioned).length} of ${ai.length} prompts mention the brand`;
-      }
-      case 'links':  return `${(s.links || []).length} links built`;
-      case 'work':   return `${(s.activities || []).length} activities · ${(s.screenshots || []).length} screenshots`;
-    }
-  };
-
-  const chosen = selected ? SECTION_META.filter(m => selected[m.key]).length : 0;
+  const shownIn = (key: string) => (bySection[key] || []).filter(i => itemOn[i.id] !== false).length;
+  const sectionsOn = sections.filter(s => sectionOn[s.key]).length;
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -157,7 +165,7 @@ const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, snapshot, onClo
           <div>
             <h2 className="modal-title">Build the report</h2>
             <p className="modal-desc" style={{ marginBottom: 0 }}>
-              Untick anything the client shouldn't see, and correct any figure before it goes out.
+              Untick anything the client shouldn't see. Every figure can be corrected with the pencil.
             </p>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={17} /></button>
@@ -175,7 +183,7 @@ const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, snapshot, onClo
                 <input
                   id="composer-instruction"
                   className="form-input"
-                  placeholder="e.g. hide average CTR and drop the work done section"
+                  placeholder="e.g. hide average CTR and drop the business profile section"
                   value={instruction}
                   onChange={e => setInstruction(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); askAi(); } }}
@@ -195,87 +203,124 @@ const ReportComposer: React.FC<Props> = ({ clientId, snapshotId, snapshot, onClo
             </div>
 
             <div className="overline" style={{ margin: '20px 0 10px' }}>
-              Sections · {chosen} of {SECTION_META.length} included
+              Sections · {sectionsOn} of {sections.length} included
             </div>
 
             <div className="stack">
-              {SECTION_META.map(m => {
-                const has = available?.[m.key];
-                const on = !!selected?.[m.key];
+              {sections.map(sec => {
+                const has = available[sec.key];
+                const on = !!sectionOn[sec.key];
+                const list = bySection[sec.key] || [];
+                const isOpen = !!open[sec.key];
+
                 return (
-                  <div key={m.key} className={`composer-section ${on ? 'on' : ''} ${has ? '' : 'empty'}`}>
-                    <label className="composer-section-head">
-                      <input type="checkbox" checked={on} disabled={!has} onChange={() => toggleSection(m.key)} />
+                  <div key={sec.key} className={`composer-section ${on ? 'on' : ''} ${has ? '' : 'empty'}`}>
+                    <div className="composer-section-head">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={!has}
+                        onChange={() => toggleSection(sec.key)}
+                        aria-label={`Include ${sec.label}`}
+                      />
                       <span className="composer-section-text">
-                        <span className="composer-section-title">{m.icon} {m.label}</span>
+                        <span className="composer-section-title">{SECTION_ICON[sec.key]} {sec.label}</span>
                         <span className="composer-section-sub">
-                          {has ? summary(m.key) : 'No data — nothing to show'}
+                          {has ? `${shownIn(sec.key)} of ${list.length} shown` : 'No data — nothing to show'}
                         </span>
                       </span>
-                    </label>
 
-                    {/* Every figure inside Traffic gets its own tick and its own pencil. */}
-                    {m.key === 'traffic' && has && on && (
+                      {has && list.length > 0 && (
+                        <button
+                          className={`composer-expand ${isOpen ? 'open' : ''}`}
+                          onClick={() => setOpen({ ...open, [sec.key]: !isOpen })}
+                          aria-expanded={isOpen}
+                          aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${sec.label}`}
+                        >
+                          <ChevronDown size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    {has && on && isOpen && (
                       <div className="composer-metrics">
-                        {Object.entries(definitions).map(([provider, defs]) => (
-                          <div key={provider}>
-                            <div className="composer-metric-label">
-                              {PROVIDER_META[provider]?.icon} {PROVIDER_META[provider]?.label || provider}
-                            </div>
-                            <div className="metric-grid">
-                              {defs.map(d => {
-                                const id = `${provider}.${d.key}`;
-                                const isEditing = editing === id;
-                                const on = metricOn[id] !== false;
-                                return (
-                                  <div key={id} className={`metric-card ${on ? '' : 'off'}`}>
-                                    <label className="metric-card-head">
-                                      <input type="checkbox" checked={on} onChange={() => toggleMetric(id)} />
-                                      <span>{d.label}</span>
-                                    </label>
+                        <div className="composer-bulk">
+                          <button className="btn ghost btn-sm" onClick={() => setAllIn(sec.key, true)}>Select all</button>
+                          <button className="btn ghost btn-sm" onClick={() => setAllIn(sec.key, false)}>Clear all</button>
+                        </div>
 
-                                    <div className="metric-card-value">
-                                      {isEditing ? (
-                                        <>
-                                          <input
-                                            className="form-input metric-input"
-                                            type="number"
-                                            min="0"
-                                            step={d.format === 'int' ? '1' : d.format === 'percent' ? '0.0001' : '0.1'}
-                                            value={values[id] ?? '0'}
-                                            autoFocus
-                                            onChange={e => setValues({ ...values, [id]: e.target.value })}
-                                            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditing(null); }}
-                                          />
-                                          <button
-                                            className="metric-pencil done"
-                                            onClick={() => setEditing(null)}
-                                            aria-label={`Done editing ${d.label}`}
-                                          >
-                                            <Check size={13} />
-                                          </button>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <span className="metric-number" title={values[id]}>
-                                            {formatValue(Number(values[id] ?? 0), d.format)}
-                                          </span>
-                                          <button
-                                            className="metric-pencil"
-                                            onClick={() => setEditing(id)}
-                                            aria-label={`Edit ${d.label}`}
-                                          >
-                                            <Pencil size={12} />
-                                          </button>
-                                        </>
-                                      )}
+                        {(['headline', 'summary', 'row'] as const).map(kind => {
+                          const group = list.filter(i => i.kind === kind);
+                          if (group.length === 0) return null;
+                          return (
+                            <div key={kind}>
+                              {list.some(i => i.kind !== kind) && (
+                                <div className="composer-metric-label">{KIND_LABEL[kind]}</div>
+                              )}
+                              <div className={kind === 'row' ? 'metric-rows' : 'metric-grid'}>
+                                {group.map(i => {
+                                  const isEditing = editing === i.id;
+                                  const shown = itemOn[i.id] !== false;
+                                  return (
+                                    <div key={i.id} className={`metric-card ${shown ? '' : 'off'} ${kind === 'row' ? 'is-row' : ''}`}>
+                                      <label className="metric-card-head">
+                                        <input type="checkbox" checked={shown} onChange={() => toggleItem(i.id)} />
+                                        <span title={i.label}>{i.label}</span>
+                                      </label>
+
+                                      <div className="metric-card-value">
+                                        {isEditing && i.editable ? (
+                                          <>
+                                            {i.format === 'bool' ? (
+                                              <select
+                                                className="form-select metric-input"
+                                                value={values[i.id] === 'true' ? 'true' : 'false'}
+                                                autoFocus
+                                                onChange={e => setValues({ ...values, [i.id]: e.target.value })}
+                                              >
+                                                <option value="true">Mentioned</option>
+                                                <option value="false">Not found</option>
+                                              </select>
+                                            ) : (
+                                              <input
+                                                className="form-input metric-input"
+                                                type="number"
+                                                min="0"
+                                                step={i.format === 'int' ? '1' : i.format === 'percent' ? '0.0001' : '0.1'}
+                                                value={values[i.id] ?? '0'}
+                                                autoFocus
+                                                onChange={e => setValues({ ...values, [i.id]: e.target.value })}
+                                                onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditing(null); }}
+                                              />
+                                            )}
+                                            <button className="metric-pencil done" onClick={() => setEditing(null)} aria-label="Done">
+                                              <Check size={13} />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <span className="metric-number">
+                                              {formatValue(
+                                                i.format === 'bool' ? values[i.id] === 'true' : (values[i.id] as any),
+                                                i.format,
+                                              )}
+                                              {i.unit === 'position' && <small> pos</small>}
+                                            </span>
+                                            {i.editable && (
+                                              <button className="metric-pencil" onClick={() => setEditing(i.id)} aria-label={`Edit ${i.label}`}>
+                                                <Pencil size={12} />
+                                              </button>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

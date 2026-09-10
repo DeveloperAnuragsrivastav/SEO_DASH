@@ -2314,6 +2314,63 @@ a.src.man:hover { border-color: var(--brand-400); }
   .composer-ai-row .btn { width: 100%; }
 }
 
+/* ── Composer: collapsible sections and row lists ────────────────── */
+
+.composer-section-head { position: relative; }
+
+.composer-expand {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.2s var(--ease), background-color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+
+.composer-expand:hover { background: var(--bg-surface-hover); border-color: var(--line); color: var(--ink); }
+.composer-expand.open { transform: rotate(180deg); }
+
+.composer-bulk {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+/* Row lists get one line each and scroll once they get long */
+.metric-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.metric-card.is-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 11px;
+}
+
+.metric-card.is-row .metric-card-head { margin-bottom: 0; flex: 1; min-width: 0; }
+.metric-card.is-row .metric-card-value { min-height: 0; flex-shrink: 0; }
+.metric-card.is-row .metric-number { font-size: 14px; }
+.metric-card.is-row .metric-number small {
+  font-family: var(--body);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.metric-card.is-row .metric-input { width: 92px; flex: none; }
+
 /* ═══════════════════════════════════════════════════════════════════
    REPORT-SHARED UTILITIES
    ═══════════════════════════════════════════════════════════════════ */

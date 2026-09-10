@@ -1269,6 +1269,7 @@
     <section class="report-page page-two">
         <div class="page-inner">
             
+{% if sections.gsc %}
             <!-- GSC Section -->
             <div class="heading-row">
                 <div><span class="eyebrow">Search Performance</span>
@@ -1283,6 +1284,8 @@
                 {% if mo('gsc.position') %}<div class="small-metric"><span>Avg Position</span><strong>{{ gsc.get('position', 0) | fmt }}</strong></div>{% endif %}
             </div>
 
+{% endif %}
+{% if sections.ga4 %}
             <!-- GA4 Section -->
             <div class="heading-row">
                 <div><span class="eyebrow">Website Traffic</span>
@@ -1313,11 +1316,16 @@
                 {% endif %}
             </div>
 
+{% endif %}
             <!-- GBP Section -->
             {% set show_calls = gbp.get('calls', 0) > 0 and mo('gbp.calls') %}
             {% set show_dir = gbp.get('directions', 0) > 0 and mo('gbp.direction_requests') %}
             {% set show_clicks = gbp.get('website_clicks', 0) > 0 and mo('gbp.website_clicks') %}
             {% set show_searches = gbp.get('searches', 0) > 0 %}
+            {% set show_calls = show_calls and sections.gbp %}
+            {% set show_dir = show_dir and sections.gbp %}
+            {% set show_clicks = show_clicks and sections.gbp %}
+            {% set show_searches = show_searches and sections.gbp %}
             {% set gbp_cols = (1 if show_calls else 0) + (1 if show_dir else 0) + (1 if show_clicks else 0) + (1 if show_searches else 0) %}
             {% if gbp_cols > 0 %}
             <div class="gbp" style="grid-template-columns: 1.25fr repeat({{ gbp_cols }}, 1fr);">

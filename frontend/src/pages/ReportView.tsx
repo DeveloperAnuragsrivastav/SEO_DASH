@@ -38,12 +38,30 @@ const ReportView: React.FC = () => {
   const gsc = snap.gsc || {};
   const ga4 = snap.ga4 || {};
   const gbp = snap.gbp || {};
-  const rankings = snap.rankings || { summary: {}, keywords: [] };
-  const aiVis = snap.ai_visibility || [];
-  const links = snap.links || [];
-  const activities = snap.activities || [];
-  const screenshots = snap.screenshots || [];
   const deltas = snap.kpi_deltas || { gsc: {}, ga4: {}, gbp: {} };
+
+  // Rows the composer unticked never reach the page. Ids mirror the server's
+  // report_composer module, so app and PDF drop exactly the same rows.
+  const chosenItems = snap.included_items || {};
+  const keepRow = (id: string) => chosenItems[id] !== false;
+
+  const rawRankings = snap.rankings || { summary: {}, keywords: [] };
+  const rankings = {
+    ...rawRankings,
+    keywords: (rawRankings.keywords || []).filter(
+      (kw: any, i: number) => keepRow(`rankings.kw.${kw.keyword_id ?? `i${i}`}`)
+    ),
+  };
+  const aiVis = (snap.ai_visibility || []).filter(
+    (m: any, i: number) => keepRow(`ai_visibility.${m.prompt_id ?? i}.${m.platform ?? 'unknown'}`)
+  );
+  const links = (snap.links || []).filter(
+    (l: any, i: number) => keepRow(`links.${l.id ?? `i${i}`}`)
+  );
+  const activities = (snap.activities || []).filter((_: any, i: number) => keepRow(`work.act.${i}`));
+  const screenshots = (snap.screenshots || []).filter(
+    (sh: any, i: number) => keepRow(`work.shot.${sh.id ?? `i${i}`}`)
+  );
 
   const gscClicks = gsc.clicks || 0;
   const ga4Sessions = ga4.sessions || 0;
@@ -58,12 +76,12 @@ const ReportView: React.FC = () => {
   const included = snap.included_sections || {};
   const on = (key: string) => included[key] !== false;
 
-  const metricOn = snap.included_metrics || {};
-  const showMetric = (id: string) => metricOn[id] !== false;
+  const showMetric = (id: string) => chosenItems[id] !== false;
+  const metricOn = chosenItems;
 
-  const hasGSC = on('traffic') && (gscClicks > 0 || (gsc.impressions || 0) > 0);
-  const hasGA4 = on('traffic') && (ga4Sessions > 0 || (ga4.users || 0) > 0);
-  const hasGBP = on('traffic') && ((gbp.calls || 0) > 0 || (gbp.direction_requests || 0) > 0 || (gbp.website_clicks || 0) > 0 || (gbp.searches || 0) > 0);
+  const hasGSC = on('gsc') && (gscClicks > 0 || (gsc.impressions || 0) > 0);
+  const hasGA4 = on('ga4') && (ga4Sessions > 0 || (ga4.users || 0) > 0);
+  const hasGBP = on('gbp') && ((gbp.calls || 0) > 0 || (gbp.direction_requests || 0) > 0 || (gbp.website_clicks || 0) > 0 || (gbp.searches || 0) > 0);
   const hasRankings = on('rankings') && (rankings.keywords || []).length > 0;
   const hasAI = on('ai_visibility') && aiTotal > 0;
   const hasLinks = on('links') && links.length > 0;
@@ -202,7 +220,6 @@ const ReportView: React.FC = () => {
         <ReportComposer
           clientId={clientId}
           snapshotId={snapshotId}
-          snapshot={snap}
           onClose={() => setShowComposer(false)}
           onSaved={async () => {
             setShowComposer(false);

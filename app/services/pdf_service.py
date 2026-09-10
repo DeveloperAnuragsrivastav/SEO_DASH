@@ -152,22 +152,27 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     except Exception:
         pass
 
-    # Which sections this report shows. Absent selection = show whatever has data.
+    # Which sections this report shows, and which individual figures within
+    # them. Absent selection = show everything.
+    from app.services import report_composer as composer
+
     included = comparative_data.get("included_sections")
     if not isinstance(included, dict):
         included = {}
-    sections = {
-        k: bool(included.get(k, True))
-        for k in ("traffic", "rankings", "ai_visibility", "links", "work")
-    }
+    sections = {k: bool(included.get(k, True)) for k in composer.SECTION_KEYS}
+    # The template still asks about "traffic" for the shared page chrome.
+    sections["traffic"] = sections["gsc"] or sections["ga4"] or sections["gbp"]
 
-    # Per-figure switches, addressed as "<provider>.<key>". Absent = show it.
-    chosen_metrics = comparative_data.get("included_metrics")
-    if not isinstance(chosen_metrics, dict):
-        chosen_metrics = {}
+    chosen_items = comparative_data.get("included_items")
+    if not isinstance(chosen_items, dict):
+        chosen_items = {}
 
-    def metric_on(metric_id: str) -> bool:
-        return chosen_metrics.get(metric_id, True) is not False
+    def metric_on(item_id: str) -> bool:
+        """A figure shows only if its own tick AND its section are on."""
+        section = item_id.split(".", 1)[0]
+        if section in sections and not sections[section]:
+            return False
+        return chosen_items.get(item_id, True) is not False
 
     return template.render(
         sections=sections,

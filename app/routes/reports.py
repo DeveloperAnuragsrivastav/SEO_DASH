@@ -13,6 +13,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import engine, get_db
 from app.models.ai_mention import AiMention
+from app.models.ai_prompt import AiPrompt
 from app.models.activity import Activity
 from app.models.client import Client
 from app.models.connection import Connection
@@ -24,12 +25,8 @@ from app.models.ranking import Ranking
 from app.models.report_snapshot import ReportSnapshot
 from app.models.screenshot import Screenshot
 from app.services.ga4_service import pull_ga4_data
-from app.services.openai_service import (
-    REPORT_METRIC_IDS,
-    REPORT_METRICS,
-    REPORT_SECTION_KEYS,
-    suggest_report_sections,
-)
+from app.services import report_composer as composer
+from app.services.openai_service import suggest_report_sections
 from app.services.gbp_service import pull_gbp_data
 from app.services.openai_service import generate_report_narrative
 from app.services.gsc_service import pull_gsc_data
@@ -183,61 +180,16 @@ def publish_report(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = D
 
 
 class SectionSelection(BaseModel):
-    sections: dict[str, bool]
-    metrics: dict[str, bool] | None = None
+    sections: dict[str, bool] | None = None
+    items: dict[str, bool] | None = None
+
+
+class ItemEdits(BaseModel):
+    edits: dict[str, Any]
 
 
 class SectionSuggestRequest(BaseModel):
     instruction: str
-
-
-def _section_availability(snapshot: dict) -> dict[str, bool]:
-    """Which report sections actually carry data in this snapshot."""
-    snapshot = snapshot or {}
-    gsc = snapshot.get("gsc") or {}
-    ga4 = snapshot.get("ga4") or {}
-    gbp = snapshot.get("gbp") or {}
-    rankings = snapshot.get("rankings") or {}
-
-    return {
-        "traffic": bool(
-            (gsc.get("clicks") or 0) or (gsc.get("impressions") or 0)
-            or (ga4.get("sessions") or 0) or (ga4.get("users") or 0)
-            or (gbp.get("calls") or 0) or (gbp.get("website_clicks") or 0)
-        ),
-        "rankings": bool(rankings.get("keywords")),
-        "ai_visibility": bool(snapshot.get("ai_visibility")),
-        "links": bool(snapshot.get("links")),
-        "work": bool(snapshot.get("activities") or snapshot.get("screenshots")),
-    }
-
-
-def _current_selection(snapshot: dict) -> dict[str, bool]:
-    """Stored section selection, defaulting to 'everything that has data'."""
-    available = _section_availability(snapshot or {})
-    stored = (snapshot or {}).get("included_sections")
-    if not isinstance(stored, dict):
-        return available
-    return {k: bool(stored.get(k, available[k])) and available[k] for k in REPORT_SECTION_KEYS}
-
-
-def _current_metrics(snapshot: dict) -> dict[str, bool]:
-    """Stored per-figure selection, defaulting to 'show everything'."""
-    stored = (snapshot or {}).get("included_metrics")
-    if not isinstance(stored, dict):
-        return {m: True for m in REPORT_METRIC_IDS}
-    return {m: bool(stored.get(m, True)) for m in REPORT_METRIC_IDS}
-
-
-def _metric_values(snapshot: dict) -> dict[str, float]:
-    """Current value of every toggleable figure, keyed by metric id."""
-    snapshot = snapshot or {}
-    out: dict[str, float] = {}
-    for provider, metas in REPORT_METRICS.items():
-        block = snapshot.get(provider) or {}
-        for meta in metas:
-            out[f"{provider}.{meta['key']}"] = block.get(meta["key"], 0) or 0
-    return out
 
 
 def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> ReportSnapshot:
@@ -251,46 +203,57 @@ def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> Re
     return report
 
 
-@router.get("/{snapshot_id}/sections")
-def get_report_sections(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
-    """The section picker's state: what exists, and what is currently included."""
+@router.get("/{snapshot_id}/composer")
+def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Everything the composer needs: sections, every datum, and current state."""
     report = _load_draft(client_id, snapshot_id, db)
     snapshot = report.snapshot or {}
+
+    # The snapshot stores prompt ids, not their text — resolve them so the
+    # composer shows something a person can actually tell apart.
+    prompt_labels = {
+        str(pid): text_
+        for pid, text_ in db.execute(
+            select(AiPrompt.id, AiPrompt.prompt_text).where(AiPrompt.client_id == client_id)
+        ).all()
+    }
+
     return {
-        "available": _section_availability(snapshot),
-        "selected": _current_selection(snapshot),
-        "metrics": {
-            "definitions": REPORT_METRICS,
-            "selected": _current_metrics(snapshot),
-            "values": _metric_values(snapshot),
-        },
+        "sections": composer.SECTIONS,
+        "available": composer.section_availability(snapshot),
+        "selectedSections": composer.current_sections(snapshot),
+        "items": composer.enumerate_items(snapshot, prompt_labels),
+        "selectedItems": composer.current_items(snapshot),
+        "editable": report.status != ReportStatus.published,
     }
 
 
-@router.put("/{snapshot_id}/sections")
-def set_report_sections(
+@router.put("/{snapshot_id}/composer")
+def set_composer(
     client_id: uuid.UUID,
     snapshot_id: uuid.UUID,
     data: SectionSelection,
     db: Session = Depends(get_db),
 ):
-    """Save which sections this report shows. A published report is frozen."""
+    """Save which sections and which individual figures the report shows."""
     report = _load_draft(client_id, snapshot_id, db)
     if report.status == ReportStatus.published:
         raise HTTPException(status.HTTP_409_CONFLICT, "Published reports cannot be edited.")
 
     snapshot = dict(report.snapshot or {})
-    available = _section_availability(snapshot)
+    available = composer.section_availability(snapshot)
 
-    snapshot["included_sections"] = {
-        k: bool(data.sections.get(k, available[k])) and available[k]
-        for k in REPORT_SECTION_KEYS
-    }
+    if data.sections is not None:
+        current = composer.current_sections(snapshot)
+        snapshot["included_sections"] = {
+            k: bool(data.sections.get(k, current[k])) and available[k]
+            for k in composer.SECTION_KEYS
+        }
 
-    if data.metrics is not None:
-        current = _current_metrics(snapshot)
-        snapshot["included_metrics"] = {
-            m: bool(data.metrics.get(m, current[m])) for m in REPORT_METRIC_IDS
+    if data.items is not None:
+        current_items = composer.current_items(snapshot)
+        snapshot["included_items"] = {
+            i: bool(data.items.get(i, current_items[i])) for i in current_items
         }
 
     report.snapshot = snapshot
@@ -298,53 +261,23 @@ def set_report_sections(
     db.commit()
 
     return {
-        "selected": snapshot["included_sections"],
-        "available": available,
-        "metrics": _current_metrics(snapshot),
+        "selectedSections": composer.current_sections(snapshot),
+        "selectedItems": composer.current_items(snapshot),
     }
 
 
-# Headline totals the composer lets you correct before the report goes out.
-EDITABLE_METRICS: dict[str, list[str]] = {
-    "gsc": ["clicks", "impressions", "ctr", "position"],
-    "ga4": ["sessions", "users", "engaged_sessions", "conversions", "revenue"],
-    "gbp": ["calls", "direction_requests", "website_clicks", "bookings"],
-}
-
-
-class MetricEdits(BaseModel):
-    metrics: dict[str, dict[str, float]]
-
-
-@router.get("/{snapshot_id}/metrics")
-def get_report_metrics(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
-    """The editable headline figures for this report, as they stand."""
-    report = _load_draft(client_id, snapshot_id, db)
-    snapshot = report.snapshot or {}
-    return {
-        "metrics": {
-            provider: {
-                key: (snapshot.get(provider) or {}).get(key, 0)
-                for key in keys
-            }
-            for provider, keys in EDITABLE_METRICS.items()
-        },
-        "edited": (snapshot.get("edited_metrics") or {}),
-    }
-
-
-@router.put("/{snapshot_id}/metrics")
-def set_report_metrics(
+@router.put("/{snapshot_id}/values")
+def set_composer_values(
     client_id: uuid.UUID,
     snapshot_id: uuid.UUID,
-    data: MetricEdits,
+    data: ItemEdits,
     db: Session = Depends(get_db),
 ):
-    """Overwrite headline figures on a draft report.
+    """Overwrite individual figures on a draft report.
 
-    Period-on-period deltas are re-derived from the previous period implied by
-    the existing delta, so an edited figure cannot leave the report showing a
-    change that contradicts the number printed next to it.
+    Period-on-period deltas for headline figures are re-derived from the
+    previous period implied by the existing delta, so an edited number can never
+    sit beside a percentage that contradicts it.
     """
     report = _load_draft(client_id, snapshot_id, db)
     if report.status == ReportStatus.published:
@@ -352,71 +285,49 @@ def set_report_metrics(
 
     snapshot = dict(report.snapshot or {})
     deltas = dict(snapshot.get("kpi_deltas") or {})
-    edited = dict(snapshot.get("edited_metrics") or {})
+    applied, rejected = [], []
 
-    for provider, keys in EDITABLE_METRICS.items():
-        incoming = data.metrics.get(provider)
-        if not incoming:
-            continue
+    for item_id, raw in data.edits.items():
+        parts = item_id.split(".")
+        is_headline = len(parts) == 2 and parts[0] in composer.HEADLINE
 
-        block = dict(snapshot.get(provider) or {})
-        provider_deltas = dict(deltas.get(provider) or {})
-        touched = list(edited.get(provider) or [])
-
-        for key in keys:
-            if key not in incoming:
-                continue
+        if is_headline:
+            provider, key = parts
             try:
-                new_value = float(incoming[key])
+                new_value = float(raw)
             except (TypeError, ValueError):
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    f"{provider}.{key} must be a number.",
-                )
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item_id} must be a number.")
             if new_value < 0:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    f"{provider}.{key} cannot be negative.",
-                )
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item_id} cannot be negative.")
 
-            old_value = float(block.get(key) or 0)
+            old_value = float((snapshot.get(provider) or {}).get(key) or 0)
+            provider_deltas = dict(deltas.get(provider) or {})
             if key in provider_deltas:
                 previous = old_value - float(provider_deltas.get(key) or 0)
                 provider_deltas[key] = new_value - previous
+                deltas[provider] = provider_deltas
 
-            block[key] = new_value
-            if new_value != old_value and key not in touched:
-                touched.append(key)
-
-        snapshot[provider] = block
-        deltas[provider] = provider_deltas
-        if touched:
-            edited[provider] = touched
+        if composer.write_edit(snapshot, item_id, raw):
+            applied.append(item_id)
+        else:
+            rejected.append(item_id)
 
     snapshot["kpi_deltas"] = deltas
-    snapshot["edited_metrics"] = edited
-
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
 
-    return {
-        "metrics": {
-            provider: {key: (snapshot.get(provider) or {}).get(key, 0) for key in keys}
-            for provider, keys in EDITABLE_METRICS.items()
-        },
-        "edited": edited,
-    }
+    return {"applied": applied, "rejected": rejected, "items": composer.enumerate_items(snapshot)}
 
 
-@router.post("/{snapshot_id}/sections/suggest")
-def suggest_sections(
+@router.post("/{snapshot_id}/composer/suggest")
+def suggest_composer(
     client_id: uuid.UUID,
     snapshot_id: uuid.UUID,
     data: SectionSuggestRequest,
     db: Session = Depends(get_db),
 ):
-    """Turn a plain-language instruction into a section selection.
+    """Turn a plain-language instruction into a selection.
 
     Nothing is saved here — the result is handed back for the user to confirm.
     """
@@ -426,9 +337,10 @@ def suggest_sections(
     try:
         return suggest_report_sections(
             instruction=data.instruction,
-            current=_current_selection(snapshot),
-            available=_section_availability(snapshot),
-            current_metrics=_current_metrics(snapshot),
+            sections=composer.current_sections(snapshot),
+            items=composer.enumerate_items(snapshot),
+            item_state=composer.current_items(snapshot),
+            available=composer.section_availability(snapshot),
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e))
@@ -965,6 +877,23 @@ def _aggregate_metrics(snapshots, section):
 def _build_comparative_report(snapshots):
     if not snapshots:
         return {}
+
+    class _Composed:
+        """A snapshot with unticked rows already removed.
+
+        Filtering once, here, means every downstream aggregation and the PDF
+        template all see the same arrays — there is no second place that could
+        forget to apply the composer's choices.
+        """
+
+        __slots__ = ("snapshot", "end_date", "narrative")
+
+        def __init__(self, src):
+            self.snapshot = composer.apply_selection(src.snapshot or {})
+            self.end_date = src.end_date
+            self.narrative = getattr(src, "narrative", "") or ""
+
+    snapshots = [_Composed(s) for s in snapshots]
     
     months = []
     for s in snapshots:
@@ -987,8 +916,8 @@ def _build_comparative_report(snapshots):
     # most recent snapshot's selection wins, since that is the one just edited.
     if isinstance(latest_snap.get("included_sections"), dict):
         comparative_data["included_sections"] = latest_snap["included_sections"]
-    if isinstance(latest_snap.get("included_metrics"), dict):
-        comparative_data["included_metrics"] = latest_snap["included_metrics"]
+    if isinstance(latest_snap.get("included_items"), dict):
+        comparative_data["included_items"] = latest_snap["included_items"]
     comparative_data["narrative"] = snapshots[-1].narrative if getattr(snapshots[-1], 'narrative', None) else ""
     if "rankings" in latest_snap:
         comparative_data["rankings"]["summary"] = latest_snap["rankings"].get("summary", {})
