@@ -2,13 +2,16 @@ import React from 'react';
 import { fmt, deltaEl } from './ReportUtils';
 
 interface TrafficSectionProps {
+  metricOn?: Record<string, boolean>;
   gsc: any;
   ga4: any;
   gbp: any;
   deltas: any;
 }
 
-const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas }) => {
+const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas, metricOn }) => {
+  // A figure shows unless the composer explicitly switched it off.
+  const show = (id: string) => (metricOn ? metricOn[id] !== false : true);
   const topPages = Array.isArray(gsc.top_pages) ? gsc.top_pages : [];
   
   const ga4Sources = Array.isArray(ga4.traffic_sources) ? ga4.traffic_sources : [];
@@ -42,26 +45,34 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas }
         </div>
         
         <div className="grid g4">
+          {show('gsc.clicks') && (
           <div className="kpi">
             <div className="lab">Search Clicks</div>
             <div className="val">{fmt(gscClicks)}</div>
             <div className="sub">{deltaEl(gscClicks, gscClicks - (deltas.gsc?.clicks || 0))} vs prev</div>
           </div>
+          )}
+          {show('gsc.impressions') && (
           <div className="kpi">
             <div className="lab">Impressions</div>
             <div className="val">{fmt(gscImpressions)}</div>
             <div className="sub">{deltaEl(gscImpressions, gscImpressions - (deltas.gsc?.impressions || 0))} vs prev</div>
           </div>
+          )}
+          {show('gsc.ctr') && (
           <div className="kpi">
             <div className="lab">Avg CTR</div>
             <div className="val">{(gscCtr ? (gscCtr * 100).toFixed(1) : 0)}%</div>
             <div className="sub">click-through rate</div>
           </div>
+          )}
+          {show('gsc.position') && (
           <div className="kpi">
             <div className="lab">Avg Position</div>
             <div className="val">{(gscPosition ? gscPosition.toFixed(1) : 0)}</div>
             <div className="sub">search ranking</div>
           </div>
+          )}
         </div>
 
         {/* ── Top Pages (GSC) ── */}
@@ -116,17 +127,19 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas }
         </div>
 
         <div className="grid g3">
+          {show('ga4.sessions') && (
           <div className="kpi">
             <div className="lab">Total Sessions</div>
             <div className="val">{fmt(ga4.sessions || 0)}</div>
             <div className="sub">{fmt(ga4.users || 0)} total users</div>
           </div>
+          )}
           <div className="kpi">
             <div className="lab">Organic Sessions</div>
             <div className="val">{fmt(ga4.organic_sessions || 0)}</div>
             <div className="sub">from search engines</div>
           </div>
-          {(ga4.conversions || 0) > 0 && (
+          {show('ga4.conversions') && (ga4.conversions || 0) > 0 && (
             <div className="kpi">
               <div className="lab">Conversions</div>
               <div className="val">{fmt(ga4.conversions)}</div>
@@ -290,11 +303,11 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas }
         <div className="card pad" style={{ borderLeft: '3px solid var(--amber)' }}>
           {(() => {
             const metrics = [
-              { label: 'Calls', value: gbp.calls || 0 },
-              { label: 'Direction requests', value: gbp.direction_requests || 0 },
-              { label: 'Website clicks', value: gbp.website_clicks || 0 },
-              { label: 'Local searches', value: gbp.searches || 0 }
-            ].filter(m => m.value > 0);
+              { id: 'gbp.calls', label: 'Calls', value: gbp.calls || 0 },
+              { id: 'gbp.direction_requests', label: 'Direction requests', value: gbp.direction_requests || 0 },
+              { id: 'gbp.website_clicks', label: 'Website clicks', value: gbp.website_clicks || 0 },
+              { id: 'gbp.searches', label: 'Local searches', value: gbp.searches || 0 }
+            ].filter(m => m.value > 0 && show(m.id));
             return (
               <div className={`grid g${Math.max(1, metrics.length)}`}>
                 {metrics.map((m, i) => (

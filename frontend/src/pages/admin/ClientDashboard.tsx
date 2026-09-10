@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import { toast } from 'sonner';
 import { fmt, deltaEl } from '../../components/report/ReportUtils';
@@ -15,6 +15,7 @@ import PageSkeleton from '../../components/ui/PageSkeleton';
 
 const ClientDashboard: React.FC = () => {
   const { clientId } = useParams();
+  const navigate = useNavigate();
   const [client, setClient] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
   const [reportCount, setReportCount] = useState<number>(0);
@@ -142,7 +143,9 @@ const ClientDashboard: React.FC = () => {
       if (reportData) {
         setReport(reportData);
         setReportCount(prev => prev + 1); // Optimistically increment
-        toast.success('Report generated successfully!');
+        toast.success('Report generated — choose what to include.');
+        // Land straight in the composer so the next step is obvious.
+        navigate(`/admin/clients/${clientId}/reports/${reportData.id}?compose=1`);
       } else {
         toast.error('Report generation timed out.');
       }

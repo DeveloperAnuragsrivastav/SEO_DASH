@@ -10,7 +10,8 @@ import RankingsSection from '../components/report/RankingsSection';
 import AIVisibilitySection from '../components/report/AIVisibilitySection';
 import LinksSection from '../components/report/LinksSection';
 import WorkDoneSection from '../components/report/WorkDoneSection';
-import { MousePointerClick, Users, TrendingUp, Bot } from 'lucide-react';
+import { MousePointerClick, Users, TrendingUp, Bot, SlidersHorizontal } from 'lucide-react';
+import ReportComposer from '../components/ReportComposer';
 import '../report.css';
 
 const ReportView: React.FC = () => {
@@ -25,6 +26,7 @@ const ReportView: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [activeSection, setActiveSection] = useState('executive-summary');
+  const [showComposer, setShowComposer] = useState(searchParams.get('compose') === '1');
 
   const snap = report?.snapshot || {};
   const months = snap.months || [];
@@ -51,13 +53,21 @@ const ReportView: React.FC = () => {
   const aiTotal = aiVis.length;
 
   // Smart section detection — determine which sections have real data
-  const hasGSC = gscClicks > 0 || (gsc.impressions || 0) > 0;
-  const hasGA4 = ga4Sessions > 0 || (ga4.users || 0) > 0;
-  const hasGBP = (gbp.calls || 0) > 0 || (gbp.direction_requests || 0) > 0 || (gbp.website_clicks || 0) > 0 || (gbp.searches || 0) > 0;
-  const hasRankings = (rankings.keywords || []).length > 0;
-  const hasAI = aiTotal > 0;
-  const hasLinks = links.length > 0;
-  const hasWork = activities.length > 0 || screenshots.length > 0;
+  // A section shows only if it has data AND the composer left it switched on.
+  // An absent selection means "show whatever has data", i.e. the old behaviour.
+  const included = snap.included_sections || {};
+  const on = (key: string) => included[key] !== false;
+
+  const metricOn = snap.included_metrics || {};
+  const showMetric = (id: string) => metricOn[id] !== false;
+
+  const hasGSC = on('traffic') && (gscClicks > 0 || (gsc.impressions || 0) > 0);
+  const hasGA4 = on('traffic') && (ga4Sessions > 0 || (ga4.users || 0) > 0);
+  const hasGBP = on('traffic') && ((gbp.calls || 0) > 0 || (gbp.direction_requests || 0) > 0 || (gbp.website_clicks || 0) > 0 || (gbp.searches || 0) > 0);
+  const hasRankings = on('rankings') && (rankings.keywords || []).length > 0;
+  const hasAI = on('ai_visibility') && aiTotal > 0;
+  const hasLinks = on('links') && links.length > 0;
+  const hasWork = on('work') && (activities.length > 0 || screenshots.length > 0);
 
   useEffect(() => {
     if (!clientId || !snapshotId) return;
@@ -180,14 +190,32 @@ const ReportView: React.FC = () => {
 
   // Build dynamic top KPIs — only show cards with non-zero values
   const topKpis = [
-    hasGSC && gscClicks > 0 && { icon: <MousePointerClick size={16} color="var(--brand)" />, label: 'Search Clicks', value: fmt(gscClicks), sub: <>{deltaEl(gscClicks, gscClicks - (deltas.gsc?.clicks || 0))} vs prev</> },
-    hasGA4 && ga4Sessions > 0 && { icon: <Users size={16} color="var(--brand)" />, label: 'Website Sessions', value: fmt(ga4Sessions), sub: `${fmt(ga4Users)} users` },
+    hasGSC && showMetric('gsc.clicks') && gscClicks > 0 && { icon: <MousePointerClick size={16} color="var(--brand)" />, label: 'Search Clicks', value: fmt(gscClicks), sub: <>{deltaEl(gscClicks, gscClicks - (deltas.gsc?.clicks || 0))} vs prev</> },
+    hasGA4 && showMetric('ga4.sessions') && ga4Sessions > 0 && { icon: <Users size={16} color="var(--brand)" />, label: 'Website Sessions', value: fmt(ga4Sessions), sub: `${fmt(ga4Users)} users` },
     hasRankings && (rankings.summary?.improved || 0) > 0 && { icon: <TrendingUp size={16} color="var(--brand)" />, label: 'Rankings Improved', value: rankings.summary?.improved || 0, sub: `${rankings.summary?.declined || 0} declined` },
     hasAI && aiMentioned > 0 && { icon: <Bot size={16} color="var(--brand)" />, label: 'AI Brand Mentions', value: aiMentioned, sub: `of ${aiTotal} tracked prompts` },
   ].filter(Boolean) as { icon: any; label: string; value: any; sub: any }[];
 
   return (
     <div className="report-view">
+      {showComposer && clientId && snapshotId && snapshotId !== 'multi' && (
+        <ReportComposer
+          clientId={clientId}
+          snapshotId={snapshotId}
+          snapshot={snap}
+          onClose={() => setShowComposer(false)}
+          onSaved={async () => {
+            setShowComposer(false);
+            try {
+              const full = await api.get(`/clients/${clientId}/reports/${snapshotId}`);
+              setReport(full.data);
+            } catch (e) {
+              // Handled by global interceptor
+            }
+          }}
+        />
+      )}
+
       {/* Top bar */}
       <div className="topbar">
         <div className="wrap">
@@ -210,6 +238,11 @@ const ReportView: React.FC = () => {
 
           <span className="pill live hide-s">{report?.status || 'no report'}</span>
 
+          {report && report.status === 'draft' && snapshotId !== 'multi' && (
+            <button className="btn ghost" onClick={() => setShowComposer(true)}>
+              <SlidersHorizontal size={14} /> Sections &amp; Data
+            </button>
+          )}
           {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (
             <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
           )}
@@ -272,7 +305,7 @@ const ReportView: React.FC = () => {
           )}
 
           {(hasGSC || hasGA4 || hasGBP) && (
-            <TrafficSection gsc={gsc} ga4={ga4} gbp={gbp} deltas={deltas} />
+            <TrafficSection metricOn={metricOn} gsc={gsc} ga4={ga4} gbp={gbp} deltas={deltas} />
           )}
           
           {hasRankings && (

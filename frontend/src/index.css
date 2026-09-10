@@ -2105,6 +2105,216 @@ a.src.man:hover { border-color: var(--brand-400); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   REPORT COMPOSER
+   ═══════════════════════════════════════════════════════════════════ */
+
+.modal.composer { max-width: 680px; }
+
+.composer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* ── Plain-language instruction ──────────────────────────────────── */
+
+.composer-ai {
+  padding: 14px 16px;
+  border: 1px solid var(--amber-border);
+  border-radius: var(--radius-md);
+  background: var(--amber-soft);
+}
+
+.composer-ai-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber-text);
+  margin-bottom: 8px;
+}
+
+.composer-ai-row { display: flex; gap: 8px; }
+.composer-ai-row .form-input { flex: 1; }
+
+.composer-ai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--success-500);
+}
+
+.composer-ai-note.ignored { color: var(--ink-3); }
+.composer-ai-note > svg { margin-top: 2px; flex-shrink: 0; }
+
+/* ── Section rows ────────────────────────────────────────────────── */
+
+.composer-section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  transition: border-color 0.16s var(--ease), background-color 0.16s var(--ease);
+}
+
+.composer-section.on { border-color: var(--brand-300); background: var(--card); }
+.composer-section.empty { opacity: 0.55; }
+
+.composer-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 15px;
+  cursor: pointer;
+}
+
+.composer-section.empty .composer-section-head { cursor: not-allowed; }
+
+.composer-section-head input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--brand-500);
+  cursor: inherit;
+  flex-shrink: 0;
+}
+
+.composer-section-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.composer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.composer-section-title > svg { color: var(--ink-3); }
+.composer-section-sub { font-size: 12px; color: var(--ink-3); }
+
+/* ── Editable figures: one tick + one pencil per number ──────────── */
+
+.composer-metrics {
+  border-top: 1px solid var(--line-2);
+  padding: 14px 15px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--canvas-2);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.composer-metric-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+  gap: 8px;
+}
+
+.metric-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 9px 11px;
+  transition: border-color 0.14s var(--ease), opacity 0.14s var(--ease);
+}
+
+.metric-card.off { opacity: 0.5; }
+.metric-card.off .metric-number { text-decoration: line-through; }
+
+.metric-card-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: 5px;
+}
+
+.metric-card-head input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--brand-500);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.metric-card-head > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metric-card-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.metric-number {
+  font-family: var(--disp);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.metric-pencil {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-4);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.14s var(--ease), background-color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+
+.metric-card:hover .metric-pencil { color: var(--ink-2); border-color: var(--line); }
+.metric-pencil:hover { background: var(--bg-surface-hover); color: var(--brand-600); border-color: var(--line); }
+.metric-pencil.done { color: var(--success-500); border-color: var(--up-border); background: var(--up-soft); }
+
+.metric-input {
+  height: 26px;
+  font-size: 13px;
+  font-family: var(--mono);
+  padding: 0 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+@media (max-width: 560px) {
+  .composer-ai-row { flex-direction: column; }
+  .composer-ai-row .btn { width: 100%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    REPORT-SHARED UTILITIES
    ═══════════════════════════════════════════════════════════════════ */
 

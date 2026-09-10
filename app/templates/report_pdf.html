@@ -1206,6 +1206,7 @@
             {% set top10 = ns.top10 %}
             {% set clicks_delta = deltas.get('gsc', {}).get('clicks', 0) %}
             <div class="metric-grid">
+{% if mo('gsc.clicks') %}
                 <div class="metric">
                     <span>Search Clicks</span>
                     <strong>{{ gsc.get('clicks', 0) | fmt }}</strong>
@@ -1214,11 +1215,14 @@
                         {{ clicks_delta | abs | fmt }} vs prev
                     </small>
                 </div>
+{% endif %}
+{% if mo('ga4.sessions') %}
                 <div class="metric blue">
                     <span>Website Sessions</span>
                     <strong>{{ ga4.get('sessions', 0) | fmt }}</strong>
                     <small>{{ ga4.get('engaged_sessions', 0) | fmt }} engaged</small>
                 </div>
+{% endif %}
                 <div class="metric">
                     <span>Top 10 Rankings</span>
                     <strong>{{ top10 }}</strong>
@@ -1250,9 +1254,9 @@
                         {% set h_sess = 146 %}
                         {% set h_eng = [((ga4.get('engaged_sessions', 0) / max_sess) * 146), 4] | max %}
                         {% set h_conv = [((ga4.get('conversions', 0) / max_sess) * 146), 4] | max %}
-                        <div class="bar"><i style="height:{{ h_sess }}px"></i><b>{{ ga4.get('sessions', 0) | fmt }}</b><span>Sessions</span></div>
-                        <div class="bar"><i style="height:{{ h_eng }}px"></i><b>{{ ga4.get('engaged_sessions', 0) | fmt }}</b><span>Engaged</span></div>
-                        <div class="bar"><i style="height:{{ h_conv }}px"></i><b>{{ ga4.get('conversions', 0) | fmt }}</b><span>Conversions</span></div>
+                        {% if mo('ga4.sessions') %}<div class="bar"><i style="height:{{ h_sess }}px"></i><b>{{ ga4.get('sessions', 0) | fmt }}</b><span>Sessions</span></div>{% endif %}
+                        {% if mo('ga4.engaged_sessions') %}<div class="bar"><i style="height:{{ h_eng }}px"></i><b>{{ ga4.get('engaged_sessions', 0) | fmt }}</b><span>Engaged</span></div>{% endif %}
+                        {% if mo('ga4.conversions') %}<div class="bar"><i style="height:{{ h_conv }}px"></i><b>{{ ga4.get('conversions', 0) | fmt }}</b><span>Conversions</span></div>{% endif %}
                     </div>
                 </div>
             </div>
@@ -1261,6 +1265,7 @@
     </section>
 
     <!-- Page 2: Search Performance & GBP -->
+{% if sections.traffic %}
     <section class="report-page page-two">
         <div class="page-inner">
             
@@ -1272,10 +1277,10 @@
             </div>
             <div class="section-rule"></div>
             <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
-                <div class="small-metric"><span>Search Clicks</span><strong>{{ gsc.get('clicks', 0) | fmt }}</strong></div>
-                <div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong></div>
-                <div class="small-metric"><span>Avg CTR</span><strong>{{ (gsc.get('ctr', 0) * 100) | round(1) }}%</strong></div>
-                <div class="small-metric"><span>Avg Position</span><strong>{{ gsc.get('position', 0) | fmt }}</strong></div>
+                {% if mo('gsc.clicks') %}<div class="small-metric"><span>Search Clicks</span><strong>{{ gsc.get('clicks', 0) | fmt }}</strong></div>{% endif %}
+                {% if mo('gsc.impressions') %}<div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong></div>{% endif %}
+                {% if mo('gsc.ctr') %}<div class="small-metric"><span>Avg CTR</span><strong>{{ (gsc.get('ctr', 0) * 100) | round(1) }}%</strong></div>{% endif %}
+                {% if mo('gsc.position') %}<div class="small-metric"><span>Avg Position</span><strong>{{ gsc.get('position', 0) | fmt }}</strong></div>{% endif %}
             </div>
 
             <!-- GA4 Section -->
@@ -1290,10 +1295,10 @@
             {% set show_dur = ga4.get('avg_session_duration', 0) > 0 %}
             {% set ga4_cols = 2 + (1 if show_conv else 0) + (1 if show_cart else 0) + (1 if show_dur else 0) %}
             <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat({{ ga4_cols }}, 1fr); gap: 12px;">
-                <div class="small-metric"><span>Sessions</span><strong>{{ ga4.get('sessions', 0) | fmt }}</strong></div>
+                {% if mo('ga4.sessions') %}<div class="small-metric"><span>Sessions</span><strong>{{ ga4.get('sessions', 0) | fmt }}</strong></div>{% endif %}
                 <div class="small-metric"><span>Organic Sessions</span><strong>{{ ga4.get('organic_sessions', 0) | fmt }}</strong></div>
                 {% if show_conv %}
-                <div class="small-metric"><span>Conversions</span><strong>{{ ga4.get('conversions', 0) | fmt }}</strong></div>
+                {% if mo('ga4.conversions') %}<div class="small-metric"><span>Conversions</span><strong>{{ ga4.get('conversions', 0) | fmt }}</strong></div>{% endif %}
                 {% endif %}
                 {% if show_cart %}
                 <div class="small-metric"><span>Add to Carts</span><strong>{{ ga4.get('add_to_carts', 0) | fmt }}</strong></div>
@@ -1309,9 +1314,9 @@
             </div>
 
             <!-- GBP Section -->
-            {% set show_calls = gbp.get('calls', 0) > 0 %}
-            {% set show_dir = gbp.get('directions', 0) > 0 %}
-            {% set show_clicks = gbp.get('website_clicks', 0) > 0 %}
+            {% set show_calls = gbp.get('calls', 0) > 0 and mo('gbp.calls') %}
+            {% set show_dir = gbp.get('directions', 0) > 0 and mo('gbp.direction_requests') %}
+            {% set show_clicks = gbp.get('website_clicks', 0) > 0 and mo('gbp.website_clicks') %}
             {% set show_searches = gbp.get('searches', 0) > 0 %}
             {% set gbp_cols = (1 if show_calls else 0) + (1 if show_dir else 0) + (1 if show_clicks else 0) + (1 if show_searches else 0) %}
             {% if gbp_cols > 0 %}
@@ -1327,9 +1332,9 @@
                 <div class="visual-card">
                     <p class="chart-caption">GA4 engagement funnel</p>
                     <div class="funnel">
-                        <div class="funnel-step"><i style="height:90px"></i><b>{{ ga4.get('sessions', 0) | fmt }}</b><span>Sessions</span></div>
-                        <div class="funnel-step"><i style="height:{{ [((ga4.get('engaged_sessions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('engaged_sessions', 0) | fmt }}</b><span>Engaged</span></div>
-                        <div class="funnel-step"><i style="height:{{ [((ga4.get('conversions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('conversions', 0) | fmt }}</b><span>Conversions</span></div>
+                        {% if mo('ga4.sessions') %}<div class="funnel-step"><i style="height:90px"></i><b>{{ ga4.get('sessions', 0) | fmt }}</b><span>Sessions</span></div>{% endif %}
+                        {% if mo('ga4.engaged_sessions') %}<div class="funnel-step"><i style="height:{{ [((ga4.get('engaged_sessions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('engaged_sessions', 0) | fmt }}</b><span>Engaged</span></div>{% endif %}
+                        {% if mo('ga4.conversions') %}<div class="funnel-step"><i style="height:{{ [((ga4.get('conversions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('conversions', 0) | fmt }}</b><span>Conversions</span></div>{% endif %}
                     </div>
                 </div>
                 <div class="visual-card">
@@ -1341,9 +1346,9 @@
                         {% set h_w = [((gbp.get('website_clicks', 0) / max_gbp) * 100), 4] | max %}
                         {% set h_s = [((gbp.get('searches', 0) / max_gbp) * 100), 4] | max %}
                         
-                        <div class="bar"><i style="height:{{ h_c }}px"></i><b>{{ gbp.get('calls', 0) | fmt }}</b><span>Calls</span></div>
-                        <div class="bar"><i style="height:{{ h_d }}px"></i><b>{{ gbp.get('directions', 0) | fmt }}</b><span>Directions</span></div>
-                        <div class="bar"><i style="height:{{ h_w }}px"></i><b>{{ gbp.get('website_clicks', 0) | fmt }}</b><span>Clicks</span></div>
+                        {% if mo('gbp.calls') %}<div class="bar"><i style="height:{{ h_c }}px"></i><b>{{ gbp.get('calls', 0) | fmt }}</b><span>Calls</span></div>{% endif %}
+                        {% if mo('gbp.direction_requests') %}<div class="bar"><i style="height:{{ h_d }}px"></i><b>{{ gbp.get('directions', 0) | fmt }}</b><span>Directions</span></div>{% endif %}
+                        {% if mo('gbp.website_clicks') %}<div class="bar"><i style="height:{{ h_w }}px"></i><b>{{ gbp.get('website_clicks', 0) | fmt }}</b><span>Clicks</span></div>{% endif %}
                         <div class="bar"><i style="height:{{ h_s }}px"></i><b>{{ gbp.get('searches', 0) | fmt }}</b><span>Searches</span></div>
                     </div>
                 </div>
@@ -1525,6 +1530,8 @@
     </section>
 
     <!-- Page 3: Rankings & AI -->
+{% endif %}
+{% if sections.rankings %}
     <section class="report-page page-three">
         <div class="page-inner">
             <div class="heading-row">
@@ -1612,6 +1619,8 @@
     </section>
 
     <!-- Page 4: AI Visibility -->
+{% endif %}
+{% if sections.ai_visibility %}
     <section class="report-page page-ai">
         <div class="page-inner">
             <span class="eyebrow">Search generative experience</span>
@@ -1650,6 +1659,8 @@
     </section>
 
     <!-- Page 4: Links & Activities -->
+{% endif %}
+{% if sections.links %}
     <section class="report-page page-four">
         <div class="page-inner">
             <div class="heading-row">
@@ -1712,6 +1723,8 @@
     </section>
 
     <!-- Page 5: Work Delivery -->
+{% endif %}
+{% if sections.work %}
     <section class="report-page page-five">
         <div class="page-inner">
             <div class="heading-row">
@@ -1753,6 +1766,7 @@
     </section>
     {% endfor %}
     {% endif %}
+{% endif %}
 </body>
 
 </html>

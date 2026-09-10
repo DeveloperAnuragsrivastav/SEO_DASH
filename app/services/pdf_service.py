@@ -152,7 +152,26 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     except Exception:
         pass
 
+    # Which sections this report shows. Absent selection = show whatever has data.
+    included = comparative_data.get("included_sections")
+    if not isinstance(included, dict):
+        included = {}
+    sections = {
+        k: bool(included.get(k, True))
+        for k in ("traffic", "rankings", "ai_visibility", "links", "work")
+    }
+
+    # Per-figure switches, addressed as "<provider>.<key>". Absent = show it.
+    chosen_metrics = comparative_data.get("included_metrics")
+    if not isinstance(chosen_metrics, dict):
+        chosen_metrics = {}
+
+    def metric_on(metric_id: str) -> bool:
+        return chosen_metrics.get(metric_id, True) is not False
+
     return template.render(
+        sections=sections,
+        mo=metric_on,
         comparative_data=comparative_data,
         months=comparative_data.get("months", []),
         gsc=comparative_data.get("gsc", {}),
