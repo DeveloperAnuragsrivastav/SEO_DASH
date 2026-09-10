@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Plug,
   MoreHorizontal,
+  ChevronLeft,
   KeyRound,
   LogOut,
   X,
@@ -29,9 +30,11 @@ interface SidebarProps {
   /** Mobile drawer visibility — desktop ignores this. */
   open?: boolean;
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+export function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapsed }: SidebarProps) {
   const { user, logout } = useAuth();
   const { canViewAdminTools, isSuperAdmin, isManager } = usePermissions();
   const { clientId } = useParams();
@@ -101,9 +104,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         aria-hidden="true"
       />
 
-      <aside className={`app-sidebar ${open ? 'open' : ''}`}>
+      <aside className={`app-sidebar ${open ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header">
           <img src="/logo6.png" alt="EZ Insights" className="sidebar-logo" />
+          <button
+            className="sidebar-collapse hide-s"
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+            title={collapsed ? 'Expand' : 'Collapse'}
+          >
+            <ChevronLeft size={15} />
+          </button>
           <button className="icon-btn sidebar-close" onClick={closeDrawer} aria-label="Close navigation">
             <X size={17} />
           </button>
@@ -114,17 +125,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="nav-section-title">Agency</div>
           {!isSuperAdmin && (
             <NavLink to="/admin/clients" end className={navCls} onClick={closeDrawer}>
-              <Building2 size={16} /> <span>{isManager ? 'My Clients' : 'Assigned Clients'}</span>
+              <span className="nav-ico"><Building2 size={15} /></span> <span className="nav-text">{isManager ? 'My Clients' : 'Assigned Clients'}</span>
             </NavLink>
           )}
           {canViewAdminTools && (
             <NavLink to="/admin/users" className={navCls} onClick={closeDrawer}>
-              <Users size={16} /> <span>Managers</span>
+              <span className="nav-ico"><Users size={15} /></span> <span className="nav-text">Managers</span>
             </NavLink>
           )}
           {isManager && (
             <NavLink to="/admin/manager-tools" className={navCls} onClick={closeDrawer}>
-              <Kanban size={16} /> <span>Team &amp; Assignments</span>
+              <span className="nav-ico"><Kanban size={15} /></span> <span className="nav-text">Team &amp; Assignments</span>
             </NavLink>
           )}
 
@@ -136,39 +147,39 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               </div>
 
               <NavLink to={`/admin/clients/${clientId}`} end className={navCls} onClick={closeDrawer}>
-                <LayoutDashboard size={16} /> <span>Overview</span>
+                <span className="nav-ico"><LayoutDashboard size={15} /></span> <span className="nav-text">Overview</span>
               </NavLink>
 
               <NavLink to={`/admin/clients/${clientId}/manual-entry`} className={navCls} onClick={closeDrawer}>
-                <Inbox size={16} /> <span>Data Ingestion</span>
+                <span className="nav-ico"><Inbox size={15} /></span> <span className="nav-text">Data Ingestion</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/keywords`} className={navCls} onClick={closeDrawer}>
-                <Crosshair size={16} /> <span>Keyword Performance</span>
+                <span className="nav-ico"><Crosshair size={15} /></span> <span className="nav-text">Keyword Performance</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/ai-mentions-data`} className={navCls} onClick={closeDrawer}>
-                <BarChart2 size={16} /> <span>Target AI Prompts Tracking &amp; Performance</span>
+                <span className="nav-ico"><BarChart2 size={15} /></span> <span className="nav-text">Target AI Prompts Tracking &amp; Performance</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/gbp`} className={navCls} onClick={closeDrawer}>
-                <MapPin size={16} /> <span>GBP Data</span>
+                <span className="nav-ico"><MapPin size={15} /></span> <span className="nav-text">GBP Data</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/google-analytics`} className={navCls} onClick={closeDrawer}>
-                <TrendingUp size={16} /> <span>Google Analytics</span>
+                <span className="nav-ico"><TrendingUp size={15} /></span> <span className="nav-text">Google Analytics</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/search-console`} className={navCls} onClick={closeDrawer}>
-                <Search size={16} /> <span>Search Console</span>
+                <span className="nav-ico"><Search size={15} /></span> <span className="nav-text">Search Console</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/links`} className={navCls} onClick={closeDrawer}>
-                <LinkIcon size={16} /> <span>Performed Backlinks Activities</span>
+                <span className="nav-ico"><LinkIcon size={15} /></span> <span className="nav-text">Performed Backlinks Activities</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/work`} className={navCls} onClick={closeDrawer}>
-                <CheckSquare size={16} /> <span>On-Site SEO Activities Performed</span>
+                <span className="nav-ico"><CheckSquare size={15} /></span> <span className="nav-text">On-Site SEO Activities Performed</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/screenshots`} className={navCls} onClick={closeDrawer}>
-                <ImageIcon size={16} /> <span>Screenshots</span>
+                <span className="nav-ico"><ImageIcon size={15} /></span> <span className="nav-text">Screenshots</span>
               </NavLink>
               {user?.role !== 'user' && (
                 <NavLink to={`/admin/clients/${clientId}/connections`} className={navCls} onClick={closeDrawer}>
-                  <Plug size={16} /> <span>Connections</span>
+                  <span className="nav-ico"><Plug size={15} /></span> <span className="nav-text">Connections</span>
                 </NavLink>
               )}
             </>

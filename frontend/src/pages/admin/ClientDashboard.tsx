@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import { toast } from 'sonner';
-import { fmt, deltaEl } from '../../components/report/ReportUtils';
+import { fmt } from '../../components/report/ReportUtils';
 import {
   Palette, RefreshCw, FileText, Download, ArrowRight, ArrowUpRight,
   SearchX, Loader2, MousePointerClick, Users, TrendingUp, Bot,
@@ -12,6 +12,7 @@ import {
 
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
+import Sparkline from '../../components/ui/Sparkline';
 
 const ClientDashboard: React.FC = () => {
   const { clientId } = useParams();
@@ -24,6 +25,7 @@ const ClientDashboard: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sections, setSections] = useState<any[] | null>(null);
+  const [trends, setTrends] = useState<any>(null);
   const [savingMode, setSavingMode] = useState<string | null>(null);
 
   // Whitelabel Modal State
@@ -48,7 +50,8 @@ const ClientDashboard: React.FC = () => {
       api.get(`/clients/${clientId}/connections`).catch(() => ({ data: [] })),
       api.get(`/clients/${clientId}/reports/count`, { skipErrorToast: true } as any).catch(() => ({ data: { count: 0 } })),
       api.get(`/clients/${clientId}/sections`, { skipErrorToast: true } as any).catch(() => ({ data: [] })),
-    ]).then(([c, r, conn, rCount, sec]) => {
+      api.get(`/clients/${clientId}/reports/trends?days=30`, { skipErrorToast: true } as any).catch(() => ({ data: null })),
+    ]).then(([c, r, conn, rCount, sec, tr]) => {
       if (!c) {
         setClient(null);
         return;
@@ -58,6 +61,7 @@ const ClientDashboard: React.FC = () => {
       setConnections(conn.data || []);
       setReportCount(rCount.data?.count || 0);
       setSections(sec.data || []);
+      setTrends(tr.data || null);
       setEditName(c.data.name || '');
       setEditTheme(c.data.theme_color || '#2563eb');
       setEditLogo(c.data.logo_url || '');
@@ -292,36 +296,79 @@ const ClientDashboard: React.FC = () => {
     ? new Date(report.end_date).toLocaleString('default', { month: 'long', year: 'numeric' })
     : '';
 
+  /** Real recorded series only — an absent metric renders without a chart. */
+  const seriesOf = (provider: string, key: string): number[] => {
+    const pts = trends?.series?.[provider]?.[key];
+    return Array.isArray(pts) ? pts.map((p: any) => Number(p.v) || 0) : [];
+  };
+
+  const pctChange = (current: number, delta: number): number | null => {
+    const previous = current - delta;
+    if (!previous) return null;
+    return (delta / previous) * 100;
+  };
+
   const kpis = [
     {
-      icon: <MousePointerClick size={15} />,
+      key: 'clicks',
+      icon: <MousePointerClick size={16} />,
+      tone: 'amber',
       label: 'Search Clicks',
       value: fmt(gscClicks),
-      sub: <>{deltaEl(gscClicks, gscClicks - (deltas.gsc?.clicks || 0))} vs previous period</>,
+      change: pctChange(gscClicks, deltas.gsc?.clicks || 0),
+      series: seriesOf('gsc', 'clicks'),
+      foot: 'vs previous period',
+      note: (c: number | null) =>
+        c === null ? 'No previous period to compare against.'
+        : c > 0 ? 'More people are finding your site in search results.'
+        : c < 0 ? 'Fewer clicks from search than the period before.'
+        : 'Search clicks held steady this period.',
     },
     {
-      icon: <Users size={15} />,
+      key: 'sessions',
+      icon: <Users size={16} />,
+      tone: 'blue',
       label: 'Website Sessions',
       value: fmt(ga4Sessions),
-      sub: <>{deltaEl(ga4Sessions, ga4Sessions - (deltas.ga4?.sessions || 0))} · {fmt(ga4Users)} users</>,
+      change: pctChange(ga4Sessions, deltas.ga4?.sessions || 0),
+      series: seriesOf('ga4', 'sessions'),
+      foot: 'vs previous period',
+      note: () => `${fmt(ga4Users)} users in ${periodLabel || 'this period'}.`,
     },
     {
-      icon: <TrendingUp size={15} />,
+      key: 'rankings',
+      icon: <TrendingUp size={16} />,
+      tone: 'violet',
       label: 'Rankings Improved',
       value: fmt(rankSummary.improved || 0),
-      sub: <>{fmt(rankSummary.top_10 || 0)} in top 10 · {fmt(rankSummary.declined || 0)} declined</>,
+      change: null,
+      series: [],
+      foot: `${fmt(rankSummary.top_10 || 0)} in top 10 · ${fmt(rankSummary.declined || 0)} declined`,
+      note: () =>
+        (rankSummary.improved || 0) > 0
+          ? `${fmt(rankSummary.improved)} keywords moved up this period.`
+          : 'No ranking changes this period.',
     },
     {
-      icon: <Bot size={15} />,
+      key: 'ai',
+      icon: <Bot size={16} />,
+      tone: 'green',
       label: 'AI Brand Mentions',
       value: fmt(aiMentioned),
-      sub: <>of {fmt(aiTotal)} tracked prompts</>,
+      change: null,
+      series: [],
+      foot: `of ${fmt(aiTotal)} tracked prompts`,
+      note: () =>
+        aiMentioned > 0
+          ? 'Your brand is being mentioned in AI tools.'
+          : 'No AI tool mentioned your brand yet.',
     },
   ];
 
   // Each area summarised in one line, with the full table one click away.
   const areas = [
     {
+      tone: 'amber', series: [], bars: true,
       icon: <Crosshair size={15} />, label: 'Keyword Performance',
       to: `/clients/${clientId}/keywords`,
       value: fmt((rankings.keywords || []).length),
@@ -329,6 +376,7 @@ const ClientDashboard: React.FC = () => {
       detail: `${fmt(rankSummary.top_10 || 0)} in top 10 · ${fmt(rankSummary['11_20'] || 0)} in 11–20`,
     },
     {
+      tone: 'blue', series: seriesOf('gsc', 'impressions'),
       icon: <Search size={15} />, label: 'Search Console',
       to: `/clients/${clientId}/search-console`,
       value: fmt(gsc.impressions || 0),
@@ -336,6 +384,7 @@ const ClientDashboard: React.FC = () => {
       detail: `${fmt(gscClicks)} clicks · avg position ${(gsc.position || 0).toFixed(1)}`,
     },
     {
+      tone: 'orange', series: seriesOf('ga4', 'sessions'),
       icon: <BarChart2 size={15} />, label: 'Google Analytics',
       to: `/clients/${clientId}/google-analytics`,
       value: fmt(ga4Sessions),
@@ -343,6 +392,7 @@ const ClientDashboard: React.FC = () => {
       detail: `${fmt(ga4Users)} users · ${fmt(ga4.conversions || 0)} conversions`,
     },
     {
+      tone: 'rose', series: seriesOf('gbp', 'calls'),
       icon: <MapPin size={15} />, label: 'Google Business Profile',
       to: `/clients/${clientId}/gbp`,
       value: fmt(gbp.calls || 0),
@@ -350,6 +400,7 @@ const ClientDashboard: React.FC = () => {
       detail: `${fmt(gbp.direction_requests || 0)} directions · ${fmt(gbp.website_clicks || 0)} site clicks`,
     },
     {
+      tone: 'green', series: [],
       icon: <Bot size={15} />, label: 'AI Visibility',
       to: `/clients/${clientId}/ai-mentions-data`,
       value: fmt(aiMentioned),
@@ -357,6 +408,7 @@ const ClientDashboard: React.FC = () => {
       detail: `${fmt(aiTotal - aiMentioned)} not mentioned`,
     },
     {
+      tone: 'violet', series: [],
       icon: <LinkIcon size={15} />, label: 'Backlinks',
       to: `/clients/${clientId}/links`,
       value: fmt(links.length),
@@ -364,6 +416,7 @@ const ClientDashboard: React.FC = () => {
       detail: 'Recorded this period',
     },
     {
+      tone: 'green', series: [],
       icon: <CheckSquare size={15} />, label: 'Work Done',
       to: `/clients/${clientId}/work`,
       value: fmt(activities.length),
@@ -371,6 +424,7 @@ const ClientDashboard: React.FC = () => {
       detail: 'On-site SEO performed',
     },
     {
+      tone: 'blue', series: [], bars: true,
       icon: <ImageIcon size={15} />, label: 'Screenshots',
       to: `/clients/${clientId}/screenshots`,
       value: fmt(screenshots.length),
@@ -383,6 +437,11 @@ const ClientDashboard: React.FC = () => {
     <>
       <PageHeader
         title={`${client.name} Overview`}
+        badge={
+          <span className={`status-pill ${client.status === 'active' ? 'on' : ''}`}>
+            {client.status === 'active' ? 'Active Client' : String(client.status || '').toUpperCase()}
+          </span>
+        }
         subtitle={`${client.domain} · ${client.package_keywords} tracked keywords`}
         breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Clients', href: '/admin/clients' }, { label: client.name }]}
         actions={
@@ -421,7 +480,10 @@ const ClientDashboard: React.FC = () => {
         <>
           {/* ── 1. The answer: headline performance ────────────────────── */}
           <div className="section-title">
-            <h2 className="h2">Performance · {periodLabel}</h2>
+            <div>
+              <h2 className="h2">Performance · {periodLabel}</h2>
+              <p className="section-sub">How this client is doing against the period before.</p>
+            </div>
             <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="btn ghost btn-sm">
               Open full report <ArrowUpRight size={14} />
             </Link>
@@ -429,64 +491,110 @@ const ClientDashboard: React.FC = () => {
 
           <div className="kpi-row">
             {kpis.map(k => (
-              <div key={k.label} className="kpi">
-                <span className="lab">{k.icon} {k.label}</span>
-                <span className="val">{k.value}</span>
-                <span className="sub">{k.sub}</span>
+              <div key={k.key} className="stat">
+                <div className="stat-top">
+                  <span className={`stat-chip tone-${k.tone}`}>{k.icon}</span>
+                  <span className="stat-label">{k.label}</span>
+                </div>
+
+                <div className="stat-figure">
+                  <span className="stat-value">{k.value}</span>
+                  {k.change !== null && (
+                    <span className={`trend ${k.change > 0 ? 'up' : k.change < 0 ? 'down' : 'flat'}`}>
+                      {k.change > 0 ? '↑' : k.change < 0 ? '↓' : '—'} {Math.abs(k.change).toFixed(0)}%
+                    </span>
+                  )}
+                  <span className="stat-spark">
+                    <Sparkline
+                      values={k.series}
+                      color={`var(--tone-${k.tone})`}
+                      label={`${k.label} trend`}
+                    />
+                  </span>
+                </div>
+
+                <div className="stat-foot">{k.foot}</div>
+                <div className="stat-note">{k.note(k.change)}</div>
               </div>
             ))}
           </div>
 
           {/* ── 2. Where the report stands ─────────────────────────────── */}
-          <div className="section-title"><h2 className="h2">This Month's Report</h2></div>
+          <div className="section-title">
+            <div>
+              <h2 className="h2">This Month's Report</h2>
+              <p className="section-sub">What the client will receive, and where it stands.</p>
+            </div>
+            <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="section-link">
+              Open full report <ArrowUpRight size={14} />
+            </Link>
+          </div>
 
-          <div className="page-card report-status">
-            <div className="report-status-main">
-              <span className={`badge ${report.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
-                {report.status.toUpperCase()}
-              </span>
-              <div>
-                <div className="report-status-title">{periodLabel} report</div>
-                <div className="text-subtle text-xs">
-                  Generated {report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}
-                  {' · '}{reportCount} total {reportCount === 1 ? 'report' : 'reports'}
-                </div>
+          <div className="report-card">
+            <span className="stat-chip lg tone-amber"><FileText size={20} /></span>
+
+            <div className="report-card-body">
+              <div className="report-card-head">
+                <span className={`badge ${report.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
+                  {report.status.toUpperCase()}
+                </span>
+                <span className="report-card-title">{periodLabel} report</span>
               </div>
+              <div className="text-subtle text-xs">
+                Generated {report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}
+                {' · '}{reportCount} total {reportCount === 1 ? 'report' : 'reports'}
+              </div>
+              {daysRemaining > 0 && report.status !== 'published' && (
+                <p className="report-card-note">
+                  Generating a new snapshot is blocked for {daysRemaining} more day(s).
+                </p>
+              )}
             </div>
 
-            <div className="report-status-actions">
-              {/* One primary action opens this month's report; older periods,
-                  PDF export and generating a new snapshot sit behind it. */}
-              <button className="btn ghost" onClick={openGenerateModal}>
-                All reports
-              </button>
+            <div className="report-card-actions">
+              <button className="btn ghost" onClick={openGenerateModal}>All reports</button>
               <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="btn btn-primary">
                 Open report <ArrowRight size={14} />
               </Link>
             </div>
-
-            {daysRemaining > 0 && report.status !== 'published' && (
-              <p className="text-xs report-status-note">
-                Generating a new snapshot is blocked for {daysRemaining} more day(s).
-              </p>
-            )}
           </div>
 
           {/* ── 3. The detail, summarised — full tables one click away ─── */}
-          <div className="section-title"><h2 className="h2">Explore the Data</h2></div>
+          <div className="section-title">
+            <div>
+              <h2 className="h2">Explore the Data</h2>
+              <p className="section-sub">Dive deeper into this client's performance.</p>
+            </div>
+          </div>
 
           <div className="area-grid">
             {areas.map(a => (
               <Link key={a.label} to={a.to} className="area-card">
-                <span className="area-label">{a.icon} {a.label}</span>
-                <span className="area-value">
-                  {a.value} <small>{a.unit}</small>
+                <span className="area-top">
+                  <span className={`stat-chip sm tone-${a.tone}`}>{a.icon}</span>
+                  <span className="area-label">{a.label}</span>
                 </span>
+
+                <span className="area-figure">
+                  <span className="area-value">{a.value} <small>{a.unit}</small></span>
+                  <span className="area-spark">
+                    <Sparkline
+                      values={a.series}
+                      color={`var(--tone-${a.tone})`}
+                      variant={(a as any).bars ? 'bar' : 'line'}
+                      width={72}
+                      height={28}
+                      label={`${a.label} trend`}
+                    />
+                  </span>
+                </span>
+
                 <span className="area-detail">{a.detail}</span>
                 <span className="area-cta">View all <ArrowRight size={13} /></span>
               </Link>
             ))}
           </div>
+
         </>
       )}
 

@@ -203,6 +203,49 @@ def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> Re
     return report
 
 
+@router.get("/trends")
+def get_trends(
+    client_id: uuid.UUID,
+    days: int = 30,
+    db: Session = Depends(get_db),
+):
+    """Daily series for the headline figures, for the overview sparklines.
+
+    Only real recorded values are returned — a metric with nothing stored
+    comes back as an empty list, so the caller can leave the chart out
+    rather than draw an invented trend.
+    """
+    days = max(7, min(days, 180))
+    end = datetime.date.today()
+    start = end - datetime.timedelta(days=days)
+
+    wanted = {
+        "gsc": ["clicks", "impressions"],
+        "ga4": ["sessions", "users"],
+        "gbp": ["calls", "website_clicks"],
+    }
+
+    rows = db.execute(
+        select(Metric.provider, Metric.metric_key, Metric.captured_on, func.sum(Metric.value))
+        .where(
+            Metric.client_id == client_id,
+            Metric.captured_on >= start,
+            Metric.captured_on <= end,
+            Metric.dimension_key.is_(None),
+        )
+        .group_by(Metric.provider, Metric.metric_key, Metric.captured_on)
+        .order_by(Metric.captured_on)
+    ).all()
+
+    series: dict[str, dict[str, list]] = {p: {k: [] for k in ks} for p, ks in wanted.items()}
+    for provider, key, day, total in rows:
+        name = provider.value if hasattr(provider, "value") else str(provider)
+        if name in series and key in series[name]:
+            series[name][key].append({"d": day.isoformat(), "v": float(total or 0)})
+
+    return {"from": start.isoformat(), "to": end.isoformat(), "series": series}
+
+
 @router.get("/{snapshot_id}/composer")
 def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
     """Everything the composer needs: sections, every datum, and current state."""
