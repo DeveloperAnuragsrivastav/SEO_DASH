@@ -187,6 +187,7 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
         ga4_top_pages=comparative_data.get("ga4", {}).get("top_pages", []),
         ga4_devices=comparative_data.get("ga4", {}).get("devices", []),
         ga4_countries=comparative_data.get("ga4", {}).get("countries", []),
+        gsc_daily=comparative_data.get("gsc_daily", []),
         rankings=comparative_data.get("rankings", {}),
         keywords=comparative_data.get("rankings", {}).get("keywords", []),
         deltas=comparative_data.get("kpi_deltas", {}),
@@ -253,7 +254,11 @@ async def generate_report_pdf(comparative_data: dict, client: dict, base_url: st
             )
 
             width = max(int(dimensions.get("width") or 794), 320)
+            # Bias upward by a few pixels: a sliver of white at the foot is
+            # invisible, whereas being one pixel short adds an entire blank page.
             height = int(dimensions.get("height") or 0)
+            if height:
+                height += 6
 
             # Chromium refuses absurd page sizes; fall back to paginated A4
             # rather than failing the download outright.

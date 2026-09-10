@@ -317,12 +317,15 @@
             flex: none;
         }
 
+        /* A quiet ownership mark, not a second headline. */
         .head-logo {
-            height: 26px;
+            height: 16px;
             width: auto;
-            max-width: 110px;
+            max-width: 74px;
             object-fit: contain;
             display: block;
+            opacity: .32;
+            filter: grayscale(1);
         }
 
         .section-rule {
@@ -424,7 +427,9 @@
         }
 
         .visual-card {
-            min-height: 156px;
+            /* Sized by content — these hold compact bar lists now, not tall
+               charts, so a fixed height only produced dead space. */
+            min-height: 0;
             padding: 15px;
             position: relative;
             overflow: hidden;
@@ -763,7 +768,7 @@
         }
 
         .page-one .chart-shelf .visual-card {
-            min-height: 306px;
+            min-height: 0;
         }
 
         .page-one .ring-layout {
@@ -925,7 +930,9 @@
         }
 
         .page-two .chart-row .visual-card {
-            min-height: 278px;
+            /* These hold compact bar lists now; a fixed height just left a
+               large empty block under two or three rows. */
+            min-height: 0;
         }
 
         .page-two .funnel {
@@ -1464,6 +1471,71 @@
     <small class="vs">vs {{ prev | round(0) | int | fmt }} prior period</small>
   {%- endif -%}
 {%- endmacro %}
+{# ── Charts ported from the reference generator ──────────────────────
+   trend_svg() and bar_chart_html() in uploads/includes/functions.php.
+   Same geometry, same proportions; colour comes from the report theme. #}
+
+{% macro trend_chart(points, color, w=700, h=150) -%}
+  {%- set pts = points | reject('none') | list -%}
+  {%- if pts | length >= 2 -%}
+    {%- set lo = pts | min -%}
+    {%- set hi = pts | max -%}
+    {%- set span = (hi - lo) if (hi - lo) else 1 -%}
+    {%- set pad = 12 -%}
+    {%- set step = (w - pad * 2) / (pts | length - 1) -%}
+    {%- set ns = namespace(line='', area='', lastx=0, lasty=0) -%}
+    {%- for v in pts -%}
+      {%- set x = pad + loop.index0 * step -%}
+      {%- set y = h - pad - ((v - lo) / span) * (h - pad * 2) -%}
+      {%- set ns.line = ns.line ~ (' ' if not loop.first else '') ~ (x | round(1)) ~ ',' ~ (y | round(1)) -%}
+      {%- set ns.area = ns.area ~ ('M' if loop.first else ' L') ~ (x | round(1)) ~ ',' ~ (y | round(1)) -%}
+      {%- set ns.lastx = x | round(1) -%}
+      {%- set ns.lasty = y | round(1) -%}
+    {%- endfor -%}
+    <svg viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none"
+         style="width:100%;height:{{ h }}px;display:block" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="tg{{ w }}{{ h }}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="{{ color }}" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="{{ color }}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      {% for g in [1, 2] %}
+      <line x1="0" y1="{{ (pad + (h - pad * 2) * g / 3) | round(1) }}"
+            x2="{{ w }}" y2="{{ (pad + (h - pad * 2) * g / 3) | round(1) }}"
+            stroke="#e8ecf2" stroke-width="1"></line>
+      {% endfor %}
+      <path d="{{ ns.area }} L{{ w }},{{ h }} L0,{{ h }} Z" fill="url(#tg{{ w }}{{ h }})" stroke="none"></path>
+      <polyline points="{{ ns.line }}" fill="none" stroke="{{ color }}" stroke-width="3.5"
+                stroke-linejoin="round" stroke-linecap="round"></polyline>
+      <circle cx="{{ ns.lastx }}" cy="{{ ns.lasty }}" r="6" fill="#fff" stroke="{{ color }}" stroke-width="3"></circle>
+    </svg>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro bar_list(rows, label_key, value_key, color) -%}
+  {%- if rows -%}
+    {%- set top = (rows | map(attribute=value_key) | max) or 1 -%}
+    <table style="width:100%;border-collapse:collapse">
+      {%- for r in rows -%}
+      <tr>
+        <td style="width:32%;font-size:9px;padding:4px 8px 4px 0">{{ r[label_key] }}</td>
+        <td style="width:52%;padding:4px 0">
+          <div style="background:#eef2f7;border-radius:4px;height:12px;width:100%">
+            <div style="background:{{ color }};border-radius:4px;height:12px;width:{{ ((r[value_key] / top) * 100) | round(0) | int }}%"></div>
+          </div>
+        </td>
+        <td style="width:16%;font-size:9px;font-weight:700;text-align:right;padding:4px 0 4px 8px">{{ r[value_key] | int }}</td>
+      </tr>
+      {%- endfor -%}
+    </table>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro chart_label(text) -%}
+<div style="font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--muted);margin:14px 0 6px;text-transform:uppercase">{{ text }}</div>
+{%- endmacro %}
+
     <!-- Page 2: Search Performance & GBP -->
 {% if sections.traffic %}
     <section class="report-page page-two">
@@ -1482,7 +1554,15 @@
                 {% if mo('gsc.impressions') %}<div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong>{{ change_line(gsc.get('impressions', 0), deltas.get('gsc', {}).get('impressions', 0)) }}</div>{% endif %}
                 {% if mo('gsc.ctr') %}<div class="small-metric"><span>Avg CTR</span><strong>{{ (gsc.get('ctr', 0) * 100) | round(1) }}%</strong></div>{% endif %}
                 {% if mo('gsc.position') %}<div class="small-metric"><span>Avg Position</span><strong>{{ gsc.get('position', 0) | fmt }}</strong></div>{% endif %}
+
             </div>
+
+            {% if gsc_daily and gsc_daily | length >= 2 %}
+            <div style="margin:6px 0 18px">
+                {{ chart_label('Daily clicks trend') }}
+                {{ trend_chart(gsc_daily, 'var(--forest)') }}
+            </div>
+            {% endif %}
 
 {% endif %}
 {% if sections.ga4 %}
@@ -1539,26 +1619,20 @@
             <div class="chart-row">
                 <div class="visual-card">
                     <p class="chart-caption">GA4 engagement funnel</p>
-                    <div class="funnel">
-                        {% if mo('ga4.sessions') %}<div class="funnel-step"><i style="height:90px"></i><b>{{ ga4.get('sessions', 0) | fmt }}</b><span>Sessions</span></div>{% endif %}
-                        {% if mo('ga4.engaged_sessions') %}<div class="funnel-step"><i style="height:{{ [((ga4.get('engaged_sessions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('engaged_sessions', 0) | fmt }}</b><span>Engaged</span></div>{% endif %}
-                        {% if mo('ga4.conversions') %}<div class="funnel-step"><i style="height:{{ [((ga4.get('conversions', 0) / max_sess) * 90), 4] | max }}px"></i><b>{{ ga4.get('conversions', 0) | fmt }}</b><span>Conversions</span></div>{% endif %}
-                    </div>
+                    {% set ga4_rows = [] %}
+                    {% if mo('ga4.sessions') and ga4.get('sessions', 0) %}{% set _ = ga4_rows.append({'k': 'Sessions', 'v': ga4.get('sessions', 0)}) %}{% endif %}
+                    {% if mo('ga4.engaged_sessions') and ga4.get('engaged_sessions', 0) %}{% set _ = ga4_rows.append({'k': 'Engaged', 'v': ga4.get('engaged_sessions', 0)}) %}{% endif %}
+                    {% if mo('ga4.conversions') and ga4.get('conversions', 0) %}{% set _ = ga4_rows.append({'k': 'Conversions', 'v': ga4.get('conversions', 0)}) %}{% endif %}
+                    {{ bar_list(ga4_rows, 'k', 'v', 'var(--forest)') }}
                 </div>
                 <div class="visual-card">
                     <p class="chart-caption">Google Business Profile actions</p>
-                    <div class="bar-chart">
-                        {% set max_gbp = [gbp.get('calls', 0), gbp.get('directions', 0), gbp.get('website_clicks', 0), gbp.get('searches', 0), 1] | max %}
-                        {% set h_c = [((gbp.get('calls', 0) / max_gbp) * 100), 4] | max %}
-                        {% set h_d = [((gbp.get('directions', 0) / max_gbp) * 100), 4] | max %}
-                        {% set h_w = [((gbp.get('website_clicks', 0) / max_gbp) * 100), 4] | max %}
-                        {% set h_s = [((gbp.get('searches', 0) / max_gbp) * 100), 4] | max %}
-                        
-                        {% if mo('gbp.calls') %}<div class="bar"><i style="height:{{ h_c }}px"></i><b>{{ gbp.get('calls', 0) | fmt }}</b><span>Calls</span></div>{% endif %}
-                        {% if mo('gbp.direction_requests') %}<div class="bar"><i style="height:{{ h_d }}px"></i><b>{{ gbp.get('directions', 0) | fmt }}</b><span>Directions</span></div>{% endif %}
-                        {% if mo('gbp.website_clicks') %}<div class="bar"><i style="height:{{ h_w }}px"></i><b>{{ gbp.get('website_clicks', 0) | fmt }}</b><span>Clicks</span></div>{% endif %}
-                        <div class="bar"><i style="height:{{ h_s }}px"></i><b>{{ gbp.get('searches', 0) | fmt }}</b><span>Searches</span></div>
-                    </div>
+                    {% set gbp_rows = [] %}
+                    {% if mo('gbp.calls') and gbp.get('calls', 0) %}{% set _ = gbp_rows.append({'k': 'Calls', 'v': gbp.get('calls', 0)}) %}{% endif %}
+                    {% if mo('gbp.direction_requests') and gbp.get('directions', 0) %}{% set _ = gbp_rows.append({'k': 'Direction requests', 'v': gbp.get('directions', 0)}) %}{% endif %}
+                    {% if mo('gbp.website_clicks') and gbp.get('website_clicks', 0) %}{% set _ = gbp_rows.append({'k': 'Website clicks', 'v': gbp.get('website_clicks', 0)}) %}{% endif %}
+                    {% if gbp.get('searches', 0) %}{% set _ = gbp_rows.append({'k': 'Local searches', 'v': gbp.get('searches', 0)}) %}{% endif %}
+                    {{ bar_list(gbp_rows, 'k', 'v', 'var(--forest)') }}
                 </div>
             </div>
         </div>

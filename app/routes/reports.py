@@ -929,13 +929,20 @@ def _build_comparative_report(snapshots):
         forget to apply the composer's choices.
         """
 
-        __slots__ = ("snapshot", "end_date", "narrative")
+        __slots__ = ("snapshot", "end_date", "start_date", "narrative")
 
         def __init__(self, src):
             self.snapshot = composer.apply_selection(src.snapshot or {})
             self.end_date = src.end_date
+            self.start_date = getattr(src, "start_date", src.end_date)
             self.narrative = getattr(src, "narrative", "") or ""
 
+    # The builder has no session of its own; borrow the one these rows are
+    # attached to so the trend series can be read without changing callers.
+    from sqlalchemy.orm import object_session
+
+    last_client_id = getattr(snapshots[-1], "client_id", None)
+    session = object_session(snapshots[-1])
     snapshots = [_Composed(s) for s in snapshots]
     
     months = []
@@ -961,6 +968,30 @@ def _build_comparative_report(snapshots):
         comparative_data["included_sections"] = latest_snap["included_sections"]
     if isinstance(latest_snap.get("included_items"), dict):
         comparative_data["included_items"] = latest_snap["included_items"]
+
+    # Daily clicks for the trend chart. Recorded values only — an empty list
+    # means the chart is skipped rather than drawn from nothing.
+    try:
+        first, last = snapshots[0], snapshots[-1]
+        if session is None or last_client_id is None:
+            raise RuntimeError("no session available for the trend series")
+        daily = session.execute(
+            select(Metric.captured_on, func.sum(Metric.value))
+            .where(
+                Metric.client_id == last_client_id,
+                Metric.provider == ProviderType.gsc,
+                Metric.metric_key == "clicks",
+                Metric.dimension_key.is_(None),
+                Metric.captured_on >= first.start_date,
+                Metric.captured_on <= last.end_date,
+            )
+            .group_by(Metric.captured_on)
+            .order_by(Metric.captured_on)
+        ).all()
+        comparative_data["gsc_daily"] = [float(v or 0) for _, v in daily]
+    except Exception:
+        logger.exception("Daily clicks series unavailable for the trend chart.")
+        comparative_data["gsc_daily"] = []
     comparative_data["narrative"] = snapshots[-1].narrative if getattr(snapshots[-1], 'narrative', None) else ""
     if "rankings" in latest_snap:
         comparative_data["rankings"]["summary"] = latest_snap["rankings"].get("summary", {})
