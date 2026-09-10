@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../api/client';
 import { toast } from 'sonner';
+import {
+  Palette, RefreshCw, FileText, Download, ArrowRight,
+  SearchX, Loader2, CalendarClock, Plug
+} from 'lucide-react';
 
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
@@ -93,7 +97,7 @@ const ClientDashboard: React.FC = () => {
     const toastId = toast.info('Report generation started (this may take a minute)...', { duration: 60000 });
     try {
       await api.post(`/clients/${clientId}/reports/generate`, {});
-      
+
       let reportData = null;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 3000));
@@ -110,7 +114,7 @@ const ClientDashboard: React.FC = () => {
           // ignore 404s while processing
         }
       }
-      
+
       toast.dismiss(toastId);
       if (reportData) {
         setReport(reportData);
@@ -198,61 +202,67 @@ const ClientDashboard: React.FC = () => {
   }
 
   if (loading) return <PageSkeleton cards={2} header={true} stats={0} />;
-  
+
   if (!client) return (
-    <div className="page-card" style={{ textAlign: 'center', margin: '40px auto', maxWidth: '600px' }}>
-      <h2 className="h2" style={{ marginBottom: '16px' }}>Project Not Found</h2>
-      <p className="text-subtle" style={{ marginBottom: '32px' }}>This project may have been deleted or you don't have access to it.</p>
-      <Link to="/admin/clients" className="btn btn-primary">Go back to Clients</Link>
+    <div className="page-card" style={{ margin: '40px auto', maxWidth: '560px' }}>
+      <div className="empty-state">
+        <span className="empty-state-icon"><SearchX size={22} /></span>
+        <h3>Project not found</h3>
+        <p>This project may have been deleted, or you don't have access to it.</p>
+        <Link to="/admin/clients" className="btn btn-primary">Back to Clients</Link>
+      </div>
     </div>
   );
 
   return (
     <>
-      <PageHeader 
+      <PageHeader
         title={`${client.name} Overview`}
         subtitle={`${client.domain} · ${client.package_keywords} tracked keywords`}
         breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Clients', href: '/admin/clients' }, { label: client.name }]}
         actions={
           <button className="btn btn-secondary" onClick={() => setShowWhitelabel(true)}>
-            🎨 Whitelabel Settings
+            <Palette size={15} /> Whitelabel Settings
           </button>
         }
       />
 
-      <div className="grid-cols-2" style={{ marginBottom: '24px' }}>
+      <div className="grid-cols-2" style={{ marginBottom: '24px', alignItems: 'stretch' }}>
         {/* API Connections */}
-        <div className="page-card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div className="page-card panel">
+          <div className="panel-head">
             <h3 className="h2">API Connections</h3>
-            <Link to={`/admin/clients/${clientId}/connections`} className="btn btn-secondary btn-sm">Manage</Link>
+            <Link to={`/admin/clients/${clientId}/connections`} className="btn ghost btn-sm">Manage</Link>
           </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px', flex: 1 }}>
+
+          <div className="panel-body">
             {['gsc', 'ga4'].map(p => {
               const c = connections.find((x: any) => x.provider === p);
               const isConnected = c?.status === 'connected';
               return (
-                <div key={p} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span className={`badge ${isConnected ? 'badge-success' : 'badge-neutral'}`} style={{ width: '8px', height: '8px', padding: 0, borderRadius: '50%' }} />
-                    <span style={{ fontWeight: 600, fontSize: '14px', textTransform: 'uppercase' }}>{p}</span>
+                <div key={p} className="data-row">
+                  <div className="data-row-label">
+                    <span className={`dot ${isConnected ? 'on' : 'off'}`} />
+                    <span className="data-row-name">{p.toUpperCase()}</span>
                   </div>
-                  <span className="text-subtle text-xs mono">
+                  <span className={`src ${isConnected ? '' : 'man'}`} title={c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}>
                     {c ? (isConnected ? c.property_id : c.status) : 'Manual / Not Linked'}
                   </span>
                 </div>
               );
             })}
           </div>
-          <button className="btn btn-secondary" onClick={handleSync} disabled={syncing} style={{ width: '100%', justifyContent: 'center' }}>
-            {syncing ? 'Syncing...' : 'Sync Connected Sources'}
-          </button>
+
+          <div className="panel-foot">
+            <button className="btn btn-secondary btn-block" onClick={handleSync} disabled={syncing}>
+              {syncing ? <><Loader2 size={15} className="spin" /> Syncing…</> : <><RefreshCw size={15} /> Sync Connected Sources</>}
+            </button>
+          </div>
         </div>
 
         {/* Report Generation */}
-        <div className="page-card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div className="page-card panel">
+          <div className="panel-head">
             <h3 className="h2">Latest Report Snapshot</h3>
             {report && (
               <span className={`badge ${report.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
@@ -260,71 +270,83 @@ const ClientDashboard: React.FC = () => {
               </span>
             )}
           </div>
-          
+
           {!report ? (
-            <div style={{ textAlign: 'center', padding: '24px 0', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <p className="text-subtle" style={{ marginBottom: '8px' }}>No report snapshot generated yet.</p>
-              <p className="text-subtle text-xs" style={{ marginBottom: '24px' }}>Ensure all bulk data is uploaded before generating.</p>
-              <button className="btn btn-primary" onClick={handleGenerate} disabled={generating} style={{ width: '100%', justifyContent: 'center' }}>
-                {generating ? 'Generating...' : 'Generate Snapshot'}
+            <div className="panel-body" style={{ justifyContent: 'center' }}>
+              <div className="empty-state" style={{ padding: '12px 0' }}>
+                <span className="empty-state-icon"><FileText size={22} /></span>
+                <h3>No snapshot yet</h3>
+                <p>Ensure all bulk data is uploaded before generating.</p>
+              </div>
+              <button className="btn btn-primary btn-block" onClick={handleGenerate} disabled={generating}>
+                {generating ? <><Loader2 size={15} className="spin" /> Generating…</> : 'Generate Snapshot'}
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span className="text-subtle text-sm">Total Snapshots</span>
-                <span className="mono" style={{ fontWeight: 600 }}>
-                  {reportCount}
-                </span>
+            <>
+              <div className="panel-body">
+                <div className="data-row">
+                  <div className="data-row-label"><Plug size={14} /> <span className="data-row-name">Total Snapshots</span></div>
+                  <span className="mono" style={{ fontWeight: 600 }}>{reportCount}</span>
+                </div>
+                <div className="data-row">
+                  <div className="data-row-label"><CalendarClock size={14} /> <span className="data-row-name">Latest Generated</span></div>
+                  <span className="mono text-xs" style={{ color: 'var(--ink-2)' }}>
+                    {report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}
+                  </span>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span className="text-subtle text-sm">Latest Generated</span>
-                <span className="mono text-xs">{report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}</span>
-              </div>
-              
-              <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
-                <button className="btn btn-primary" onClick={openGenerateModal} style={{ width: '100%', justifyContent: 'center' }}>
-                  Generate / View Reports
+
+              <div className="panel-foot">
+                <button className="btn btn-primary btn-block" onClick={openGenerateModal}>
+                  Generate / View Reports <ArrowRight size={14} />
                 </button>
-                
+
                 {daysRemaining > 0 && report.status !== 'published' && (
-                  <p className="text-xs" style={{ textAlign: 'center', marginTop: '12px', color: 'var(--amber)' }}>
+                  <p className="text-xs" style={{ textAlign: 'center', marginTop: '10px', color: 'var(--ink-3)' }}>
                     Generating a new snapshot is blocked for {daysRemaining} more day(s).
                   </p>
                 )}
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
 
       {showWhitelabel && (
-        <div className="modal-backdrop">
-          <div className="modal">
-            <h2 className="h2" style={{ marginBottom: '24px' }}>Whitelabel Settings</h2>
-            
-            <div className="form-group" style={{ marginBottom: '16px' }}>
+        <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowWhitelabel(false); }}>
+          <div className="modal" role="dialog" aria-modal="true">
+            <h2 className="modal-title">Whitelabel Settings</h2>
+            <p className="modal-desc">Branding applied to this client's reports and portal.</p>
+
+            <div className="form-group">
               <label className="form-label">Client Name</label>
               <input type="text" className="form-input" value={editName} onChange={e => setEditName(e.target.value)} />
             </div>
 
-            <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label className="form-label">Theme Color (Hex)</label>
+            <div className="form-group">
+              <label className="form-label">Theme Color</label>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <input type="color" value={editTheme} onChange={e => setEditTheme(e.target.value)} style={{ width: '40px', height: '40px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} />
-                <input type="text" className="form-input" value={editTheme} onChange={e => setEditTheme(e.target.value)} style={{ flex: 1 }} />
+                <input
+                  type="color"
+                  value={editTheme}
+                  onChange={e => setEditTheme(e.target.value)}
+                  className="color-swatch"
+                  aria-label="Theme colour picker"
+                />
+                <input type="text" className="form-input mono" value={editTheme} onChange={e => setEditTheme(e.target.value)} style={{ flex: 1 }} />
               </div>
             </div>
 
-            <div className="form-group" style={{ marginBottom: '32px' }}>
-              <label className="form-label">Logo URL (Optional)</label>
+            <div className="form-group">
+              <label className="form-label">Logo URL <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>· optional</span></label>
               <input type="text" className="form-input" placeholder="https://..." value={editLogo} onChange={e => setEditLogo(e.target.value)} />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowWhitelabel(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSaveWhitelabel} disabled={savingSettings}>
-                {savingSettings ? 'Saving...' : 'Save Settings'}
+                {savingSettings ? <><Loader2 size={15} className="spin" /> Saving…</> : 'Save Settings'}
               </button>
             </div>
           </div>
@@ -332,47 +354,47 @@ const ClientDashboard: React.FC = () => {
       )}
 
       {showGenerateModal && (
-        <div className="modal-backdrop">
-          <div className="modal" style={{ maxWidth: '500px' }}>
-            <h2 className="h2" style={{ marginBottom: '24px' }}>Generate / View Reports</h2>
-            
+        <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowGenerateModal(false); }}>
+          <div className="modal" style={{ maxWidth: '540px' }} role="dialog" aria-modal="true">
+            <h2 className="modal-title">Generate / View Reports</h2>
+            <p className="modal-desc">Open a rolling multi-month view, or export any period as PDF.</p>
+
             {reportCount > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflowY: 'auto' }}>
-                {Array.from({ length: Math.min(reportCount, 12) }, (_, i) => i + 1).map(num => (
-                  <div key={num} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-app)' }}>
-                    <span style={{ fontWeight: 600 }}>{num === 1 ? 'This Month' : `${num} Months`}</span>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <Link to={`/admin/clients/${clientId}/reports/multi?count=${num}`} className="btn btn-primary btn-sm">Open in App</Link>
-                      <button className="btn btn-secondary btn-sm" onClick={() => handleDownloadPDF(num)} disabled={downloading}>
-                        {downloading ? '...' : 'PDF'}
-                      </button>
+              <>
+                <div className="overline" style={{ marginBottom: 10 }}>Rolling Periods</div>
+                <div className="stack scroll-y" style={{ maxHeight: '260px' }}>
+                  {Array.from({ length: Math.min(reportCount, 12) }, (_, i) => i + 1).map(num => (
+                    <div key={num} className="list-row">
+                      <span style={{ fontWeight: 600, fontSize: 13.5 }}>{num === 1 ? 'This Month' : `${num} Months`}</span>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <Link to={`/admin/clients/${clientId}/reports/multi?count=${num}`} className="btn btn-primary btn-sm">Open in App</Link>
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleDownloadPDF(num)} disabled={downloading}>
+                          {downloading ? <Loader2 size={13} className="spin" /> : <Download size={13} />} PDF
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
 
-            <div style={{ marginTop: '24px', marginBottom: '12px' }}>
-              <h3 className="text-subtle text-sm" style={{ fontWeight: 600, textTransform: 'uppercase' }}>Past Single-Month Snapshots</h3>
-            </div>
-            
+            <div className="overline" style={{ margin: '22px 0 10px' }}>Past Single-Month Snapshots</div>
+
             {loadingHistory ? (
-              <p className="text-subtle text-sm" style={{ textAlign: 'center', padding: '16px' }}>Loading history...</p>
+              <p className="text-subtle text-sm" style={{ textAlign: 'center', padding: '16px' }}>Loading history…</p>
             ) : history.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
+              <div className="stack scroll-y" style={{ maxHeight: '220px' }}>
                 {history.map(snap => {
                   const dateLabel = new Date(snap.end_date).toLocaleString('default', { month: 'long', year: 'numeric' });
                   return (
-                    <div key={snap.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-app)' }}>
+                    <div key={snap.id} className="list-row">
                       <div>
-                        <span style={{ fontWeight: 500, fontSize: '14px', display: 'block' }}>{dateLabel}</span>
+                        <span style={{ fontWeight: 600, fontSize: '13.5px', display: 'block' }}>{dateLabel}</span>
                         <span className="text-subtle text-xs">{new Date(snap.generated_at).toLocaleString()}</span>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleDownloadHistoricalPDF(snap.id, dateLabel)} disabled={downloading}>
-                          {downloading ? '...' : 'PDF'}
-                        </button>
-                      </div>
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleDownloadHistoricalPDF(snap.id, dateLabel)} disabled={downloading}>
+                        {downloading ? <Loader2 size={13} className="spin" /> : <Download size={13} />} PDF
+                      </button>
                     </div>
                   );
                 })}
@@ -380,22 +402,22 @@ const ClientDashboard: React.FC = () => {
             ) : (
               <p className="text-subtle text-sm" style={{ textAlign: 'center', padding: '16px' }}>No past snapshots available.</p>
             )}
-            
-            <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-               <div>
-                 <h4 className="h2" style={{ margin: 0, fontSize: '15px', marginBottom: '4px' }}>Generate New Snapshot</h4>
-                 <p className="text-subtle text-xs" style={{ margin: 0, maxWidth: '240px' }}>Captures the latest data to append to the report history.</p>
-               </div>
-               <button 
-                  className="btn btn-secondary" 
-                  onClick={() => { setShowGenerateModal(false); handleGenerate(); }}
-                  disabled={generating || (daysRemaining > 0 && report?.status !== 'published')}
-                >
-                  {generating ? 'Generating...' : 'Generate New'}
-               </button>
+
+            <div className="callout">
+              <div>
+                <h4 className="callout-title">Generate New Snapshot</h4>
+                <p className="callout-desc">Captures the latest data to append to the report history.</p>
+              </div>
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setShowGenerateModal(false); handleGenerate(); }}
+                disabled={generating || (daysRemaining > 0 && report?.status !== 'published')}
+              >
+                {generating ? <><Loader2 size={15} className="spin" /> Generating…</> : 'Generate New'}
+              </button>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px' }}>
+            <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowGenerateModal(false)}>Close</button>
             </div>
           </div>

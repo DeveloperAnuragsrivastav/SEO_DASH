@@ -3,6 +3,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import api from '../../api/client';
 import { Navigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ChevronDown, UserPlus, Users as UsersIcon } from 'lucide-react';
 
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
@@ -148,7 +149,7 @@ export default function Users() {
         breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Manager Directory' }]}
         actions={
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-            Add Manager
+            <UserPlus size={15} /> Add Manager
           </button>
         }
       />
@@ -170,71 +171,82 @@ export default function Users() {
 
       <div style={{ display: 'grid', gap: '16px' }}>
         {managers.length === 0 ? (
-          <div className="page-card" style={{ textAlign: 'center', padding: '48px' }}>
-            <p className="text-subtle">No managers found. Create one to get started.</p>
+          <div className="page-card">
+            <div className="empty-state">
+              <span className="empty-state-icon"><UsersIcon size={22} /></span>
+              <h3>No managers yet</h3>
+              <p>Create an isolated manager account to start delegating projects.</p>
+              <button className="btn btn-primary" onClick={() => setShowAdd(true)}><UserPlus size={15} /> Add Manager</button>
+            </div>
           </div>
         ) : (
           managers.map(manager => (
             <div key={manager.id} className="page-card-flush">
-              <div 
-                style={{ padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              <button
+                type="button"
+                className="manager-row"
+                aria-expanded={expandedId === manager.id}
                 onClick={() => setExpandedId(expandedId === manager.id ? null : manager.id)}
               >
-                <div>
-                  <h3 className="h2" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                <span className="avatar avatar-lg">{manager.email.slice(0, 2)}</span>
+
+                <span className="manager-identity">
+                  <span className="manager-email">
                     {manager.email}
                     {manager.is_active ? (
                       <span className="badge badge-success">ACTIVE</span>
                     ) : (
                       <span className="badge badge-neutral">INACTIVE</span>
                     )}
-                  </h3>
-                  <div className="text-subtle text-xs mono">
-                    Last Login: {manager.last_login_at ? new Date(manager.last_login_at).toLocaleDateString() : 'Never'}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '24px', color: 'var(--text-tertiary)' }}>
-                  <div className="text-sm">
-                    <strong>{manager.managed_users?.length || 0}</strong> Users
-                  </div>
-                  <div className="text-sm">
-                    <strong>{manager.managed_clients?.length || 0}</strong> Projects
-                  </div>
-                  <div style={{ transform: expandedId === manager.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'var(--bg-app)', borderRadius: '50%' }}>
-                    ↓
-                  </div>
-                </div>
-              </div>
+                  </span>
+                  <span className="text-subtle text-xs">
+                    Last login {manager.last_login_at ? new Date(manager.last_login_at).toLocaleDateString() : 'never'}
+                  </span>
+                </span>
+
+                <span className="manager-counts hide-s">
+                  <span className="manager-count">
+                    <span className="manager-count-value mono">{manager.managed_users?.length || 0}</span>
+                    <span className="overline">Users</span>
+                  </span>
+                  <span className="manager-count">
+                    <span className="manager-count-value mono">{manager.managed_clients?.length || 0}</span>
+                    <span className="overline">Projects</span>
+                  </span>
+                </span>
+
+                <ChevronDown size={17} className={`manager-chevron ${expandedId === manager.id ? 'open' : ''}`} />
+              </button>
               
               {expandedId === manager.id && (
-                <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+                <div className="manager-detail">
                   
                   {/* Assigned Users */}
                   <div>
-                    <h4 className="h2" style={{ fontSize: '15px', marginBottom: '16px' }}>Assigned Users</h4>
+                    <div className="overline" style={{ marginBottom: 12 }}>Assigned Users</div>
                     {manager.managed_users?.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {manager.managed_users.map(u => (
-                          <div key={u.id} style={{ padding: '12px 16px', background: 'var(--neutral-bg)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 500 }}>{u.email}</span>
+                          <div key={u.id} className="list-row">
+                            <span style={{ fontWeight: 500, fontSize: 13.5, overflowWrap: 'anywhere' }}>{u.email}</span>
                             <span className={`badge ${u.is_active ? 'badge-success' : 'badge-neutral'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-subtle text-sm italic">No users assigned.</div>
+                      <div className="text-subtle text-sm">No users assigned.</div>
                     )}
                   </div>
                   
                   {/* Assigned Clients */}
                   <div>
-                    <h4 className="h2" style={{ fontSize: '15px', marginBottom: '16px' }}>Assigned Projects</h4>
+                    <div className="overline" style={{ marginBottom: 12 }}>Assigned Projects</div>
                     {manager.managed_clients?.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {manager.managed_clients.map(c => (
-                          <div key={c.id} style={{ padding: '12px 16px', background: 'var(--neutral-bg)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div>
-                              <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
+                          <div key={c.id} className="list-row">
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, marginBottom: 2, fontSize: 13.5 }}>{c.name}</div>
                               <div className="text-subtle text-xs">{c.domain}</div>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
@@ -247,8 +259,7 @@ export default function Users() {
                                   setDeletingClient(c);
                                   setDeleteConfirmation('');
                                 }}
-                                className="btn btn-secondary btn-sm"
-                                style={{ color: 'var(--down)' }}
+                                className="btn btn-danger-ghost btn-sm"
                               >
                                 Delete
                               </button>
@@ -257,7 +268,7 @@ export default function Users() {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-subtle text-sm italic">No projects assigned.</div>
+                      <div className="text-subtle text-sm">No projects assigned.</div>
                     )}
                   </div>
 
@@ -273,8 +284,10 @@ export default function Users() {
           <div className="modal" style={{ maxWidth: modalStep === 'project' ? '500px' : '400px' }}>
             {modalStep === 'manager' ? (
               <>
-                <h3 className="h2" style={{ marginBottom: 20 }}>Create New Manager</h3>
-                <form onSubmit={handleAddManager} style={{ display: 'grid', gap: 16 }}>
+                <h2 className="modal-title">Create New Manager</h2>
+                <p className="modal-desc">Step 1 of 2 · account credentials</p>
+                <div className="wizard-steps"><span className="wizard-step active" /><span className="wizard-step" /></div>
+                <form onSubmit={handleAddManager}>
                   <div className="form-group">
                     <label className="form-label">Email Address</label>
                     <input 
@@ -298,7 +311,7 @@ export default function Users() {
                       placeholder="••••••••"
                     />
                   </div>
-                  <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16 }}>
+                  <div className="modal-actions">
                     <button type="button" onClick={closeModal} className="btn btn-secondary" disabled={creating}>Cancel</button>
                     <button type="submit" className="btn btn-primary" disabled={creating}>
                       {creating ? 'Creating...' : 'Next: Assign Project'}
@@ -308,9 +321,10 @@ export default function Users() {
               </>
             ) : (
               <>
-                <h3 className="h2" style={{ marginBottom: 4 }}>Up next: Create Project</h3>
-                <p className="text-subtle" style={{ marginBottom: 20, fontSize: '14px' }}>Assign an initial SEO project to this new manager.</p>
-                <form onSubmit={handleAddProject} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <h2 className="modal-title">Create Project</h2>
+                <p className="modal-desc">Step 2 of 2 · assign an initial SEO project to this new manager.</p>
+                <div className="wizard-steps"><span className="wizard-step done" /><span className="wizard-step active" /></div>
+                <form onSubmit={handleAddProject} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                     <label className="form-label">Client Name</label>
                     <input className="form-input" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} required placeholder="Acme Corp" autoFocus />
@@ -327,7 +341,7 @@ export default function Users() {
                     <label className="form-label">Tracked Keywords</label>
                     <input className="form-input" type="number" min="0" value={newProject.package_keywords} onChange={e => setNewProject({...newProject, package_keywords: e.target.value})} />
                   </div>
-                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                  <div className="modal-actions" style={{ gridColumn: '1 / -1' }}>
                     <button type="button" onClick={closeModal} className="btn btn-secondary" disabled={creating}>Skip for now</button>
                     <button type="submit" className="btn btn-primary" disabled={creating}>
                       {creating ? 'Creating...' : 'Create & Assign'}
@@ -343,15 +357,13 @@ export default function Users() {
       {deletingClient && (
         <div className="modal-backdrop">
           <div className="modal">
-            <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16, marginBottom: 20 }}>
-              <h3 className="h2" style={{ color: 'var(--down)' }}>Delete {deletingClient.name}?</h3>
-            </div>
-            <p style={{ marginBottom: '16px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+            <h2 className="modal-title" style={{ color: 'var(--down)' }}>Delete {deletingClient.name}?</h2>
+            <p className="modal-desc" style={{ marginBottom: 16 }}>
               This action <strong>cannot be undone</strong>. This will permanently delete the <strong>{deletingClient.name}</strong> project, including all keyword rankings, metrics, backlink data, and user assignments.
             </p>
-            <div className="form-group" style={{ marginBottom: '24px' }}>
-              <label className="form-label" style={{ fontWeight: 500 }}>
-                Please type <strong>{deletingClient.name}</strong> to confirm.
+            <div className="form-group">
+              <label className="form-label">
+                Type <strong>{deletingClient.name}</strong> to confirm
               </label>
               <input 
                 type="text" 
@@ -362,13 +374,12 @@ export default function Users() {
                 autoFocus
               />
             </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setDeletingClient(null)}>
                 Cancel
               </button>
-              <button 
-                className="btn btn-primary"
-                style={{ background: 'var(--down)', borderColor: 'var(--down)' }}
+              <button
+                className="btn btn-danger"
                 disabled={deleteConfirmation !== deletingClient.name}
                 onClick={handleDeleteClient}
               >

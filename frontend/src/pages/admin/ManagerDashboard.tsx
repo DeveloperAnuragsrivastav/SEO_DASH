@@ -3,6 +3,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import api from '../../api/client';
 import { Navigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { UserPlus } from 'lucide-react';
 
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
@@ -184,10 +185,14 @@ export default function ManagerDashboard() {
       </div>
 
       <div style={{ marginTop: '40px', display: 'grid', gap: '16px' }}>
-        <h3 className="h2" style={{ fontSize: '18px', marginBottom: 4 }}>Users & Assignments</h3>
+        <div className="section-title"><h3 className="h2">Users &amp; Assignments</h3></div>
         {users.length === 0 ? (
-          <div className="page-card" style={{ textAlign: 'center', padding: '48px' }}>
-            <p className="text-subtle">You haven't created any users yet.</p>
+          <div className="page-card">
+            <div className="empty-state">
+              <span className="empty-state-icon"><UserPlus size={22} /></span>
+              <h3>No team members yet</h3>
+              <p>Create a team member to give them access to the projects you manage.</p>
+            </div>
           </div>
         ) : (
           users.map(u => (

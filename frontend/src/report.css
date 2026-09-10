@@ -108,31 +108,51 @@
 }
 
 /* Buttons inside report topbar */
+/* Dark bar: exactly one primary action, everything else recedes. */
 .report-view .topbar .btn {
-  background: var(--amber);
-  color: var(--ink);
-  border: 0;
   font-family: var(--body);
   font-weight: 600;
   font-size: 13px;
-  padding: 8px 14px;
+  height: 34px;
+  padding: 0 14px;
   border-radius: var(--radius-md);
   cursor: pointer;
+  box-shadow: none;
 }
 
-.report-view .topbar .btn:hover {
-  filter: brightness(1.06);
+.report-view .topbar .btn-primary {
+  background: var(--brand-500);
+  color: #14140F;
+  border: 1px solid var(--brand-500);
+}
+
+.report-view .topbar .btn-primary:hover:not(:disabled) {
+  background: var(--brand-400);
+  border-color: var(--brand-400);
+}
+
+.report-view .topbar .btn-secondary {
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font-weight: 500;
+}
+
+.report-view .topbar .btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.17);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .report-view .topbar .btn.ghost {
   background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font-weight: 500;
 }
 
 .report-view .topbar .btn.ghost:hover {
-  background: rgba(255, 255, 255, 0.08);
-  filter: none;
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
 }
 
 /* ── Section nav ─────────────────────────────────────────── */

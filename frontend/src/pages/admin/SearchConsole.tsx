@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import PaginationBar from '../../components/ui/PaginationBar';
+import { Search } from 'lucide-react';
 
 const SearchConsole: React.FC = () => {
   const { clientId } = useParams();
@@ -65,8 +66,12 @@ const SearchConsole: React.FC = () => {
       />
 
       {records.length === 0 ? (
-        <div className="card" style={{ padding: '64px', textAlign: 'center' }}>
-          <p className="text-subtle">No GSC data found.</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon"><Search size={22} /></span>
+            <h3>No Search Console data</h3>
+            <p>Connect a GSC property, or upload a spreadsheet from the Data Ingestion Hub.</p>
+          </div>
         </div>
       ) : (
         <div className="card table-wrapper">
@@ -76,10 +81,10 @@ const SearchConsole: React.FC = () => {
                 <th>Date</th>
                 <th>Dimension</th>
                 <th>Value</th>
-                <th>Clicks</th>
-                <th>Impressions</th>
-                <th>CTR</th>
-                <th>Position</th>
+                <th className="num">Clicks</th>
+                <th className="num">Impressions</th>
+                <th className="num">CTR</th>
+                <th className="num">Position</th>
               </tr>
             </thead>
             <tbody>
@@ -88,10 +93,10 @@ const SearchConsole: React.FC = () => {
                   <td>{r.captured_on}</td>
                   <td style={{ textTransform: 'capitalize' }}>{r.dimension_key}</td>
                   <td>{r.dimension_value}</td>
-                  <td>{r.clicks ?? 0}</td>
-                  <td>{r.impressions ?? 0}</td>
-                  <td>{((r.ctr || 0) * 100).toFixed(2)}%</td>
-                  <td>{(r.position || 0).toFixed(1)}</td>
+                  <td className="num">{r.clicks ?? 0}</td>
+                  <td className="num">{r.impressions ?? 0}</td>
+                  <td className="num">{((r.ctr || 0) * 100).toFixed(2)}%</td>
+                  <td className="num">{(r.position || 0).toFixed(1)}</td>
                 </tr>
               ))}
             </tbody>

@@ -37,19 +37,16 @@ const KpiCard: React.FC<KpiCardProps> = ({ title, value, delta, sourceLabel, isM
   const IconComp = getMetricIcon(title);
 
   return (
-    <div 
-      className="card"
+    <div
+      className="kpi"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px',
-        position: 'relative',
-        overflow: 'hidden'
+        gap: '12px',
+        marginBottom: 0
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600, fontFamily: 'var(--font-body)', letterSpacing: '0.01em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <IconComp size={16} style={{ color: '#111111' }} />
+          <IconComp size={16} style={{ color: 'var(--ink-3)' }} />
           {title}
         </h3>
         

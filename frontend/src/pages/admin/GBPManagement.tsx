@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import PaginationBar from '../../components/ui/PaginationBar';
+import { MapPin } from 'lucide-react';
 
 const GBPManagement: React.FC = () => {
   const { clientId } = useParams();
@@ -66,8 +67,12 @@ const GBPManagement: React.FC = () => {
       />
 
       {records.length === 0 ? (
-        <div className="card" style={{ padding: '64px', textAlign: 'center' }}>
-          <p className="text-subtle">No manual GBP data found.</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon"><MapPin size={22} /></span>
+            <h3>No GBP data yet</h3>
+            <p>Upload Google Business Profile metrics from the Data Ingestion Hub.</p>
+          </div>
         </div>
       ) : (
         <div className="card table-wrapper">

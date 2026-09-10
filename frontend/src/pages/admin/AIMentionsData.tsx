@@ -102,9 +102,9 @@ const AIMentionsData: React.FC = () => {
                   return (
                   <tr key={i}>
                     <td style={{ fontWeight: 500, textTransform: 'capitalize' }}>{monthDisplay}</td>
-                    <td>{r.platform || '-'}</td>
-                    <td>{r.prompt || '-'}</td>
-                    <td>{r.mentioned ? 'Yes' : 'No'}</td>
+                    <td><span className="badge badge-neutral" style={{ textTransform: 'capitalize' }}>{r.platform || '—'}</span></td>
+                    <td>{r.prompt || '—'}</td>
+                    <td><span className={`badge ${r.mentioned ? 'badge-success' : 'badge-neutral'}`}>{r.mentioned ? 'MENTIONED' : 'NOT FOUND'}</span></td>
                   </tr>
                   );
                 })}
