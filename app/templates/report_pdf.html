@@ -764,6 +764,25 @@
             font-weight: 600;
         }
 
+        .small-metric .delta {
+            display: inline-block;
+            margin-top: 5px;
+            font-size: 9px;
+            font-style: normal;
+            font-weight: 700;
+        }
+
+        .small-metric .delta.up { color: var(--green); }
+        .small-metric .delta.down { color: var(--red); }
+        .small-metric .delta.flat { color: var(--muted); }
+
+        .small-metric .vs {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 8px;
+        }
+
         .small-metric strong {
             display: block;
             margin-top: 15px;
@@ -1287,6 +1306,16 @@
         </div>
     </section>
 
+{% macro change_line(current, delta) -%}
+  {%- set prev = (current | float) - (delta | float) -%}
+  {%- if prev and prev > 0 -%}
+    {%- set pct = ((delta | float) / prev * 100) -%}
+    <em class="delta {{ 'up' if pct > 0 else ('down' if pct < 0 else 'flat') }}">
+      {{ '+' if pct > 0 else '' }}{{ pct | round(0) | int }}%
+    </em>
+    <small class="vs">vs {{ prev | round(0) | int | fmt }} prior period</small>
+  {%- endif -%}
+{%- endmacro %}
     <!-- Page 2: Search Performance & GBP -->
 {% if sections.traffic %}
     <section class="report-page page-two">
@@ -1301,8 +1330,8 @@
             </div>
             <div class="section-rule"></div>
             <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
-                {% if mo('gsc.clicks') %}<div class="small-metric"><span>Search Clicks</span><strong>{{ gsc.get('clicks', 0) | fmt }}</strong></div>{% endif %}
-                {% if mo('gsc.impressions') %}<div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong></div>{% endif %}
+                {% if mo('gsc.clicks') %}<div class="small-metric"><span>Search Clicks</span><strong>{{ gsc.get('clicks', 0) | fmt }}</strong>{{ change_line(gsc.get('clicks', 0), deltas.get('gsc', {}).get('clicks', 0)) }}</div>{% endif %}
+                {% if mo('gsc.impressions') %}<div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong>{{ change_line(gsc.get('impressions', 0), deltas.get('gsc', {}).get('impressions', 0)) }}</div>{% endif %}
                 {% if mo('gsc.ctr') %}<div class="small-metric"><span>Avg CTR</span><strong>{{ (gsc.get('ctr', 0) * 100) | round(1) }}%</strong></div>{% endif %}
                 {% if mo('gsc.position') %}<div class="small-metric"><span>Avg Position</span><strong>{{ gsc.get('position', 0) | fmt }}</strong></div>{% endif %}
             </div>
@@ -1321,10 +1350,10 @@
             {% set show_dur = ga4.get('avg_session_duration', 0) > 0 %}
             {% set ga4_cols = 2 + (1 if show_conv else 0) + (1 if show_cart else 0) + (1 if show_dur else 0) %}
             <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat({{ ga4_cols }}, 1fr); gap: 12px;">
-                {% if mo('ga4.sessions') %}<div class="small-metric"><span>Sessions</span><strong>{{ ga4.get('sessions', 0) | fmt }}</strong></div>{% endif %}
+                {% if mo('ga4.sessions') %}<div class="small-metric"><span>Sessions</span><strong>{{ ga4.get('sessions', 0) | fmt }}</strong>{{ change_line(ga4.get('sessions', 0), deltas.get('ga4', {}).get('sessions', 0)) }}</div>{% endif %}
                 <div class="small-metric"><span>Organic Sessions</span><strong>{{ ga4.get('organic_sessions', 0) | fmt }}</strong></div>
                 {% if show_conv %}
-                {% if mo('ga4.conversions') %}<div class="small-metric"><span>Conversions</span><strong>{{ ga4.get('conversions', 0) | fmt }}</strong></div>{% endif %}
+                {% if mo('ga4.conversions') %}<div class="small-metric"><span>Conversions</span><strong>{{ ga4.get('conversions', 0) | fmt }}</strong>{{ change_line(ga4.get('conversions', 0), deltas.get('ga4', {}).get('conversions', 0)) }}</div>{% endif %}
                 {% endif %}
                 {% if show_cart %}
                 <div class="small-metric"><span>Add to Carts</span><strong>{{ ga4.get('add_to_carts', 0) | fmt }}</strong></div>
