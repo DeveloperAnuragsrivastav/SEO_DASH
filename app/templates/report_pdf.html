@@ -14,13 +14,15 @@
         :root {
             /* Palette taken from the approved report design: deep green as the
                structural colour, gold as the single accent. */
-            /* Exact palette from the approved report design. */
+            /* White-and-gold by default. A client's Whitelabel theme colour
+               replaces the structural colour everywhere it is used — cover,
+               table headers, chart fills, callouts. */
             --ink: #12181A;
-            --forest: {{ client_theme_color or '#123F41' }};
-            --forest-soft: #1B5457;
-            --yellow: #E9DD8A;
-            --yellow-soft: #FAF6DF;
-            --blue: #123F41;
+            --forest: {{ client_theme_color or '#1A1A18' }};
+            --forest-soft: #2C2C28;
+            --yellow: #EDAA10;
+            --yellow-soft: #FDF4DC;
+            --blue: {{ client_theme_color or '#1A1A18' }};
             --blue-soft: #EEF3F1;
             --line: #E2E8E7;
             --line-soft: #EEF2F1;
@@ -305,6 +307,22 @@
             font-size: 8px;
             font-weight: 700;
             text-align: center;
+        }
+
+        .head-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            flex: none;
+        }
+
+        .head-logo {
+            height: 26px;
+            width: auto;
+            max-width: 110px;
+            object-fit: contain;
+            display: block;
         }
 
         .section-rule {
@@ -1323,6 +1341,17 @@
     {% set activities = comparative_data.activities %}
     {% set screenshots = comparative_data.screenshots %}
     {% set month_label = display_label %}
+    {# A single brand mark throughout: the client's own logo when Whitelabel
+       supplies one, otherwise the agency logo. Never both. #}
+    {% if client_logo_url %}
+      {% set brand_logo = (base_url ~ client_logo_url) if client_logo_url.startswith('/') else client_logo_url %}
+    {% elif client_logo_b64 %}
+      {% set brand_logo = client_logo_b64 %}
+    {% elif agency_logo_b64 %}
+      {% set brand_logo = agency_logo_b64 %}
+    {% else %}
+      {% set brand_logo = base_url ~ '/static/agency_logo.png' %}
+    {% endif %}
     {% set generated_at_display = generated_at %}
     {% set narrative = comparative_data.narrative %}
     {% set status = "Published" %}
@@ -1332,19 +1361,8 @@
         <header class="cover">
             <div class="cover-inner">
                 <div class="brandline">
-                    {% if client_logo_url %}
-                    <img src="{% if client_logo_url.startswith('/') %}{{ base_url }}{{ client_logo_url }}{% else %}{{ client_logo_url }}{% endif %}" class="client-logo" alt="Client Logo" />
-                    {% else %}
-                    <div class="brand-mark">{{ client_name[:2] | upper }}</div>
-                    {% endif %}
                     <div class="brandcopy"><strong>{{ client_name }}</strong><small>{{ client_domain }}</small></div>
-                    <div class="ez-logo">
-                    {% if agency_logo_b64 %}
-                    <img src="{{ agency_logo_b64 }}" alt="Agency Logo" />
-                    {% else %}
-                    <img src="{{ base_url }}/static/agency_logo.png" alt="Agency Logo" />
-                    {% endif %}
-                </div>
+                    <div class="ez-logo"><img src="{{ brand_logo }}" alt="" /></div>
                 </div>
                 <p class="report-label">Monthly SEO Report</p>
                 <h1 style="margin: 0; font-size: 37px; line-height: 1;">Performance Report<br /><span>{{ display_label }}</span></h1>
@@ -1456,7 +1474,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Search Performance</span>
                     <h2 class="section-heading">Google Search Console</h2>
-                </div><span class="source">GSC · auto</span>
+                </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GSC · auto</span></span>
             </div>
             <div class="section-rule"></div>
             <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
@@ -1472,7 +1490,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Website Traffic</span>
                     <h2 class="section-heading">Google Analytics 4</h2>
-                </div><span class="source">GA4 · auto</span>
+                </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
             {% set show_conv = ga4.get('conversions', 0) > 0 %}
@@ -1551,7 +1569,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Page performance</span>
                     <h2 class="section-heading">Top Pages (GSC)</h2>
-                </div><span class="source">GSC · auto</span>
+                </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GSC · auto</span></span>
             </div>
             <div class="section-rule"></div>
             <div class="card" style="margin-bottom: 28px;">
@@ -1593,7 +1611,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Acquisition</span>
                     <h2 class="section-heading">Top Traffic Sources (GA4)</h2>
-                </div><span class="source">GA4 · auto</span>
+                </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
             <div class="card" style="margin-bottom: 28px;">
@@ -1626,7 +1644,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Engagement</span>
                     <h2 class="section-heading">Top Landing Pages (GA4)</h2>
-                </div><span class="source">GA4 · auto</span>
+                </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
             <div class="card" style="margin-bottom: 28px;">
@@ -1660,7 +1678,7 @@
                 <div class="heading-row">
                     <div><span class="eyebrow">Audience</span>
                         <h2 class="section-heading">Device Breakdown (GA4)</h2>
-                    </div><span class="source">GA4 · auto</span>
+                    </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
                 </div>
                 <div class="section-rule"></div>
                 {% if ga4_devices %}
@@ -1687,7 +1705,7 @@
                 <div class="heading-row">
                     <div><span class="eyebrow">Audience</span>
                         <h2 class="section-heading">Top Countries (GA4)</h2>
-                    </div><span class="source">GA4 · auto</span>
+                    </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
                 </div>
                 <div class="section-rule"></div>
                 <div class="card">
