@@ -74,8 +74,15 @@ const WorkManagement: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="card table-wrapper">
-          <table>
+        <div className="page-card-flush data-panel">
+          <div className="data-panel-head">
+            <div>
+              <h2 className="h2">On-Site Activities</h2>
+              <p className="section-sub">Work delivered on the site.</p>
+            </div>
+          </div>
+          <div className="table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Activity Type</th>
@@ -93,6 +100,7 @@ const WorkManagement: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
       

@@ -41,7 +41,13 @@ const Screenshots: React.FC = () => {
         subtitle="View screenshots uploaded via the Data Ingestion Hub."
       />
 
-      <div className="card">
+      <div className="page-card-flush data-panel">
+          <div className="data-panel-head">
+            <div>
+              <h2 className="h2">All Screenshots</h2>
+              <p className="section-sub">Evidence images attached to the report.</p>
+            </div>
+          </div>
         <div className="card-header">
           <h2 className="h2">All Screenshots</h2>
         </div>

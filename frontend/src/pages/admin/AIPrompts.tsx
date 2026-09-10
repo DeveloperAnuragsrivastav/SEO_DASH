@@ -100,14 +100,21 @@ const AIPrompts: React.FC = () => {
         }
       />
 
-        <div className="card table-wrapper">
+        <div className="page-card-flush data-panel">
+          <div className="data-panel-head">
+            <div>
+              <h2 className="h2">Tracked Prompts</h2>
+              <p className="section-sub">Prompts monitored for brand mentions.</p>
+            </div>
+          </div>
+          <div className="table-wrapper">
           <div className="card-header">
             <h3 className="h2">Tracked Prompts</h3>
             <span className="text-subtle text-xs">
               {prompts.filter(p => p.is_active).length} active prompts
             </span>
           </div>
-          <table>
+          <table className="data-table">
             <thead>
               <tr>
                 <th style={{ width: 34 }}>#</th>
@@ -151,6 +158,7 @@ const AIPrompts: React.FC = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         <PaginationBar 

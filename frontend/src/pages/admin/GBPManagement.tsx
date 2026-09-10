@@ -75,8 +75,15 @@ const GBPManagement: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="card table-wrapper">
-          <table>
+        <div className="page-card-flush data-panel">
+          <div className="data-panel-head">
+            <div>
+              <h2 className="h2">Business Profile Records</h2>
+              <p className="section-sub">Calls, directions and website clicks by date.</p>
+            </div>
+          </div>
+          <div className="table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Date</th>
@@ -102,6 +109,7 @@ const GBPManagement: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
       

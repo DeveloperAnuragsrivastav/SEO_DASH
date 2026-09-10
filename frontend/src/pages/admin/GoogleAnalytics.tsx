@@ -74,8 +74,15 @@ const GoogleAnalytics: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="card table-wrapper">
-          <table>
+        <div className="page-card-flush data-panel">
+          <div className="data-panel-head">
+            <div>
+              <h2 className="h2">Analytics Records</h2>
+              <p className="section-sub">Daily sessions, users and conversions.</p>
+            </div>
+          </div>
+          <div className="table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Date</th>
@@ -101,6 +108,7 @@ const GoogleAnalytics: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
       

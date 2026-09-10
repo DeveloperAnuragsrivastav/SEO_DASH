@@ -122,9 +122,12 @@ const Connections: React.FC = () => {
       <div style={{ display: 'grid', gap: 24 }}>
         <div className="card">
           <div className="card-header">
-            <h3 className="h2">Mapped Properties</h3>
+            <div>
+              <h3 className="h2">Mapped Properties</h3>
+              <p className="section-sub">Google properties linked to this client.</p>
+            </div>
           </div>
-          <table>
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Provider</th>

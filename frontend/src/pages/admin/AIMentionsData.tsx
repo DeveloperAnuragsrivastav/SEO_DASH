@@ -71,7 +71,10 @@ const AIMentionsData: React.FC = () => {
 
       <div className="card">
         <div className="card-header">
-          <h3 className="h2">Uploaded Records</h3>
+          <div>
+              <h3 className="h2">Uploaded Records</h3>
+              <p className="section-sub">Where AI tools mention this brand.</p>
+            </div>
         </div>
         
         {records.length === 0 ? (
@@ -80,7 +83,7 @@ const AIMentionsData: React.FC = () => {
           </div>
         ) : (
           <div className="table-wrapper" style={{ overflowX: 'auto', borderTop: '1px solid var(--border-subtle)' }}>
-            <table className="table" style={{ width: '100%' }}>
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>Month</th>

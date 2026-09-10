@@ -3,7 +3,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import api from '../../api/client';
 import { Navigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Users as UsersIcon, FolderOpen, Search, ExternalLink, ChevronDown, Plus } from 'lucide-react';
 
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
@@ -43,6 +43,7 @@ export default function ManagerDashboard() {
   const [newProject, setNewProject] = useState({ name: '', domain: '', business_type: 'ecommerce', locale: 'en-GB', package_keywords: '10' });
   const [existingProjectId, setExistingProjectId] = useState('');
   const [wizardSubmitting, setWizardSubmitting] = useState(false);
+  const [userQuery, setUserQuery] = useState('');
 
   const loadDashboard = async () => {
     try {
@@ -158,6 +159,10 @@ export default function ManagerDashboard() {
     }
   };
 
+  const visibleUsers = users.filter(u =>
+    !userQuery.trim() || u.email.toLowerCase().includes(userQuery.trim().toLowerCase())
+  );
+
   if (loading) return <PageSkeleton stats={2} />;
 
   return (
@@ -173,19 +178,47 @@ export default function ManagerDashboard() {
         }
       />
 
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Your Team Members</div>
-          <div className="stat-value">{stats.total_users}</div>
+      <div className="stat-duo">
+        <div className="stat">
+          <div className="stat-top">
+            <span className="stat-chip lg tone-amber"><UsersIcon size={20} /></span>
+            <div>
+              <div className="stat-label">Your Team Members</div>
+              <div className="stat-value">{stats.total_users}</div>
+              <div className="stat-note plain">Active team members in your agency</div>
+            </div>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Your Projects</div>
-          <div className="stat-value">{stats.total_projects}</div>
+        <div className="stat">
+          <div className="stat-top">
+            <span className="stat-chip lg tone-orange"><FolderOpen size={20} /></span>
+            <div>
+              <div className="stat-label">Your Projects</div>
+              <div className="stat-value">{stats.total_projects}</div>
+              <div className="stat-note plain">Total projects across your team</div>
+            </div>
+          </div>
         </div>
       </div>
 
       <div style={{ marginTop: '40px', display: 'grid', gap: '16px' }}>
-        <div className="section-title"><h3 className="h2">Users &amp; Assignments</h3></div>
+        <div className="section-title">
+          <div>
+            <h3 className="h2">Users &amp; Assignments</h3>
+            <p className="section-sub">Team members and their assigned projects.</p>
+          </div>
+          {users.length > 0 && (
+            <div className="toolbar-search sm">
+              <Search size={14} />
+              <input
+                value={userQuery}
+                onChange={e => setUserQuery(e.target.value)}
+                placeholder="Search team members…"
+                aria-label="Search team members"
+              />
+            </div>
+          )}
+        </div>
         {users.length === 0 ? (
           <div className="page-card">
             <div className="empty-state">
@@ -195,43 +228,47 @@ export default function ManagerDashboard() {
             </div>
           </div>
         ) : (
-          users.map(u => (
+          visibleUsers.map(u => (
             <div key={u.id} className="page-card-flush">
-              <div style={{ padding: '24px', borderBottom: u.assigned_clients?.length ? '1px solid var(--border-subtle)' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <h3 className="h2" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                      {u.email}
-                      {u.is_active ? (
-                        <span className="badge badge-success">ACTIVE</span>
-                      ) : (
-                        <span className="badge badge-neutral">INACTIVE</span>
-                      )}
-                    </h3>
-                    <div className="text-subtle text-xs mono">
-                      Last Login: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
-                    </div>
-                  </div>
-                  <div className="text-sm text-subtle" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span><strong>{u.assigned_clients?.length || 0}</strong> Assigned Projects</span>
-                    <button className="btn btn-secondary btn-sm" onClick={() => openAssignWizard(u.id)}>
-                      + Assign Project
-                    </button>
-                  </div>
+              <div className="member-row">
+                <span className="avatar avatar-lg member-avatar">{u.email.slice(0, 2)}</span>
+
+                <div className="member-identity">
+                  <span className="member-email">
+                    {u.email}
+                    <span className={`status-pill ${u.is_active ? 'on' : ''}`}>
+                      {u.is_active ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </span>
+                  <span className="text-subtle text-xs">
+                    Last Login: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
+                  </span>
                 </div>
+
+                <span className="member-count hide-s">
+                  <strong>{u.assigned_clients?.length || 0}</strong> Assigned Projects
+                </span>
+
+                <button className="btn btn-secondary btn-sm" onClick={() => openAssignWizard(u.id)}>
+                  <Plus size={13} /> Assign Project
+                </button>
+
+                <ChevronDown size={16} className="member-chevron" />
               </div>
               
               {u.assigned_clients && u.assigned_clients.length > 0 && (
-                <div style={{ padding: '16px 24px' }}>
-                  <div style={{ display: 'grid', gap: '8px' }}>
+                <div className="member-projects">
+                  <div className="member-projects-head">Assigned Projects ({u.assigned_clients.length})</div>
+                  <div className="stack">
                     {u.assigned_clients.map(c => (
-                      <div key={c.id} style={{ padding: '12px 16px', background: 'var(--neutral-bg)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
-                          <div className="text-subtle text-xs">{c.domain}</div>
+                      <div key={c.id} className="project-row">
+                        <span className="stat-chip sm tone-amber"><FolderOpen size={14} /></span>
+                        <div className="project-row-text">
+                          <strong>{c.name}</strong>
+                          <small>{c.domain}</small>
                         </div>
                         <Link to={`/admin/clients/${c.id}`} className="btn btn-secondary btn-sm">
-                          Dashboard
+                          <ExternalLink size={13} /> Dashboard
                         </Link>
                       </div>
                     ))}

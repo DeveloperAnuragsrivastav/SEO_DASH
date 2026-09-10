@@ -3,7 +3,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import api from '../../api/client';
 import { Navigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ChevronDown, UserPlus, Users as UsersIcon } from 'lucide-react';
+import { ChevronDown, UserPlus, Users as UsersIcon, UserCheck, UserX, FolderOpen, ExternalLink } from 'lucide-react';
 
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
@@ -155,17 +155,35 @@ export default function Users() {
       />
 
       <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total Managers</div>
-          <div className="stat-value">{managers.length}</div>
+        <div className="stat">
+          <div className="stat-top">
+            <span className="stat-chip lg tone-amber"><UsersIcon size={20} /></span>
+            <div>
+              <div className="stat-label">Total Managers</div>
+              <div className="stat-value">{managers.length}</div>
+              <div className="stat-note plain">Manager accounts in this agency</div>
+            </div>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Active</div>
-          <div className="stat-value" style={{ color: 'var(--up)' }}>{activeCount}</div>
+        <div className="stat">
+          <div className="stat-top">
+            <span className="stat-chip lg tone-green"><UserCheck size={20} /></span>
+            <div>
+              <div className="stat-label">Active</div>
+              <div className="stat-value">{activeCount}</div>
+              <div className="stat-note plain">Currently able to sign in</div>
+            </div>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Deactivated</div>
-          <div className="stat-value">{managers.length - activeCount}</div>
+        <div className="stat">
+          <div className="stat-top">
+            <span className="stat-chip lg tone-rose"><UserX size={20} /></span>
+            <div>
+              <div className="stat-label">Deactivated</div>
+              <div className="stat-value">{managers.length - activeCount}</div>
+              <div className="stat-note plain">Access currently withdrawn</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -188,16 +206,14 @@ export default function Users() {
                 aria-expanded={expandedId === manager.id}
                 onClick={() => setExpandedId(expandedId === manager.id ? null : manager.id)}
               >
-                <span className="avatar avatar-lg">{manager.email.slice(0, 2)}</span>
+                <span className="avatar avatar-lg member-avatar">{manager.email.slice(0, 2)}</span>
 
                 <span className="manager-identity">
                   <span className="manager-email">
                     {manager.email}
-                    {manager.is_active ? (
-                      <span className="badge badge-success">ACTIVE</span>
-                    ) : (
-                      <span className="badge badge-neutral">INACTIVE</span>
-                    )}
+                    <span className={`status-pill ${manager.is_active ? 'on' : ''}`}>
+                      {manager.is_active ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
                   </span>
                   <span className="text-subtle text-xs">
                     Last login {manager.last_login_at ? new Date(manager.last_login_at).toLocaleDateString() : 'never'}
@@ -244,14 +260,15 @@ export default function Users() {
                     {manager.managed_clients?.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {manager.managed_clients.map(c => (
-                          <div key={c.id} className="list-row">
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontWeight: 600, marginBottom: 2, fontSize: 13.5 }}>{c.name}</div>
-                              <div className="text-subtle text-xs">{c.domain}</div>
+                          <div key={c.id} className="project-row">
+                            <span className="stat-chip sm tone-amber"><FolderOpen size={14} /></span>
+                            <div className="project-row-text">
+                              <strong>{c.name}</strong>
+                              <small>{c.domain}</small>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                               <Link to={`/admin/clients/${c.id}`} className="btn btn-secondary btn-sm">
-                                Dashboard
+                                <ExternalLink size={13} /> Dashboard
                               </Link>
                               <button 
                                 onClick={(e) => {

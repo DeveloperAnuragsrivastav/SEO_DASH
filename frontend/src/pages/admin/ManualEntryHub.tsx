@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import api, { API_BASE_URL } from '../../api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
 import ManualGSCUI from '../../components/ManualGSCUI';
 import ManualGA4UI from '../../components/ManualGA4UI';
-import { FileSpreadsheet, X, Check, Circle, ChevronRight, Download,
+import { FileSpreadsheet, X, Check, Download, Database, ChevronRight,
          MapPin, Link as LinkIcon, CheckSquare, Crosshair, Bot, Image as ImageIcon,
-         Search, BarChart2 } from 'lucide-react';
+         Search, BarChart2, MoreVertical, Pencil, HelpCircle } from 'lucide-react';
 
 // --- Manual Entry Forms ---
 
@@ -316,10 +316,11 @@ interface UploaderProps {
   requiresMonth?: boolean;
   icon?: React.ReactNode;
   hint?: string;
+  tone?: string;
   status?: SectionStatus;
 }
 
-const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColumns, manualForm, requiresMonth, icon, hint, status }) => {
+const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColumns, manualForm, requiresMonth, icon, hint, tone, status }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
   const [showManual, setShowManual] = useState(false);
@@ -428,43 +429,63 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
   return (
     <>
       <div
-        className={`checklist-row ${status && !status.loading && status.total > 0 ? 'done' : ''}`}
+        className={`ingest-row ${status && !status.loading && status.total > 0 ? 'done' : ''}`}
         onClick={() => setModalOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalOpen(true); } }}
       >
-        <span className="checklist-mark">
+        <span className="ingest-state">
           {status?.loading
             ? <span className="checklist-spin" />
             : status && status.total > 0
-              ? <Check size={15} />
-              : <Circle size={13} />}
+              ? <Check size={13} />
+              : null}
         </span>
 
-        <span className="checklist-body">
-          <span className="checklist-title">
-            {icon}{title}
+        <span className={`stat-chip sm tone-${tone || 'blue'}`}>{icon}</span>
+
+        <span className="ingest-main">
+          <span className="ingest-title">
+            {title}
+            {!status?.loading && (
+              <span className={`badge ${status && status.total > 0 ? 'badge-success' : 'badge-warning'}`}>
+                {status && status.total > 0 ? 'Completed' : 'Pending'}
+              </span>
+            )}
           </span>
-          <span className="checklist-meta">
-            {status?.loading
-              ? 'Checking…'
-              : status && status.total > 0
-                ? <>{status.total.toLocaleString()} {status.total === 1 ? 'record' : 'records'}{status.latest ? ` · latest ${status.latest}` : ''}</>
-                : (hint || 'Nothing added yet')}
+          <span className="ingest-desc">{hint}</span>
+        </span>
+
+        <span className="ingest-count">
+          <Database size={13} />
+          <span>
+            <b>
+              {status?.loading
+                ? 'Checking…'
+                : status && status.total > 0
+                  ? `${status.total.toLocaleString()} ${status.total === 1 ? 'record' : 'records'}`
+                  : 'No data added yet'}
+            </b>
+            <small>{status?.latest ? `Last updated ${status.latest}` : '—'}</small>
           </span>
         </span>
 
-        <span className="checklist-actions">
+        <span className="ingest-actions" onClick={e => e.stopPropagation()}>
           {templateColumns && (
-            <button className="btn ghost btn-sm hide-s" onClick={downloadTemplate}>
-              <Download size={13} /> Template
+            <button className="btn btn-secondary btn-sm hide-s" onClick={downloadTemplate}>
+              <Download size={13} /> Download Template
             </button>
           )}
-          <span className="btn btn-secondary btn-sm">
-            {status && !status.loading && status.total > 0 ? 'Update' : 'Add data'}
-            <ChevronRight size={13} />
-          </span>
+          <button
+            className={`btn btn-sm ${status && !status.loading && status.total > 0 ? 'btn-secondary' : 'btn-primary'}`}
+            onClick={() => setModalOpen(true)}
+          >
+            {status && !status.loading && status.total > 0
+              ? <><Pencil size={13} /> Update</>
+              : <><Download size={13} /> Add Data</>}
+          </button>
+          <span className="ingest-more" aria-hidden="true"><MoreVertical size={15} /></span>
         </span>
       </div>
 
@@ -641,6 +662,20 @@ const ManualEntryHub: React.FC = () => {
   const pct = Math.round((checked / total) * 100);
   const thisMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
+  const STEP_COPY: Record<SectionKey, { label: string; hint: string }> = {
+    keywords: { label: 'Add Keyword Performance', hint: 'Rankings for the keywords you track' },
+    links: { label: 'Add Backlinks', hint: 'Links built for this client' },
+    work: { label: 'Add On-Site SEO Activities', hint: 'Work done on the site this month' },
+    gbp: { label: 'Add GBP Metrics', hint: 'Calls, directions and clicks' },
+    ai: { label: 'Add Target AI Prompts', hint: 'Whether AI tools mention this brand' },
+    screenshots: { label: 'Add Screenshots', hint: 'Evidence images to attach to the report' },
+    gsc: { label: 'Add Search Console', hint: 'Clicks, impressions, CTR and position' },
+    ga4: { label: 'Add Google Analytics', hint: 'Sessions, users and conversions' },
+  };
+
+  const nextKey = activeKeys.find(k => !statuses[k].loading && statuses[k].total === 0);
+  const nextStep = nextKey ? STEP_COPY[nextKey] : null;
+
   return (
     <>
       <PageHeader
@@ -653,31 +688,48 @@ const ManualEntryHub: React.FC = () => {
         ]}
       />
 
-      <div className="page-card checklist-progress">
-        <div className="checklist-progress-head">
-          <div>
-            <div className="checklist-progress-count">
-              {stillLoading ? 'Checking data…' : `${checked} of ${total} data sets ready`}
+      <div className="progress-card">
+        <span className="stat-chip lg tone-amber"><Database size={22} /></span>
+
+        <div className="progress-main">
+          <h2 className="progress-title">Data Ingestion Progress</h2>
+          <p className="progress-count">
+            {stillLoading ? 'Checking data…' : `${checked} of ${total} data sets ready`}
+          </p>
+          <p className="progress-sub">
+            {checked === total
+              ? `Everything is in. You can generate the ${thisMonth} report.`
+              : `Add the remaining data, then generate the ${thisMonth} report.`}
+          </p>
+          <div className="progress-bar-row">
+            <div className={`bar checklist-bar ${checked < total ? 'partial' : ''}`}>
+              <span className="fill" style={{ width: `${stillLoading ? 0 : pct}%` }} />
             </div>
-            <div className="text-subtle text-xs">
-              {checked === total
-                ? `Everything is in. You can generate the ${thisMonth} report.`
-                : `Add the remaining data, then generate the ${thisMonth} report.`}
-            </div>
+            <span className="progress-pct">{stillLoading ? '—' : `${pct}%`}</span>
           </div>
-          <Link to={`/admin/clients/${clientId}`} className="btn btn-secondary btn-sm">
-            Back to Overview
-          </Link>
         </div>
 
-        <div className={`bar checklist-bar ${checked < total ? 'partial' : ''}`}>
-          <span className="fill" style={{ width: `${stillLoading ? 0 : pct}%` }} />
-        </div>
+        {nextStep && (
+          <div className="next-step">
+            <div className="next-step-head">
+              <span>Next Step</span>
+              <ChevronRight size={14} />
+            </div>
+            <div className="next-step-body">
+              <span className="stat-chip sm tone-blue"><FileSpreadsheet size={14} /></span>
+              <div>
+                <strong>{nextStep.label}</strong>
+                <small>{nextStep.hint}</small>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="checklist">
         <IngestionCard
           title="Keyword Performance"
+          tone="violet"
           icon={<Crosshair size={15} />}
           hint="Rankings for the keywords you track"
           status={statuses.keywords}
@@ -688,6 +740,7 @@ const ManualEntryHub: React.FC = () => {
 
         <IngestionCard
           title="Performed Backlinks Activities"
+          tone="blue"
           icon={<LinkIcon size={15} />}
           hint="Links built for this client"
           status={statuses.links}
@@ -699,6 +752,7 @@ Aug'26,Guest Post,https://example.com/post,1"
 
         <IngestionCard
           title="On-Site SEO Activities Performed"
+          tone="green"
           icon={<CheckSquare size={15} />}
           hint="Work done on the site this month"
           status={statuses.work}
@@ -710,6 +764,7 @@ Optimized Homepage,1,Updated meta titles"
 
         <IngestionCard
           title="GBP Metrics"
+          tone="rose"
           icon={<MapPin size={15} />}
           hint="Google Business Profile calls, directions and clicks"
           status={statuses.gbp}
@@ -721,6 +776,7 @@ Aug'26,100,50,300,150,5,2,10,1"
 
         <IngestionCard
           title="Target AI Prompts"
+          tone="amber"
           icon={<Bot size={15} />}
           hint="Whether AI tools mention this brand"
           status={statuses.ai}
@@ -733,6 +789,7 @@ Aug'26,Best pizza in NY,Yes,No,Yes,Yes,No"
         {manualTraffic?.gsc && (
           <IngestionCard
             title="Search Console"
+          tone="blue"
             icon={<Search size={15} />}
             hint="Clicks, impressions, CTR and position"
             status={statuses.gsc}
@@ -746,6 +803,7 @@ Aug'26,Best pizza in NY,Yes,No,Yes,Yes,No"
         {manualTraffic?.ga4 && (
           <IngestionCard
             title="Google Analytics"
+          tone="orange"
             icon={<BarChart2 size={15} />}
             hint="Sessions, users, engagement and conversions"
             status={statuses.ga4}
@@ -758,11 +816,20 @@ Aug'26,Best pizza in NY,Yes,No,Yes,Yes,No"
 
         <IngestionCard
           title="Screenshots"
+          tone="orange"
           icon={<ImageIcon size={15} />}
           hint="Evidence images to attach to the report"
           status={statuses.screenshots}
           manualForm={<ScreenshotsManualForm clientId={clientId} />}
         />
+      </div>
+
+      <div className="help-strip">
+        <span className="stat-chip sm tone-violet"><HelpCircle size={14} /></span>
+        <div>
+          <strong>Need help adding data?</strong>
+          <small>Download a template for any row above, or upload an Excel sheet you already have.</small>
+        </div>
       </div>
     </>
   );
