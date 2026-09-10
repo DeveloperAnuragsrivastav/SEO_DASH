@@ -64,9 +64,13 @@ api.interceptors.response.use(
                  : status === 503 ? '🔧 Service Unavailable: '
                  : '';
 
-    // Show the toast — but let individual page catch blocks override if they want
-    // We use a slight delay so page-level toasts can suppress this if needed
-    if (!(error as any)._toastHandled) {
+    // Show the toast — but let individual page catch blocks override if they want.
+    // NOTE: `_toastHandled` set inside a caller's .catch() runs *after* this
+    // interceptor, so it cannot suppress anything. To opt out, pass
+    // `{ skipErrorToast: true }` in the request config — that is visible here.
+    const skip = (error.config as any)?.skipErrorToast === true;
+
+    if (!skip && !(error as any)._toastHandled) {
       toast.error(prefix + message, {
         duration: 5000,
       });

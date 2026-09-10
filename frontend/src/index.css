@@ -1687,6 +1687,239 @@ code {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   CLIENT OVERVIEW — headline KPIs, report status, area summaries
+   ═══════════════════════════════════════════════════════════════════ */
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kpi-row .lab > svg { color: var(--brand-600); }
+.kpi-row .sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+@media (max-width: 1100px) { .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .kpi-row { grid-template-columns: 1fr; } }
+
+/* ── Report status strip ─────────────────────────────────────────── */
+
+.report-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 20px;
+}
+
+.report-status-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+
+.report-status-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+.report-status-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.report-status-note {
+  flex-basis: 100%;
+  margin-top: 4px;
+  color: var(--ink-3);
+}
+
+/* ── Area summary cards ──────────────────────────────────────────── */
+
+.area-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1100px) { .area-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .area-grid { grid-template-columns: 1fr; } }
+
+.area-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.area-card:hover {
+  border-color: var(--n-300);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.area-card:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--brand-400); }
+
+.area-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+
+.area-label > svg { color: var(--ink-3); }
+
+.area-value {
+  font-family: var(--disp);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  color: var(--ink);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.area-value small {
+  font-family: var(--body);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  margin-left: 3px;
+}
+
+.area-detail { font-size: 12px; color: var(--ink-3); }
+
+.area-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  transition: color 0.14s var(--ease), gap 0.16s var(--ease);
+}
+
+.area-card:hover .area-cta { color: var(--brand-600); gap: 8px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DATA CHECKLIST (Add Data)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.checklist-progress { padding: 18px 20px; margin-bottom: 16px; }
+
+.checklist-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.checklist-progress-count {
+  font-family: var(--disp);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+
+/* Higher specificity than the generic `.bar .fill` defined later in this file */
+.bar.checklist-bar { height: 6px; }
+.bar.checklist-bar .fill { background: var(--success-500); }
+.bar.checklist-bar.partial .fill { background: var(--brand-500); }
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), background-color 0.16s var(--ease);
+}
+
+.checklist-row:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); }
+.checklist-row:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--brand-400); }
+
+/* Tick */
+.checklist-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--canvas-2);
+  color: var(--ink-4);
+  flex-shrink: 0;
+  transition: background-color 0.16s var(--ease), color 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+
+.checklist-row.done .checklist-mark {
+  background: var(--up-soft);
+  border-color: var(--up-border);
+  color: var(--success-500);
+}
+
+.checklist-spin {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--line);
+  border-top-color: var(--ink-4);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.checklist-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+
+.checklist-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  color: var(--ink);
+}
+
+.checklist-title > svg { color: var(--ink-3); flex-shrink: 0; }
+
+.checklist-meta { font-size: 12.5px; color: var(--ink-3); }
+
+.checklist-row.done .checklist-meta { color: var(--ink-2); }
+
+.checklist-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* The trailing chip is a span inside a clickable row, not its own button */
+.checklist-actions .btn-secondary { pointer-events: none; }
+
+@media (max-width: 560px) {
+  .checklist-row { padding: 12px 14px; gap: 10px; }
+  .checklist-actions .btn-secondary { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    DATA INGESTION TILES
    ═══════════════════════════════════════════════════════════════════ */
 

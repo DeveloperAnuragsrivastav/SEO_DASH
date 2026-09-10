@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import api, { API_BASE_URL } from '../../api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
-import { Upload, FileSpreadsheet, X } from 'lucide-react';
+import PageHeader from '../../components/ui/PageHeader';
+import { FileSpreadsheet, X, Check, Circle, ChevronRight, Download,
+         MapPin, Link as LinkIcon, CheckSquare, Crosshair, Bot, Image as ImageIcon } from 'lucide-react';
 
 // --- Manual Entry Forms ---
 
@@ -253,15 +255,24 @@ const ScreenshotsManualForm = ({ clientId }: { clientId: string }) => {
 // --- Main Components ---
 
 
+interface SectionStatus {
+  loading: boolean;
+  total: number;
+  latest: string | null;
+}
+
 interface UploaderProps {
   title: string;
   endpoint?: string;
   templateColumns?: string;
   manualForm: React.ReactNode;
   requiresMonth?: boolean;
+  icon?: React.ReactNode;
+  hint?: string;
+  status?: SectionStatus;
 }
 
-const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColumns, manualForm, requiresMonth }) => {
+const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColumns, manualForm, requiresMonth, icon, hint, status }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
   const [showManual, setShowManual] = useState(false);
@@ -369,22 +380,45 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
 
   return (
     <>
-      <div className="card ingest-tile" onClick={() => setModalOpen(true)}>
-        <div className="card-header">
-          <h3 className="h2">{title}</h3>
+      <div
+        className={`checklist-row ${status && !status.loading && status.total > 0 ? 'done' : ''}`}
+        onClick={() => setModalOpen(true)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalOpen(true); } }}
+      >
+        <span className="checklist-mark">
+          {status?.loading
+            ? <span className="checklist-spin" />
+            : status && status.total > 0
+              ? <Check size={15} />
+              : <Circle size={13} />}
+        </span>
+
+        <span className="checklist-body">
+          <span className="checklist-title">
+            {icon}{title}
+          </span>
+          <span className="checklist-meta">
+            {status?.loading
+              ? 'Checking…'
+              : status && status.total > 0
+                ? <>{status.total.toLocaleString()} {status.total === 1 ? 'record' : 'records'}{status.latest ? ` · latest ${status.latest}` : ''}</>
+                : (hint || 'Nothing added yet')}
+          </span>
+        </span>
+
+        <span className="checklist-actions">
           {templateColumns && (
-            <button className="btn ghost btn-sm" onClick={downloadTemplate}>
-              Template
+            <button className="btn ghost btn-sm hide-s" onClick={downloadTemplate}>
+              <Download size={13} /> Template
             </button>
           )}
-        </div>
-        <div className="card-body ingest-tile-body">
-          <span className="ingest-tile-icon"><Upload size={20} /></span>
-          <div className="ingest-tile-title">Click to inject data</div>
-          <div className="text-subtle text-xs">
-            {endpoint ? "Supports Excel (.xlsx), and manual entry" : "Supports manual entry"}
-          </div>
-        </div>
+          <span className="btn btn-secondary btn-sm">
+            {status && !status.loading && status.total > 0 ? 'Update' : 'Add data'}
+            <ChevronRight size={13} />
+          </span>
+        </span>
       </div>
 
       {modalOpen && (
@@ -469,21 +503,148 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
   );
 };
 
+const SECTION_KEYS = ['gbp', 'links', 'work', 'keywords', 'ai', 'screenshots'] as const;
+type SectionKey = typeof SECTION_KEYS[number];
+
+/** Read-only presence check per data set — drives the checklist ticks. */
+const STATUS_PATHS: Record<SectionKey, string> = {
+  gbp: 'manual-gbp',
+  links: 'links',
+  work: 'work',
+  keywords: 'keywords/history',
+  ai: 'ai_mentions',
+  screenshots: 'screenshots',
+};
+
+const DATE_FIELDS = ['captured_on', 'created_on', 'month', 'date'];
+
+/** Newest date visible in the returned page, formatted for display. */
+function latestDate(items: any[]): string | null {
+  let best: number | null = null;
+  for (const it of items || []) {
+    for (const f of DATE_FIELDS) {
+      const raw = it?.[f];
+      if (!raw) continue;
+      const t = new Date(raw).getTime();
+      if (!Number.isNaN(t) && (best === null || t > best)) best = t;
+      break;
+    }
+  }
+  if (best === null) return null;
+  return new Date(best).toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 const ManualEntryHub: React.FC = () => {
   const { clientId } = useParams();
 
+  const [statuses, setStatuses] = useState<Record<SectionKey, SectionStatus>>(() =>
+    Object.fromEntries(SECTION_KEYS.map(k => [k, { loading: true, total: 0, latest: null }])) as Record<SectionKey, SectionStatus>
+  );
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+
+    SECTION_KEYS.forEach((key) => {
+      api.get(`/clients/${clientId}/${STATUS_PATHS[key]}`, { skipErrorToast: true } as any)
+        .then((res) => {
+          if (cancelled) return;
+          const items = res.data?.items || [];
+          setStatuses(prev => ({
+            ...prev,
+            [key]: { loading: false, total: res.data?.total ?? items.length, latest: latestDate(items) },
+          }));
+        })
+        .catch(() => {
+          // A missing/empty data set is a normal state here, not an error worth shouting about.
+          if (cancelled) return;
+          setStatuses(prev => ({ ...prev, [key]: { loading: false, total: 0, latest: null } }));
+        });
+    });
+
+    return () => { cancelled = true; };
+  }, [clientId]);
+
   if (!clientId) return null;
+
+  const checked = SECTION_KEYS.filter(k => !statuses[k].loading && statuses[k].total > 0).length;
+  const stillLoading = SECTION_KEYS.some(k => statuses[k].loading);
+  const total = SECTION_KEYS.length;
+  const pct = Math.round((checked / total) * 100);
+  const thisMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
   return (
     <>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 className="h1">Data Ingestion Hub</h1>
-        <p className="text-subtle" style={{ marginTop: '4px' }}>Central hub to inject data (Upload or Manual) into the system.</p>
+      <PageHeader
+        title="Add Data"
+        subtitle="Everything this client's report is built from. Work down the list."
+        breadcrumbs={[
+          { label: 'Home', href: '/' },
+          { label: 'Clients', href: '/admin/clients' },
+          { label: 'Add Data' },
+        ]}
+      />
+
+      <div className="page-card checklist-progress">
+        <div className="checklist-progress-head">
+          <div>
+            <div className="checklist-progress-count">
+              {stillLoading ? 'Checking data…' : `${checked} of ${total} data sets ready`}
+            </div>
+            <div className="text-subtle text-xs">
+              {checked === total
+                ? `Everything is in. You can generate the ${thisMonth} report.`
+                : `Add the remaining data, then generate the ${thisMonth} report.`}
+            </div>
+          </div>
+          <Link to={`/admin/clients/${clientId}`} className="btn btn-secondary btn-sm">
+            Back to Overview
+          </Link>
+        </div>
+
+        <div className={`bar checklist-bar ${checked < total ? 'partial' : ''}`}>
+          <span className="fill" style={{ width: `${stillLoading ? 0 : pct}%` }} />
+        </div>
       </div>
 
-      <div className="grid-cols-2">
+      <div className="checklist">
+        <IngestionCard
+          title="Keyword Performance"
+          icon={<Crosshair size={15} />}
+          hint="Rankings for the keywords you track"
+          status={statuses.keywords}
+          endpoint={`/clients/${clientId}/keywords/upload_csv`}
+          templateColumns="Keyword,SV,Initial Ranking,Aug'26"
+          manualForm={<KeywordsManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
+        />
+
+        <IngestionCard
+          title="Performed Backlinks Activities"
+          icon={<LinkIcon size={15} />}
+          hint="Links built for this client"
+          status={statuses.links}
+          endpoint={`/clients/${clientId}/links/upload_csv`}
+          templateColumns="Month,Activity Name,URL,Count
+Aug'26,Guest Post,https://example.com/post,1"
+          manualForm={<LinksManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
+        />
+
+        <IngestionCard
+          title="On-Site SEO Activities Performed"
+          icon={<CheckSquare size={15} />}
+          hint="Work done on the site this month"
+          status={statuses.work}
+          endpoint={`/clients/${clientId}/work/upload_csv`}
+          templateColumns="Activity Type,Count,Notes
+Optimized Homepage,1,Updated meta titles"
+          manualForm={<WorkManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
+        />
+
         <IngestionCard
           title="GBP Metrics"
+          icon={<MapPin size={15} />}
+          hint="Google Business Profile calls, directions and clicks"
+          status={statuses.gbp}
           endpoint={`/clients/${clientId}/manual-gbp/upload_csv`}
           templateColumns="Date,Impressions Desktop Maps,Impressions Desktop Search,Impressions Mobile Maps,Impressions Mobile Search,Calls,Direction Requests,Website Clicks,Bookings
 Aug'26,100,50,300,150,5,2,10,1"
@@ -491,27 +652,10 @@ Aug'26,100,50,300,150,5,2,10,1"
         />
 
         <IngestionCard
-          title="Performed Backlinks Activities"
-          endpoint={`/clients/${clientId}/links/upload_csv`}
-          templateColumns="Month,Activity Name,URL,Count
-Aug'26,Guest Post,https://example.com/post,1"
-          manualForm={<LinksManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
-        />
-        <IngestionCard
-          title="On-Site SEO Activities Performed"
-          endpoint={`/clients/${clientId}/work/upload_csv`}
-          templateColumns="Activity Type,Count,Notes
-Optimized Homepage,1,Updated meta titles"
-          manualForm={<WorkManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
-        />
-        <IngestionCard
-          title="Keyword Performance"
-          endpoint={`/clients/${clientId}/keywords/upload_csv`}
-          templateColumns="Keyword,SV,Initial Ranking,Aug'26"
-          manualForm={<KeywordsManualForm clientId={clientId} onComplete={() => window.location.reload()} />}
-        />
-        <IngestionCard
           title="Target AI Prompts"
+          icon={<Bot size={15} />}
+          hint="Whether AI tools mention this brand"
+          status={statuses.ai}
           endpoint={`/clients/${clientId}/ai_mentions/upload_csv`}
           templateColumns="Month,Prompts,ChatGPT,AI Overview,Google Gemini,Perplexity,Claude
 Aug'26,Best pizza in NY,Yes,No,Yes,Yes,No"
@@ -520,6 +664,9 @@ Aug'26,Best pizza in NY,Yes,No,Yes,Yes,No"
 
         <IngestionCard
           title="Screenshots"
+          icon={<ImageIcon size={15} />}
+          hint="Evidence images to attach to the report"
+          status={statuses.screenshots}
           manualForm={<ScreenshotsManualForm clientId={clientId} />}
         />
       </div>

@@ -39,3 +39,4 @@ htmlcov/
 .ruff_cache/
 google_credentials.json
 frontend/node_modules/
+celerybeat-schedule
