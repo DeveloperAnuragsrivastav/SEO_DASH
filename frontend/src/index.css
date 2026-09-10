@@ -2372,6 +2372,198 @@ a.src.man:hover { border-color: var(--brand-400); }
 .metric-card.is-row .metric-input { width: 92px; flex: none; }
 
 /* ═══════════════════════════════════════════════════════════════════
+   IN-PLACE REPORT EDITING
+   Edit the report itself rather than a form about it: hover anything,
+   hide it or correct it, and watch the real page change.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.report-view.is-editing { padding-bottom: 96px; }
+
+/* Anything editable gets a quiet ring on hover */
+.report-view.is-editing [data-item-id],
+.report-view.is-editing [data-section-id] {
+  position: relative;
+  border-radius: var(--radius-sm);
+  transition: box-shadow 0.14s var(--ease), opacity 0.16s var(--ease);
+}
+
+.report-view.is-editing [data-item-id]:hover {
+  box-shadow: 0 0 0 2px var(--brand-300);
+  cursor: default;
+}
+
+.report-view.is-editing [data-section-id]:hover {
+  box-shadow: 0 0 0 2px var(--line);
+}
+
+/* Hidden things stay visible but clearly excluded */
+.report-view.is-editing .re-hidden {
+  opacity: 0.38;
+  filter: grayscale(1);
+  box-shadow: inset 0 0 0 1px var(--n-300);
+}
+
+.report-view.is-editing tr.re-hidden td { text-decoration: line-through; }
+
+/* ── Floating control cluster ─────────────────────────────────────── */
+
+.re-controls {
+  position: fixed;
+  z-index: 900;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: re-pop 0.12s var(--ease-out) both;
+}
+
+@keyframes re-pop {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.re-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--body);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
+}
+
+.re-control:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+/* ── Inline value editor ──────────────────────────────────────────── */
+
+.re-inline {
+  position: fixed;
+  z-index: 950;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--brand-400);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  animation: re-pop 0.12s var(--ease-out) both;
+}
+
+.re-inline-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+
+.re-inline-row { display: flex; align-items: center; gap: 6px; }
+.re-inline-row .form-input,
+.re-inline-row .form-select { height: 32px; width: 120px; font-family: var(--mono); font-size: 13px; }
+.re-inline-unit { font-size: 12px; color: var(--ink-3); }
+
+/* ── Command bar ──────────────────────────────────────────────────── */
+
+.re-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 940;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  max-width: calc(100vw - 32px);
+  padding: 9px 10px 9px 16px;
+  background: var(--ink);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-xl);
+  animation: re-bar-in 0.2s var(--ease-out) both;
+}
+
+@keyframes re-bar-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.re-bar-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+
+.re-bar-status strong { color: #fff; font-weight: 600; }
+
+.re-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(237, 170, 16, 0.25);
+}
+
+.re-bar-count { font-variant-numeric: tabular-nums; }
+
+.re-bar-ai {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 280px;
+  flex: 1;
+}
+
+.re-bar-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-family: var(--body);
+  font-size: 13px;
+  outline: none;
+}
+
+.re-bar-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+.re-bar-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--brand-300);
+  padding-left: 2px;
+}
+
+.re-bar-note.ignored { color: rgba(255, 255, 255, 0.5); }
+
+.re-bar-actions { display: flex; align-items: center; gap: 6px; }
+.re-bar-actions .ghost { color: rgba(255, 255, 255, 0.7); border-color: transparent; }
+.re-bar-actions .ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+@media (max-width: 720px) {
+  .re-bar { left: 12px; right: 12px; transform: none; border-radius: var(--radius-lg); }
+  @keyframes re-bar-in { from { opacity: 0; } to { opacity: 1; } }
+  .re-bar-ai { min-width: 0; width: 100%; order: 3; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    REPORT-SHARED UTILITIES
    ═══════════════════════════════════════════════════════════════════ */
 

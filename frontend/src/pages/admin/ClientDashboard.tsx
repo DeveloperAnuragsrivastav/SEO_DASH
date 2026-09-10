@@ -455,12 +455,15 @@ const ClientDashboard: React.FC = () => {
             </div>
 
             <div className="report-status-actions">
-              <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="btn btn-secondary">
-                <FileText size={15} /> View
-              </Link>
-              <button className="btn btn-primary" onClick={openGenerateModal}>
-                Generate / View Reports <ArrowRight size={14} />
+              {/* One primary action: open this month's report. Everything else
+                  (older periods, PDF export, generating a new one) lives behind
+                  "All reports", so the two are no longer competing verbs. */}
+              <button className="btn ghost" onClick={openGenerateModal}>
+                All reports
               </button>
+              <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="btn btn-primary">
+                Open report <ArrowRight size={14} />
+              </Link>
             </div>
 
             {daysRemaining > 0 && report.status !== 'published' && (

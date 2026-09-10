@@ -102,7 +102,7 @@ const RankingsSection: React.FC<RankingsSectionProps> = ({ rankings, keywords, m
   }, [kwList, kwFilter, kwSearch]);
 
   return (
-    <section id="rankings" className="report-section">
+    <section id="rankings" className="report-section" data-section-id="rankings">
       <div className="head">
         <div>
           <div className="eyebrow">Keyword Performance</div>
@@ -196,7 +196,7 @@ const RankingsSection: React.FC<RankingsSectionProps> = ({ rankings, keywords, m
               filteredKw.map((kw: any, i: number) => {
                 const change = kw.change || 0;
                 return (
-                  <tr key={kw.keyword_id || i}>
+                  <tr key={kw.keyword_id || i} data-item-id={`rankings.kw.${kw.keyword_id ?? `i${i}`}`}>
                     <td className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 12, textAlign: 'center' }}>{i + 1}</td>
                     <td className="kwname">{kw.term || kw.keyword || '—'}</td>
                     <td className="num">{kw.search_volume ? kw.search_volume.toLocaleString() : '—'}</td>

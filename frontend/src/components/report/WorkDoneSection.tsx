@@ -12,7 +12,7 @@ const WorkDoneSection: React.FC<WorkDoneSectionProps> = ({ activities, screensho
   const [selectedImg, setSelectedImg] = useState<string | null>(null);
 
   return (
-    <section id="work" className="report-section">
+    <section id="work" className="report-section" data-section-id="work">
       <div className="head">
         <div>
           <div className="eyebrow">Project Delivery</div>
@@ -36,7 +36,7 @@ const WorkDoneSection: React.FC<WorkDoneSectionProps> = ({ activities, screensho
               <h3 className="h2" style={{ fontSize: '16px', marginBottom: '16px' }}>Delivered Work</h3>
               <div className="grid grid-cols-2">
                 {activities.map((a: any, i: number) => (
-                  <div key={i} className="bar-row" style={{ gridTemplateColumns: '1fr auto auto', padding: '12px 16px', background: 'var(--neutral-bg)', borderRadius: 'var(--radius-sm)' }}>
+                  <div key={i} className="bar-row" style={{ gridTemplateColumns: '1fr auto auto', padding: '12px 16px', background: 'var(--neutral-bg)', borderRadius: 'var(--radius-sm)' }} data-item-id={`work.act.${i}`}>
                     <div className="lab" style={{ color: 'var(--ink)' }}>✓ {a.activity_type}</div>
                     <div className="num" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>{a.count}</div>
                   </div>
@@ -53,7 +53,7 @@ const WorkDoneSection: React.FC<WorkDoneSectionProps> = ({ activities, screensho
               </div>
               <div className="shots-grid">
                 {screenshots.map((s: any, i: number) => (
-                  <div key={i} className="shot-card">
+                  <div key={i} className="shot-card" data-item-id={`work.shot.${s.id ?? `i${i}`}`}>
                     <div className="thumb">
                       {s.file_url && (
                         <img 

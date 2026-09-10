@@ -59,7 +59,7 @@ const AIVisibilitySection: React.FC<AIVisibilitySectionProps> = ({ aiVisibility,
     }
   });
   return (
-    <section id="ai" className="report-section">
+    <section id="ai" className="report-section" data-section-id="ai_visibility">
       <div className="head">
         <div>
           <div className="eyebrow">Search Generative Experience</div>

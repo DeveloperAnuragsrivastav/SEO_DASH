@@ -34,7 +34,7 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas, 
   return (
     <>
       {/* ── GSC Section ── */}
-      <section id="search" className="report-section">
+      <section id="search" className="report-section" data-section-id="gsc">
         <div className="head">
           <div>
             <div className="eyebrow">Search Performance</div>
@@ -46,28 +46,28 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas, 
         
         <div className="grid g4">
           {show('gsc.clicks') && (
-          <div className="kpi">
+          <div className="kpi" data-item-id="gsc.clicks">
             <div className="lab">Search Clicks</div>
             <div className="val">{fmt(gscClicks)}</div>
             <div className="sub">{deltaEl(gscClicks, gscClicks - (deltas.gsc?.clicks || 0))} vs prev</div>
           </div>
           )}
           {show('gsc.impressions') && (
-          <div className="kpi">
+          <div className="kpi" data-item-id="gsc.impressions">
             <div className="lab">Impressions</div>
             <div className="val">{fmt(gscImpressions)}</div>
             <div className="sub">{deltaEl(gscImpressions, gscImpressions - (deltas.gsc?.impressions || 0))} vs prev</div>
           </div>
           )}
           {show('gsc.ctr') && (
-          <div className="kpi">
+          <div className="kpi" data-item-id="gsc.ctr">
             <div className="lab">Avg CTR</div>
             <div className="val">{(gscCtr ? (gscCtr * 100).toFixed(1) : 0)}%</div>
             <div className="sub">click-through rate</div>
           </div>
           )}
           {show('gsc.position') && (
-          <div className="kpi">
+          <div className="kpi" data-item-id="gsc.position">
             <div className="lab">Avg Position</div>
             <div className="val">{(gscPosition ? gscPosition.toFixed(1) : 0)}</div>
             <div className="sub">search ranking</div>
@@ -116,7 +116,7 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas, 
       </section>
 
       {/* ── GA4 Section ── */}
-      <section id="traffic" className="report-section">
+      <section id="traffic" className="report-section" data-section-id="ga4">
         <div className="head">
           <div>
             <div className="eyebrow">Website Traffic</div>
@@ -128,7 +128,7 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas, 
 
         <div className="grid g3">
           {show('ga4.sessions') && (
-          <div className="kpi">
+          <div className="kpi" data-item-id="ga4.sessions">
             <div className="lab">Total Sessions</div>
             <div className="val">{fmt(ga4.sessions || 0)}</div>
             <div className="sub">{fmt(ga4.users || 0)} total users</div>
@@ -140,7 +140,7 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas, 
             <div className="sub">from search engines</div>
           </div>
           {show('ga4.conversions') && (ga4.conversions || 0) > 0 && (
-            <div className="kpi">
+            <div className="kpi" data-item-id="ga4.conversions">
               <div className="lab">Conversions</div>
               <div className="val">{fmt(ga4.conversions)}</div>
               <div className="sub">key events</div>
@@ -311,7 +311,7 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas, 
             return (
               <div className={`grid g${Math.max(1, metrics.length)}`}>
                 {metrics.map((m, i) => (
-                  <div key={i} className="kpi" style={{ border: 'none', padding: 0 }}>
+                  <div key={i} className="kpi" data-item-id={m.id} style={{ border: 'none', padding: 0 }}>
                     <div className="lab">{m.label}</div>
                     <div className="val" style={{ fontSize: '28px' }}>{fmt(m.value)}</div>
                   </div>
