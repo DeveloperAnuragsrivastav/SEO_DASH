@@ -245,10 +245,17 @@ export default function ManagerDashboard() {
 
       {showWizard && (
         <div className="modal-backdrop">
-          <div className="modal">
-            <h3 className="h2" style={{ marginBottom: 20 }}>
-              {wizardStep === 1 ? 'Create Team Member' : 'Up next: Create Project'}
-            </h3>
+          <div className={`modal ${wizardStep === 2 ? 'modal-lg' : ''}`}>
+            <h2 className="modal-title">
+              {wizardStep === 1 ? 'Create Team Member' : 'Create Project'}
+            </h2>
+            <p className="modal-desc">
+              {wizardStep === 1
+                ? 'Step 1 of 2 · account credentials'
+                : wizardStep === 2
+                  ? 'Step 2 of 2 · create and assign a new SEO project to this team member.'
+                  : 'Assign an existing project to this team member.'}
+            </p>
             
             <div className="wizard-steps">
               <div className={`wizard-step ${wizardStep >= 1 ? (wizardStep > 1 ? 'done' : 'active') : ''}`} />
@@ -280,7 +287,7 @@ export default function ManagerDashboard() {
                     placeholder="••••••••"
                   />
                 </div>
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16 }}>
+                <div className="modal-actions">
                   <button type="button" onClick={closeWizard} className="btn btn-secondary" disabled={wizardSubmitting}>Cancel</button>
                   <button type="submit" className="btn btn-primary" disabled={wizardSubmitting}>
                     {wizardSubmitting ? 'Creating...' : 'Create User →'}
@@ -289,8 +296,7 @@ export default function ManagerDashboard() {
               </form>
             ) : wizardStep === 2 ? (
               <>
-                <p className="text-subtle" style={{ marginBottom: 20, fontSize: '14px' }}>Create and assign a new SEO project to this team member.</p>
-                <form onSubmit={handleCreateAndAssignProject} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <form onSubmit={handleCreateAndAssignProject} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                     <label className="form-label">Client Name</label>
                     <input className="form-input" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} required placeholder="Acme Corp" autoFocus />
@@ -307,9 +313,10 @@ export default function ManagerDashboard() {
                     <label className="form-label">Tracked Keywords</label>
                     <input className="form-input" type="number" min="0" value={newProject.package_keywords} onChange={e => setNewProject({...newProject, package_keywords: e.target.value})} />
                   </div>
-                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
-                    <button type="button" onClick={closeWizard} className="btn btn-secondary" disabled={wizardSubmitting}>Skip for now</button>
-                    <button type="button" onClick={() => setWizardStep(3)} className="btn btn-secondary" disabled={wizardSubmitting}>Assign Existing Project</button>
+                  <div className="modal-actions" style={{ gridColumn: '1 / -1' }}>
+                    <button type="button" onClick={closeWizard} className="btn ghost" disabled={wizardSubmitting}>Skip for now</button>
+                    <span className="spacer" />
+                    <button type="button" onClick={() => setWizardStep(3)} className="btn btn-secondary" disabled={wizardSubmitting}>Assign Existing</button>
                     <button type="submit" className="btn btn-primary" disabled={wizardSubmitting}>
                       {wizardSubmitting ? 'Creating...' : 'Create & Assign'}
                     </button>
@@ -329,8 +336,9 @@ export default function ManagerDashboard() {
                     ))}
                   </select>
                 </div>
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16 }}>
-                  <button type="button" onClick={() => setWizardStep(2)} className="btn btn-secondary" disabled={wizardSubmitting}>Back</button>
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setWizardStep(2)} className="btn ghost" disabled={wizardSubmitting}>Back</button>
+                  <span className="spacer" />
                   <button type="button" onClick={closeWizard} className="btn btn-secondary" disabled={wizardSubmitting}>Skip</button>
                   <button type="submit" className="btn btn-primary" disabled={wizardSubmitting}>
                     {wizardSubmitting ? 'Assigning...' : 'Assign Project'}
