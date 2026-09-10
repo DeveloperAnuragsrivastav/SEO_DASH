@@ -144,6 +144,72 @@ def update_client(client_id: uuid.UUID, data: ClientUpdate, db: Session = Depend
     db.refresh(client)
     return client
 
+class SectionToggle(BaseModel):
+    enabled: bool
+
+
+class SectionResponse(BaseModel):
+    section_key: str
+    enabled: bool
+
+    class Config:
+        from_attributes = True
+
+
+@router.get(
+    "/{client_id}/sections",
+    response_model=list[SectionResponse],
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))],
+)
+def list_client_sections(client_id: uuid.UUID, db: Session = Depends(get_db)) -> list:
+    """Per-client section toggles.
+
+    Used to record how a client's traffic data is supplied — e.g. the
+    ``ga4_manual`` / ``gsc_manual`` keys mark a source as hand-entered rather
+    than pulled through an API connection.
+    """
+    from app.models.client_section import ClientSection
+
+    return db.query(ClientSection).filter(ClientSection.client_id == client_id).all()
+
+
+@router.put(
+    "/{client_id}/sections/{section_key}",
+    response_model=SectionResponse,
+    dependencies=[Depends(RequireRole([UserRole.super_admin, UserRole.manager, UserRole.user]))],
+)
+def set_client_section(
+    client_id: uuid.UUID,
+    section_key: str,
+    data: SectionToggle,
+    db: Session = Depends(get_db),
+):
+    """Create or update one section toggle for a client."""
+    from app.models.client_section import ClientSection
+
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    row = (
+        db.query(ClientSection)
+        .filter(
+            ClientSection.client_id == client_id,
+            ClientSection.section_key == section_key,
+        )
+        .first()
+    )
+    if row:
+        row.enabled = data.enabled
+    else:
+        row = ClientSection(client_id=client_id, section_key=section_key, enabled=data.enabled)
+        db.add(row)
+
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole([UserRole.super_admin]))])
 def delete_client(client_id: uuid.UUID, db: Session = Depends(get_db)):
     """Delete a client and all associated data. Restricted to super_admin."""
