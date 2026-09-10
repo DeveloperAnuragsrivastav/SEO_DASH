@@ -1150,22 +1150,65 @@
                 background: #fff;
             }
 
+            /* Sections flow into each other and break only where they must.
+               Forcing a page after every section left most pages two-thirds
+               empty, which is what made the report look unfinished. */
             .report-page {
                 width: 794px;
                 min-height: auto !important;
                 margin: 0;
                 box-shadow: none;
-                break-after: page;
+                break-after: auto;
+                break-inside: auto;
                 overflow: visible !important;
             }
-            
+
+            /* Even the cover flows — it is a band at the top of the first
+               page, not a full-bleed cover, so forcing a break after it left
+               half of page one blank. */
+            .report-page.page-one { break-after: auto; }
+
             .page-inner {
-                padding-top: 7px !important;
-                padding-bottom: 0 !important;
+                padding-top: 18px !important;
+                padding-bottom: 12px !important;
             }
-            
+
             .page-one .page-inner {
                 padding-top: 55px !important;
+            }
+
+            /* Never split a block across the fold. */
+            .small-metric,
+            .metric,
+            .card,
+            .gbp,
+            .chart-card,
+            .provenance,
+            .callout,
+            .delivery-layout,
+            figure,
+            img {
+                break-inside: avoid;
+            }
+
+            table { break-inside: auto; }
+            thead { display: table-header-group; }
+            tr, tfoot { break-inside: avoid; }
+
+            /* Keep a heading with the content it introduces. */
+            .heading-row,
+            .section-heading,
+            .eyebrow,
+            .section-rule {
+                break-after: avoid;
+                break-inside: avoid;
+            }
+
+            /* Two sections carry an inline page-break-before, which beats a
+               plain stylesheet rule; override it so they join the flow. */
+            .report-page[style*="page-break-before"] {
+                break-before: auto !important;
+                page-break-before: auto !important;
             }
         }
     </style>
