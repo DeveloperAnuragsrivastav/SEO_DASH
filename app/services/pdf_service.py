@@ -229,7 +229,9 @@ async def generate_report_pdf(comparative_data: dict, client: dict, base_url: st
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         try:
-            page = await browser.new_page()
+            # The sheet is 794px wide; lay out at that width so the measured
+            # height matches what actually gets printed.
+            page = await browser.new_page(viewport={"width": 794, "height": 1123})
 
             # Set content and wait for fonts to load
             await page.set_content(html_content, wait_until="networkidle")
@@ -237,11 +239,40 @@ async def generate_report_pdf(comparative_data: dict, client: dict, base_url: st
             # Small delay to ensure Google Fonts have rendered
             await page.wait_for_timeout(1500)
 
-            pdf_bytes = await page.pdf(
-                format="A4",
-                print_background=True,
-                prefer_css_page_size=True,
+            # ── One continuous sheet, sized to the content ────────────────
+            # Fixed A4 pages leave whatever is left over on the last sheet
+            # blank, so a client with three keywords instead of thirty gets a
+            # report that is mostly empty space. The reference generator avoids
+            # that by sizing the page to the rendered height; we do the same but
+            # keep Chromium's vector output instead of rasterising, so the text
+            # stays selectable and the file stays small.
+            await page.emulate_media(media="print")
+
+            dimensions = await page.evaluate(
+                "() => { document.documentElement.style.background='#fff'; const pages = Array.from(document.querySelectorAll('.report-page')); const w = pages.length ? Math.ceil(pages[0].getBoundingClientRect().width) : 794; const h = Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)); return { width: w, height: h }; }"
             )
-            return pdf_bytes
+
+            width = max(int(dimensions.get("width") or 794), 320)
+            height = int(dimensions.get("height") or 0)
+
+            # Chromium refuses absurd page sizes; fall back to paginated A4
+            # rather than failing the download outright.
+            MAX_PAGE_PX = 18000
+            if height <= 0 or height > MAX_PAGE_PX:
+                logger.warning(
+                    "Report height %spx outside single-page range; using A4 pagination.",
+                    height,
+                )
+                return await page.pdf(
+                    format="A4", print_background=True, prefer_css_page_size=True
+                )
+
+            return await page.pdf(
+                width=f"{width}px",
+                height=f"{height}px",
+                print_background=True,
+                prefer_css_page_size=False,
+                margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
+            )
         finally:
             await browser.close()

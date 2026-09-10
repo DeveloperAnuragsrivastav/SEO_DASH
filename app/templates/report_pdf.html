@@ -1213,13 +1213,12 @@
         }
 
         @media print {
+            /* The renderer sets an explicit page size matching the rendered
+               height, so the sheet must not be pinned to A4 here or Chromium
+               paginates anyway. Insets come from .page-inner. */
             @page {
-                size: A4;
-                margin: 48px 0;
-            }
-            
-            @page :first {
-                margin-top: 0;
+                size: auto;
+                margin: 0;
             }
 
             html,
@@ -1230,14 +1229,25 @@
             /* Sections flow into each other and break only where they must.
                Forcing a page after every section left most pages two-thirds
                empty, which is what made the report look unfinished. */
+            html, body, .report-wrapper { margin: 0 !important; padding: 0 !important; }
+
             .report-page {
                 width: 794px;
-                min-height: auto !important;
-                margin: 0;
+                min-height: 0 !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding-bottom: 0;
                 box-shadow: none;
                 break-after: auto;
                 break-inside: auto;
                 overflow: visible !important;
+            }
+
+            /* The whole report is one sheet now, so nothing should try to
+               start a new page. */
+            .report-wrapper, .report-page, section, div, table, tr {
+                break-before: auto !important;
+                page-break-before: auto !important;
             }
 
             /* Even the cover flows — it is a band at the top of the first
