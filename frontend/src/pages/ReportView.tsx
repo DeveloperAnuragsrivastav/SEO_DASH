@@ -192,7 +192,7 @@ const ReportView: React.FC = () => {
       <div className="topbar">
         <div className="wrap">
           <Link to="/admin/clients" className="agencymark" style={{ textDecoration: 'none' }}>
-            <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--brand)', display: 'grid', placeItems: 'center', fontFamily: 'var(--disp)', fontSize: 14, fontStyle: 'italic', fontWeight: 800, color: 'white' }}>EZ</span>
+            <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--brand)', display: 'grid', placeItems: 'center', fontFamily: 'var(--disp)', fontSize: 13, fontWeight: 800, letterSpacing: '-0.02em', color: '#14140F' }}>EZ</span>
           </Link>
           <span className="vr" />
           <div className="clientmark">

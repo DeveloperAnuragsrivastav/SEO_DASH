@@ -84,7 +84,7 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas }
                 {topPages.length > 0 ? topPages.map((p: any, i: number) => (
                   <tr key={i}>
                     <td style={{ maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <a href={p.page} target="_blank" rel="noreferrer" style={{ color: 'var(--brand, #2563eb)', textDecoration: 'none' }}>
+                      <a href={p.page} target="_blank" rel="noreferrer" className="link">
                         {(p.page || '').replace(/^https?:\/\//, '').replace(/\/$/, '')}
                       </a>
                     </td>
@@ -201,7 +201,7 @@ const TrafficSection: React.FC<TrafficSectionProps> = ({ gsc, ga4, gbp, deltas }
                 {ga4Pages.length > 0 ? ga4Pages.map((p: any, i: number) => (
                   <tr key={i}>
                     <td style={{ maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <span style={{ color: 'var(--brand, #2563eb)' }}>{p.page}</span>
+                      <span style={{ color: 'var(--link)' }}>{p.page}</span>
                     </td>
                     <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 500 }}>{fmt(p.sessions)}</td>
                     <td style={{ textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(p.users)}</td>

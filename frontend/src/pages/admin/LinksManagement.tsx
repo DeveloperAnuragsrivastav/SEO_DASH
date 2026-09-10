@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import PaginationBar from '../../components/ui/PaginationBar';
+import { Link2 } from 'lucide-react';
 
 const LinksManagement: React.FC = () => {
   const { clientId } = useParams();
@@ -65,8 +66,12 @@ const LinksManagement: React.FC = () => {
       />
 
       {links.length === 0 ? (
-        <div className="card" style={{ padding: '64px', textAlign: 'center' }}>
-          <p className="text-subtle">No backlinks found.</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon"><Link2 size={22} /></span>
+            <h3>No backlinks recorded</h3>
+            <p>Track built links by uploading them from the Data Ingestion Hub.</p>
+          </div>
         </div>
       ) : (
         <div className="card table-wrapper">
@@ -93,7 +98,7 @@ const LinksManagement: React.FC = () => {
                 <tr key={i}>
                   <td style={{ fontWeight: 500, textTransform: 'capitalize' }}>{monthDisplay}</td>
                   <td><span className="badge">{link.activity_type}</span></td>
-                  <td>{link.url ? <a href={link.url} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}>{link.domain || 'Link'}</a> : '—'}</td>
+                  <td>{link.url ? <a href={link.url} target="_blank" rel="noreferrer" className="link">{link.domain || 'Link'}</a> : '—'}</td>
                   <td className="num">{link.count || 1}</td>
                 </tr>
                 );

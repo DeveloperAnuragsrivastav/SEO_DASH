@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import PaginationBar from '../../components/ui/PaginationBar';
+import { TrendingUp } from 'lucide-react';
 
 const GoogleAnalytics: React.FC = () => {
   const { clientId } = useParams();
@@ -65,8 +66,12 @@ const GoogleAnalytics: React.FC = () => {
       />
 
       {records.length === 0 ? (
-        <div className="card" style={{ padding: '64px', textAlign: 'center' }}>
-          <p className="text-subtle">No GA4 data found.</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon"><TrendingUp size={22} /></span>
+            <h3>No Analytics data</h3>
+            <p>Connect a GA4 property, or upload a spreadsheet from the Data Ingestion Hub.</p>
+          </div>
         </div>
       ) : (
         <div className="card table-wrapper">
@@ -76,10 +81,10 @@ const GoogleAnalytics: React.FC = () => {
                 <th>Date</th>
                 <th>Dimension</th>
                 <th>Value</th>
-                <th>Sessions</th>
-                <th>Users</th>
-                <th>Engaged Sessions</th>
-                <th>Conversions</th>
+                <th className="num">Sessions</th>
+                <th className="num">Users</th>
+                <th className="num">Engaged Sessions</th>
+                <th className="num">Conversions</th>
               </tr>
             </thead>
             <tbody>
@@ -88,10 +93,10 @@ const GoogleAnalytics: React.FC = () => {
                   <td>{r.captured_on}</td>
                   <td style={{ textTransform: 'capitalize' }}>{r.dimension_key}</td>
                   <td>{r.dimension_value}</td>
-                  <td>{r.sessions}</td>
-                  <td>{r.users}</td>
-                  <td>{r.engaged_sessions}</td>
-                  <td>{r.conversions}</td>
+                  <td className="num">{r.sessions}</td>
+                  <td className="num">{r.users}</td>
+                  <td className="num">{r.engaged_sessions}</td>
+                  <td className="num">{r.conversions}</td>
                 </tr>
               ))}
             </tbody>

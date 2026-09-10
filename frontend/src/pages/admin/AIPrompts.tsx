@@ -133,7 +133,7 @@ const AIPrompts: React.FC = () => {
                       {new Date(prompt.added_at).toLocaleDateString()}
                     </td>
                     <td>
-                      <span className="st" style={{ background: prompt.is_active ? 'var(--up-soft)' : '#F1F3EF', color: prompt.is_active ? 'var(--up)' : 'var(--ink-3)', borderColor: 'transparent' }}>
+                      <span className="st" style={{ background: prompt.is_active ? 'var(--up-soft)' : 'var(--neutral-bg)', color: prompt.is_active ? 'var(--up)' : 'var(--ink-3)', borderColor: 'transparent' }}>
                         {prompt.is_active ? 'Active' : 'Paused'}
                       </span>
                     </td>

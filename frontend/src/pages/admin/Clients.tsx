@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import { ArrowRight, Building2, ExternalLink } from 'lucide-react';
 
 import { usePermissions } from '../../hooks/usePermissions';
 import PageHeader from '../../components/ui/PageHeader';
@@ -15,6 +16,9 @@ interface ClientRow {
   business_type: string;
 }
 
+const statusClass = (status: string) =>
+  status === 'active' ? 'badge-success' : status === 'paused' ? 'badge-warning' : 'badge-neutral';
+
 const Clients: React.FC = () => {
   const { isManager } = usePermissions();
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -26,8 +30,8 @@ const Clients: React.FC = () => {
       setClients(res.data || []);
     } catch (err) {
       // Handled by global interceptor
-    } finally { 
-      setLoading(false); 
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -41,53 +45,59 @@ const Clients: React.FC = () => {
 
   return (
     <>
-      <PageHeader 
+      <PageHeader
         title={isManager ? "My Clients" : "Assigned Projects"}
         subtitle={`${active} active · ${totalKw} keywords tracked`}
         breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Clients' }]}
         actions={undefined}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-        {clients.length === 0 ? (
-          <div className="page-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '64px' }}>
-            <p className="text-subtle">No projects found.</p>
+      {clients.length === 0 ? (
+        <div className="page-card">
+          <div className="empty-state">
+            <span className="empty-state-icon"><Building2 size={22} /></span>
+            <h3>No projects yet</h3>
+            <p>Once a project is assigned to you it will appear here with its keywords, traffic and reporting history.</p>
           </div>
-        ) : (
-          clients.map(c => (
-            <div key={c.id} className="page-card" style={{ display: 'flex', flexDirection: 'column', padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <div>
-                  <h3 className="h2" style={{ marginBottom: '4px', fontSize: '18px' }}>{c.name}</h3>
-                  <a href={`https://${c.domain}`} target="_blank" rel="noreferrer" className="text-subtle text-sm" style={{ textDecoration: 'none' }}>
-                    {c.domain}
-                  </a>
-                </div>
-                <span className={`badge ${c.status === 'active' ? 'badge-success' : c.status === 'paused' ? 'badge-warning' : 'badge-neutral'}`}>
-                  {c.status.toUpperCase()}
-                </span>
+        </div>
+      ) : (
+        <div className="client-grid">
+          {clients.map(c => (
+            <Link key={c.id} to={`/admin/clients/${c.id}`} className="client-card">
+              <div className="client-card-top">
+                <span className="client-monogram">{c.name.slice(0, 2)}</span>
+                <span className={`badge ${statusClass(c.status)}`}>{c.status.toUpperCase()}</span>
               </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--border-subtle)' }}>
+
+              <h3 className="client-name">{c.name}</h3>
+
+              <span
+                className="client-domain"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`https://${c.domain}`, '_blank', 'noopener,noreferrer'); }}
+                role="link"
+                tabIndex={-1}
+              >
+                {c.domain} <ExternalLink size={11} />
+              </span>
+
+              <div className="client-meta">
                 <div>
-                  <div className="text-subtle text-xs" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', fontWeight: 600 }}>Keywords</div>
-                  <div className="mono" style={{ fontSize: '15px' }}>{c.package_keywords}</div>
+                  <div className="overline">Keywords</div>
+                  <div className="client-meta-value mono">{c.package_keywords}</div>
                 </div>
                 <div>
-                  <div className="text-subtle text-xs" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', fontWeight: 600 }}>Type</div>
-                  <div style={{ fontSize: '14px', textTransform: 'capitalize' }}>{c.business_type}</div>
+                  <div className="overline">Type</div>
+                  <div className="client-meta-value" style={{ textTransform: 'capitalize' }}>{c.business_type}</div>
                 </div>
               </div>
-              
-              <Link to={`/admin/clients/${c.id}`} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
-                View Dashboard →
-              </Link>
-            </div>
-          ))
-        )}
-      </div>
 
-
+              <span className="client-cta">
+                View Dashboard <ArrowRight size={14} />
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
     </>
   );
 };

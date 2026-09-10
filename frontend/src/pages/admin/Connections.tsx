@@ -183,13 +183,13 @@ const Connections: React.FC = () => {
               <h3 className="h2">Map Property</h3>
             </div>
             <div className="card-body">
-              <div style={{ marginBottom: 24, padding: 16, backgroundColor: 'var(--yellow-soft)', borderLeft: '4px solid var(--yellow)', borderRadius: 4 }}>
-                <h4 style={{ margin: '0 0 8px 0', fontSize: 14, color: '#554c11' }}>Grant Access First</h4>
-                <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#554c11' }}>
+              <div className="notice notice-warning">
+                <h4 className="notice-title">Grant Access First</h4>
+                <p className="notice-body">
                   Before mapping, you must grant <strong>Viewer</strong> access in your client's Google Search Console and Google Analytics 4 properties to the following Service Account email:
                 </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', padding: '8px 12px', borderRadius: 4, border: '1px solid #e5e5e1' }}>
-                  <code style={{ flex: 1, fontSize: 12, color: 'var(--ink)' }}>website-cheker@gen-lang-client-0684717370.iam.gserviceaccount.com</code>
+                <div className="code-copy">
+                  <code>website-cheker@gen-lang-client-0684717370.iam.gserviceaccount.com</code>
                   <button 
                     type="button"
                     className="btn btn-secondary btn-sm"

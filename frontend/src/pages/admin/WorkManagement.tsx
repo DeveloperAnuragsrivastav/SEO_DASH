@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import PaginationBar from '../../components/ui/PaginationBar';
+import { CheckSquare } from 'lucide-react';
 
 const WorkManagement: React.FC = () => {
   const { clientId } = useParams();
@@ -65,8 +66,12 @@ const WorkManagement: React.FC = () => {
       />
 
       {activities.length === 0 ? (
-        <div className="card" style={{ padding: '64px', textAlign: 'center' }}>
-          <p className="text-subtle">No work activities found.</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon"><CheckSquare size={22} /></span>
+            <h3>No activities logged</h3>
+            <p>Record on-site SEO work from the Data Ingestion Hub.</p>
+          </div>
         </div>
       ) : (
         <div className="card table-wrapper">

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import api, { API_BASE_URL } from '../../api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { Upload, FileSpreadsheet, X } from 'lucide-react';
 
 // --- Manual Entry Forms ---
 
@@ -368,19 +369,19 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
 
   return (
     <>
-      <div className="card" style={{ cursor: 'pointer', transition: 'all 0.15s ease' }} onClick={() => setModalOpen(true)}>
+      <div className="card ingest-tile" onClick={() => setModalOpen(true)}>
         <div className="card-header">
           <h3 className="h2">{title}</h3>
           {templateColumns && (
-            <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 8px' }} onClick={downloadTemplate}>
+            <button className="btn ghost btn-sm" onClick={downloadTemplate}>
               Template
             </button>
           )}
         </div>
-        <div className="card-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
-          <div style={{ fontSize: '24px', marginBottom: '12px', color: 'var(--brand-accent)' }}>📥</div>
-          <div style={{ fontWeight: 500 }}>Click to inject data</div>
-          <div className="text-subtle text-xs" style={{ marginTop: '4px' }}>
+        <div className="card-body ingest-tile-body">
+          <span className="ingest-tile-icon"><Upload size={20} /></span>
+          <div className="ingest-tile-title">Click to inject data</div>
+          <div className="text-subtle text-xs">
             {endpoint ? "Supports Excel (.xlsx), and manual entry" : "Supports manual entry"}
           </div>
         </div>
@@ -391,7 +392,7 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
           <div className="card" style={{ width: '450px', margin: 0, maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="card-header" style={{ position: 'sticky', top: 0, background: 'var(--card)', zIndex: 10 }}>
               <h3 className="h2">{showManual ? `Add ${title}` : `Inject ${title}`}</h3>
-              <button className="btn btn-secondary btn-sm" onClick={closeModal}>Close</button>
+              <button className="icon-btn" onClick={closeModal} aria-label="Close"><X size={17} /></button>
             </div>
             <div className="card-body">
               {!showUploader && !showManual ? (
@@ -440,7 +441,7 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    <div className="dropzone-icon" style={{ fontSize: '24px', marginBottom: '8px' }}>📄</div>
+                    <div className="dropzone-icon"><FileSpreadsheet size={22} /></div>
                     <div className="dropzone-text" style={{ fontWeight: 500 }}>
                       {displayFileName || 'Click to select Excel/CSV file'}
                     </div>
