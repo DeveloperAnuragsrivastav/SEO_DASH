@@ -13,7 +13,7 @@ const SHEET_PX = 794;
 /* Screen-only adjustments layered onto the PDF template: drop the grey desk
    behind the sheet, and open links in a new tab rather than inside the frame. */
 const SCREEN_HEAD = `<base target="_blank"><style>
-  html, body { background: transparent !important; }
+  html, body { background: transparent !important; overflow: hidden !important; }
 </style>`;
 
 /* The template has two layouts: on screen every section is an A4-tall sheet
@@ -90,13 +90,20 @@ const ReportView: React.FC = () => {
   }, [html]);
 
   // The sheet is content-sized; size the frame to it so the app scrolls, not the frame.
+  const frameObserver = useRef<ResizeObserver | null>(null);
   const measure = () => {
     const doc = frameRef.current?.contentDocument;
     if (!doc) return;
-    setSheetHeight(doc.documentElement.scrollHeight);
-    // Web fonts land after load and change the height; measure again then.
-    doc.fonts?.ready.then(() => setSheetHeight(doc.documentElement.scrollHeight));
+    const update = () => setSheetHeight(doc.documentElement.scrollHeight);
+    update();
+    // Fonts and images land after load and change the height. Follow the
+    // document instead of measuring once — a frame even a few px short grows
+    // its own scrollbar beside the app's.
+    frameObserver.current?.disconnect();
+    frameObserver.current = new ResizeObserver(update);
+    frameObserver.current.observe(doc.body);
   };
+  useEffect(() => () => frameObserver.current?.disconnect(), []);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -252,6 +259,7 @@ const ReportView: React.FC = () => {
               title="Report"
               srcDoc={html}
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              scrolling="no"
               onLoad={measure}
               style={{
                 width: SHEET_PX,

@@ -1640,6 +1640,7 @@
             </div>
         </div>
         <!-- Page 2b: GSC Breakdown — Top Pages -->
+    {% if gsc_top_pages %}
     <section class="report-page" style="page-break-before: always;">
         <div class="page-inner">
             
@@ -1671,8 +1672,6 @@
                                 <td style="text-align:right;padding:6px 0;font-family:var(--mono);">{{ p.position }}</td>
                             </tr>
                             {% endfor %}
-                        {% else %}
-                            <tr><td colspan="5" style="text-align:center;padding:24px 0;color:var(--muted);">No search console data available</td></tr>
                         {% endif %}
                     </tbody>
                 </table>
@@ -1680,11 +1679,14 @@
 
         </div>
     </section>
+    {% endif %}
 
     <!-- Page 2c: GA4 Breakdown — Sources, Pages, Devices -->
+    {% if ga4_traffic_sources or ga4_top_pages or ga4_devices or ga4_countries %}
     <section class="report-page" style="page-break-before: always;">
         <div class="page-inner">
             
+            {% if ga4_traffic_sources %}
             <div class="heading-row">
                 <div><span class="eyebrow">Acquisition</span>
                     <h2 class="section-heading">Top Traffic Sources (GA4)</h2>
@@ -1711,13 +1713,13 @@
                                 <td style="text-align:right;padding:6px 0;font-family:var(--mono);">{{ s.conversions | fmt }}</td>
                             </tr>
                             {% endfor %}
-                        {% else %}
-                            <tr><td colspan="4" style="text-align:center;padding:24px 0;color:var(--muted);">No traffic sources available</td></tr>
                         {% endif %}
                     </tbody>
                 </table>
             </div>
 
+            {% endif %}
+            {% if ga4_top_pages %}
             <div class="heading-row">
                 <div><span class="eyebrow">Engagement</span>
                     <h2 class="section-heading">Top Landing Pages (GA4)</h2>
@@ -1744,13 +1746,13 @@
                                 <td style="text-align:right;padding:6px 0;font-family:var(--mono);">{{ p.conversions | fmt }}</td>
                             </tr>
                             {% endfor %}
-                        {% else %}
-                            <tr><td colspan="4" style="text-align:center;padding:24px 0;color:var(--muted);">No landing pages available</td></tr>
                         {% endif %}
                     </tbody>
                 </table>
             </div>
 
+            {% endif %}
+            {% if ga4_devices %}
             <div style="break-inside: avoid; page-break-inside: avoid; margin-top:28px;">
                 <div class="heading-row">
                     <div><span class="eyebrow">Audience</span>
@@ -1773,11 +1775,11 @@
                         </div>
                         {% endfor %}
                     </div>
-                {% else %}
-                    <div style="text-align:center;padding:24px 0;color:var(--muted);">No device data available</div>
                 {% endif %}
             </div>
 
+            {% endif %}
+            {% if ga4_countries %}
             <div style="break-inside: avoid; page-break-inside: avoid; margin-top:28px; margin-bottom:28px;">
                 <div class="heading-row">
                     <div><span class="eyebrow">Audience</span>
@@ -1803,16 +1805,16 @@
                                     <td style="text-align:right;padding:6px;font-family:var(--mono);">{{ c.users | fmt }}</td>
                                 </tr>
                                 {% endfor %}
-                            {% else %}
-                                <tr><td colspan="3" style="text-align:center;padding:24px 0;color:var(--muted);">No country data available</td></tr>
                             {% endif %}
                         </tbody>
                     </table>
                 </div>
             </div>
+            {% endif %}
 
         </div>
     </section>
+    {% endif %}
 
     <!-- Page 3: Rankings & AI -->
 {% endif %}
