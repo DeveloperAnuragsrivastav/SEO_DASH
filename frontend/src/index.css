@@ -3739,3 +3739,330 @@ input[type=number] { -moz-appearance: textfield; }
     page-break-inside: avoid;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   REPORT BUILDER — asks what goes in before the report is generated.
+   Follows the reference builder: a sticky step rail on the left, one
+   section per panel, progress + autosave under the rail, and a sticky
+   action bar. Built on the app's tokens so it follows the theme.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.rb-shell {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1000px) { .rb-shell { grid-template-columns: 1fr; } }
+
+.rb-nav {
+  position: sticky;
+  top: 16px;
+  /* Grid items default to min-width:auto, so on narrow screens the row of
+     step tabs would widen the whole column and push the page sideways. */
+  min-width: 0;
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+@media (max-width: 1000px) { .rb-nav { position: static; } }
+
+.rb-tablist { display: flex; flex-direction: column; gap: 2px; }
+
+.rb-tab {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease);
+}
+.rb-tab:hover { background: var(--canvas-2); }
+.rb-tab.active { background: var(--brand-50); }
+.rb-tab:focus-visible { outline: 2px solid var(--brand-400); outline-offset: 1px; }
+
+.rb-tab-num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--canvas-2);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.rb-tab.active .rb-tab-num { background: var(--brand-500); border-color: var(--brand-600); color: #14140F; }
+.rb-tab.done .rb-tab-num { background: var(--ink); border-color: var(--ink); color: var(--card); }
+
+.rb-tab-label { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.rb-tab.active .rb-tab-label { color: var(--brand-800); font-weight: 700; }
+
+/* Narrow screens: the rail becomes a strip of tabs that scrolls sideways.
+   Declared after the base .rb-tab rule so its width can win. */
+@media (max-width: 1000px) {
+  .rb-tablist { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 6px; }
+  .rb-tab { flex: 0 0 auto; width: auto; }
+  .rb-tab-label { white-space: nowrap; }
+}
+
+.rb-tab-state {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.rb-progress { margin-top: 8px; padding: 14px 12px 8px; border-top: 1px solid var(--line-2); }
+.rb-progress-track { height: 6px; overflow: hidden; border-radius: 3px; background: var(--line-2); }
+.rb-progress-fill { height: 100%; background: var(--brand-500); transition: width 0.3s var(--ease); }
+.rb-progress-text {
+  margin-top: 7px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+}
+.rb-save-status {
+  min-height: 13px;
+  margin-top: 4px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.rb-save-status.err { color: var(--danger-500); font-weight: 700; }
+
+/* ── Panel ── */
+.rb-main { min-width: 0; }
+
+.rb-panel {
+  min-width: 0;
+  padding: 22px 24px 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  animation: rbFade 0.25s var(--ease);
+}
+@keyframes rbFade { from { transform: translateY(6px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rb-panel { animation: none; } }
+@media (max-width: 620px) { .rb-panel { padding: 18px 16px 20px; } }
+
+.rb-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.rb-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.rb-panel-title > svg { color: var(--ink-3); }
+.rb-panel-sub { max-width: 640px; margin: 4px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+
+.rb-include {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rb-include input { width: 16px; height: 16px; accent-color: var(--brand-500); cursor: inherit; }
+.rb-include.on { border-color: var(--brand-300); background: var(--brand-50); }
+.rb-include.disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Where the figures came from: auto (Google), manual (typed), or recorded data */
+.rb-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.rb-source > svg { flex-shrink: 0; margin-top: 2px; color: var(--ink-3); }
+.rb-source strong { color: var(--ink); }
+.rb-source a { color: var(--link); font-weight: 600; }
+.rb-source.auto { border-color: var(--up-border); background: var(--up-soft); }
+.rb-source.auto > svg { color: var(--success-500); }
+.rb-source.manual { border-color: var(--amber-border); background: var(--amber-soft); }
+.rb-source.manual > svg { color: var(--brand-700); }
+
+.rb-body { transition: opacity 0.16s var(--ease); }
+.rb-body.off { opacity: 0.5; }
+.rb-group + .rb-group { margin-top: 20px; }
+
+.rb-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.rb-hint { margin: 10px 0 0; font-size: 12px; color: var(--brand-700); }
+
+/* Toggle tiles — the reference's toggle-label, on app tokens */
+.rb-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+.rb-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease), background-color 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+.rb-toggle:hover { border-color: var(--brand-300); background: var(--brand-50); }
+.rb-toggle.on { border-color: var(--brand-300); }
+.rb-toggle.disabled { opacity: 0.55; cursor: not-allowed; }
+.rb-toggle.muted { opacity: 0.6; }
+.rb-toggle input { width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--brand-500); cursor: inherit; }
+.rb-toggle-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.rb-toggle-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.rb-toggle-title > svg { flex-shrink: 0; color: var(--ink-3); }
+.rb-toggle-sub { overflow: hidden; font-size: 11.5px; color: var(--ink-3); text-overflow: ellipsis; white-space: nowrap; }
+
+.rb-jump {
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rb-jump:hover { text-decoration: underline; }
+
+/* Figures typed straight in, for sources with no connection */
+.rb-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+.rb-field {
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  transition: opacity 0.14s var(--ease);
+}
+.rb-field.off { opacity: 0.5; }
+.rb-field .metric-card-head { margin-bottom: 8px; }
+.rb-field .metric-input.wide { width: 100%; height: 34px; flex: none; font-size: 14px; }
+.rb-field-unit { margin-top: 5px; font-size: 11px; color: var(--ink-3); }
+
+/* In a full panel, row lists can run longer before they scroll */
+.rb-panel .metric-rows { max-height: 480px; }
+
+.rb-empty {
+  padding: 34px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.rb-empty .btn { margin-top: 12px; }
+
+/* Review */
+.rb-review { display: flex; flex-direction: column; gap: 6px; }
+.rb-review-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: opacity 0.14s var(--ease);
+}
+.rb-review-row.off { opacity: 0.55; }
+.rb-review-name { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; font-weight: 600; }
+.rb-review-name > svg { color: var(--ink-3); }
+.rb-review-meta { font-size: 12px; color: var(--ink-3); }
+.rb-pill {
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--canvas-2);
+  color: var(--ink-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.rb-pill.on { background: var(--brand-50); color: var(--brand-800); }
+
+/* Sticky action bar */
+.rb-actionbar {
+  position: sticky;
+  bottom: 14px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.2);
+}
+.rb-actionbar-nav { display: flex; align-items: center; gap: 8px; }
+.rb-save-hint { margin: 0 auto; text-align: center; font-size: 12px; font-weight: 500; color: var(--ink-3); }
+@media (max-width: 1320px) { .rb-save-hint { display: none; } }
+@media (max-width: 620px) {
+  .rb-actionbar { flex-direction: column; align-items: stretch; gap: 6px; bottom: 8px; padding: 10px; }
+  .rb-actionbar-nav { order: 1; flex-wrap: nowrap; }
+  .rb-actionbar-nav .btn { flex: 1; min-width: 0; justify-content: center; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
+  .rb-actionbar > .btn.ghost { order: 2; align-self: center; padding: 3px 10px; font-size: 12.5px; }
+}

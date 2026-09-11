@@ -147,9 +147,9 @@ const ClientDashboard: React.FC = () => {
       if (reportData) {
         setReport(reportData);
         setReportCount(prev => prev + 1); // Optimistically increment
-        toast.success('Report generated — choose what to include.');
-        // Land straight in the composer so the next step is obvious.
-        navigate(`/admin/clients/${clientId}/reports/${reportData.id}?compose=1`);
+        toast.success('Data collected — now choose what goes in the report.');
+        // The builder asks what to include before the report is shown.
+        navigate(`/admin/clients/${clientId}/reports/${reportData.id}/build`);
       } else {
         toast.error('Report generation timed out.');
       }

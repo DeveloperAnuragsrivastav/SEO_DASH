@@ -1,0 +1,732 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import api from '../api/client';
+import { toast } from 'sonner';
+import {
+  Sparkles, Loader2, Info, Pencil, Check, ArrowLeft, ArrowRight,
+  Search, BarChart2, MapPin, Crosshair, Bot, Link as LinkIcon, CheckSquare,
+  ListChecks, FileText, Plug,
+} from 'lucide-react';
+import PageHeader from '../components/ui/PageHeader';
+import PageSkeleton from '../components/ui/PageSkeleton';
+
+type Format = 'int' | 'percent' | 'decimal' | 'bool' | 'none';
+
+interface Item {
+  id: string;
+  section: string;
+  label: string;
+  value: number | boolean | null;
+  format: Format;
+  editable: boolean;
+  kind: 'headline' | 'summary' | 'row';
+  unit?: string;
+}
+
+interface Section { key: string; label: string }
+
+const SECTION_ICON: Record<string, React.ReactNode> = {
+  gsc: <Search size={15} />,
+  ga4: <BarChart2 size={15} />,
+  gbp: <MapPin size={15} />,
+  rankings: <Crosshair size={15} />,
+  ai_visibility: <Bot size={15} />,
+  links: <LinkIcon size={15} />,
+  work: <CheckSquare size={15} />,
+};
+
+const SECTION_SUB: Record<string, string> = {
+  gsc: 'Clicks, impressions, click-through rate and average position from Google search.',
+  ga4: 'Visits, users and conversions on the website.',
+  gbp: 'Calls, direction requests and website clicks from the Google Business Profile.',
+  rankings: 'Where each tracked keyword ranks this period.',
+  ai_visibility: 'Whether AI assistants mention the brand for each tracked prompt.',
+  links: 'Backlinks built this period.',
+  work: 'Work delivered this period, with screenshots as proof.',
+};
+
+/** Sections whose figures come from a Google connection when there is one. */
+const PROVIDER_NAME: Record<string, string> = {
+  gsc: 'Google Search Console',
+  ga4: 'Google Analytics 4',
+  gbp: 'Google Business Profile',
+};
+
+/** What a provider section needs before the server will include it. */
+const NEEDS: Record<string, string> = {
+  gsc: 'clicks or impressions',
+  ga4: 'sessions or users',
+  gbp: 'at least one of calls, direction requests, website clicks or bookings',
+};
+
+/** Where each hand-kept section's data lives, for the "add more" links. */
+const DATA_PAGE: Record<string, (clientId: string) => string> = {
+  gbp: id => `/clients/${id}/gbp`,
+  rankings: id => `/clients/${id}/keywords`,
+  ai_visibility: id => `/clients/${id}/ai-mentions-data`,
+  links: id => `/clients/${id}/links`,
+  work: id => `/clients/${id}/work`,
+};
+
+const KIND_LABEL: Record<Item['kind'], string> = { headline: 'Figures', summary: 'Summary', row: 'Rows' };
+
+/* Values are held as the text a person types. Percentages are typed as
+   percent ("0.13") but the snapshot stores fractions (0.0013). */
+const toText = (i: Item): string => {
+  if (i.format === 'bool') return i.value ? 'true' : 'false';
+  if (i.value === null || i.value === undefined) return '';
+  const n = Number(i.value) || 0;
+  return i.format === 'percent' ? String(parseFloat((n * 100).toFixed(4))) : String(n);
+};
+
+const fromText = (i: Item, text: string): number | boolean | null => {
+  if (i.format === 'bool') return text === 'true';
+  if (text.trim() === '') return null;
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return i.format === 'percent' ? n / 100 : n;
+};
+
+function display(text: string, format: Format): string {
+  if (format === 'bool') return text === 'true' ? 'Mentioned' : 'Not found';
+  if (format === 'none' || text.trim() === '') return '—';
+  const n = Number(text) || 0;
+  if (format === 'percent') return `${n.toFixed(2)}%`;
+  if (format === 'decimal') return n.toFixed(1);
+  if (Math.abs(n) >= 10000) {
+    return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  }
+  return Math.round(n).toLocaleString();
+}
+
+const ReportBuilder: React.FC = () => {
+  const { clientId, snapshotId } = useParams<{ clientId: string; snapshotId: string }>();
+  const navigate = useNavigate();
+  const base = `/clients/${clientId}/reports/${snapshotId}`;
+
+  const [loading, setLoading] = useState(true);
+  const [client, setClient] = useState<any>(null);
+  const [report, setReport] = useState<any>(null);
+  const [connections, setConnections] = useState<any[]>([]);
+  const [editable, setEditable] = useState(true);
+
+  const [sections, setSections] = useState<Section[]>([]);
+  const [available, setAvailable] = useState<Record<string, boolean>>({});
+  const [sectionOn, setSectionOn] = useState<Record<string, boolean>>({});
+  const [items, setItems] = useState<Item[]>([]);
+  const [itemOn, setItemOn] = useState<Record<string, boolean>>({});
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const [instruction, setInstruction] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [aiNote, setAiNote] = useState<{ text: string; ignored: boolean } | null>(null);
+
+  const [step, setStep] = useState(0);
+  const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
+  const [saveState, setSaveState] = useState<{ text: string; err?: boolean }>({ text: '' });
+  const [finishing, setFinishing] = useState(false);
+
+  useEffect(() => {
+    if (!clientId || !snapshotId) return;
+    let cancelled = false;
+    Promise.all([
+      api.get(`/clients/${clientId}`),
+      api.get(base),
+      api.get(`${base}/composer`),
+      api.get(`/clients/${clientId}/connections`).catch(() => ({ data: [] })),
+    ]).then(([c, r, comp, conn]) => {
+      if (cancelled) return;
+      const d = comp.data || {};
+      setClient(c.data);
+      setReport(r.data);
+      setConnections(conn.data || []);
+      setEditable(d.editable !== false);
+      setSections(d.sections || []);
+      setAvailable(d.available || {});
+      setSectionOn(d.selectedSections || {});
+      setItems(d.items || []);
+      setItemOn(d.selectedItems || {});
+      // In a provider section with nothing in it yet, zero only means "not
+      // entered": show the field empty so typing 7 gives 7, not 07.
+      const avail = d.available || {};
+      const text = Object.fromEntries((d.items || []).map((i: Item) => {
+        const t = toText(i);
+        return [i.id, i.section in PROVIDER_NAME && !avail[i.section] && Number(t) === 0 ? '' : t];
+      }));
+      setValues(text);
+      setSaved(text);
+    }).catch(() => {
+      // Handled by global interceptor
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [clientId, snapshotId]);
+
+  const bySection = useMemo(() => {
+    const map: Record<string, Item[]> = {};
+    for (const i of items) (map[i.section] ||= []).push(i);
+    return map;
+  }, [items]);
+
+  const isProvider = (key: string) => key in PROVIDER_NAME;
+  const connected = (key: string) => connections.some(c => c.provider === key && c.status === 'connected');
+  /** A provider section with no data becomes usable once figures are typed in. */
+  const hasData = (key: string) =>
+    !!available[key] || (isProvider(key) && (bySection[key] || []).some(i => Number(values[i.id]) > 0));
+
+  // ── Saving: queued one at a time, like the reference builder's autosave ──
+  const dirty = useRef(false);
+  const latest = useRef({ items, values, saved, sectionOn, itemOn });
+  latest.current = { items, values, saved, sectionOn, itemOn };
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+
+  const persist = useCallback(async () => {
+    if (!dirty.current) return;
+    dirty.current = false;
+    const { items, values, saved, sectionOn, itemOn } = latest.current;
+    setSaveState({ text: 'Saving…' });
+    try {
+      const edits: Record<string, number | boolean> = {};
+      const sent: Record<string, string> = {};
+      for (const i of items) {
+        if (!i.editable || values[i.id] === saved[i.id]) continue;
+        const next = fromText(i, values[i.id] ?? '');
+        if (next === null) continue;
+        edits[i.id] = next;
+        sent[i.id] = values[i.id];
+      }
+      // Figures first: a typed-in section only counts as having data once its
+      // numbers are stored, and the server checks that before switching it on.
+      if (Object.keys(edits).length > 0) {
+        await api.put(`${base}/values`, { edits });
+        setSaved(prev => ({ ...prev, ...sent }));
+      }
+      const res = await api.put(`${base}/composer`, { sections: sectionOn, items: itemOn });
+      if (res.data?.selectedSections) setSectionOn(res.data.selectedSections);
+      const t = new Date();
+      setSaveState({ text: `Saved ✓ ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` });
+    } catch (e) {
+      dirty.current = true;
+      setSaveState({ text: 'Could not save — check connection', err: true });
+      throw e;
+    }
+  }, [base]);
+
+  const queueSave = useCallback(() => {
+    const run = chain.current.then(persist, persist);
+    chain.current = run.catch(() => {});
+    return run;
+  }, [persist]);
+
+  // ── Edits ──
+  const autoIncluded = useRef<Set<string>>(new Set());
+
+  const toggleSection = (key: string) => {
+    if (!editable || !hasData(key)) return;
+    setSectionOn(s => ({ ...s, [key]: !s[key] }));
+    dirty.current = true;
+    setAiNote(null);
+  };
+
+  const toggleItem = (id: string) => {
+    if (!editable) return;
+    setItemOn(s => ({ ...s, [id]: s[id] === false }));
+    dirty.current = true;
+    setAiNote(null);
+  };
+
+  const setAllIn = (key: string, on: boolean) => {
+    if (!editable) return;
+    setItemOn(s => {
+      const next = { ...s };
+      for (const i of bySection[key] || []) if (i.kind === 'row') next[i.id] = on;
+      return next;
+    });
+    dirty.current = true;
+    setAiNote(null);
+  };
+
+  const setValue = (id: string, text: string) => {
+    setValues(v => ({ ...v, [id]: text }));
+    dirty.current = true;
+    // Typing the first figure into an empty, unconnected section switches it on —
+    // once. After that the tick is the person's to change.
+    const item = items.find(x => x.id === id);
+    if (item && isProvider(item.section) && !available[item.section]
+        && Number(text) > 0 && !autoIncluded.current.has(item.section)) {
+      autoIncluded.current.add(item.section);
+      setSectionOn(s => ({ ...s, [item.section]: true }));
+    }
+  };
+
+  const askAi = async () => {
+    if (!instruction.trim()) return;
+    setAsking(true);
+    setAiNote(null);
+    try {
+      const res = await api.post(`${base}/composer/suggest`, { instruction });
+      setSectionOn(res.data.sections || {});
+      setItemOn(res.data.items || {});
+      dirty.current = true;
+      setAiNote({ text: res.data.note || '', ignored: !!res.data.ignored });
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setAsking(false);
+  };
+
+  // ── Steps ──
+  const steps = useMemo(() => [
+    { key: 'overview', label: 'Sections to include' },
+    ...sections.map(s => ({ key: s.key, label: s.label })),
+    { key: 'review', label: 'Review & generate' },
+  ], [sections]);
+
+  const go = (i: number) => {
+    if (i < 0 || i >= steps.length || i === step) return;
+    setEditing(null);
+    if (editable) queueSave().catch(() => {});
+    setStep(i);
+    setVisited(v => new Set(v).add(i));
+    document.querySelector('.app-content')?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const reportPage = `/admin/clients/${clientId}/reports/${snapshotId}`;
+
+  const finish = async () => {
+    if (!editable) { navigate(reportPage); return; }
+    setFinishing(true);
+    // Always write once, so even an untouched draft stores its selection.
+    dirty.current = true;
+    try {
+      await queueSave();
+      toast.success('Report generated.');
+      navigate(reportPage);
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setFinishing(false);
+  };
+
+  const leave = async () => {
+    if (editable) {
+      try { await queueSave(); } catch (e) { return; }
+    }
+    navigate(`/admin/clients/${clientId}`);
+  };
+
+  if (loading) return <PageSkeleton cards={2} header={true} />;
+
+  if (!client || sections.length === 0) {
+    return (
+      <div className="page-card" style={{ margin: '40px auto', maxWidth: 560 }}>
+        <div className="empty-state">
+          <h3>This report could not be opened</h3>
+          <Link to={`/admin/clients/${clientId}`} className="btn btn-secondary" style={{ marginTop: 12 }}>Back to client</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const periodLabel = report?.end_date
+    ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' })
+    : '';
+  const sectionsOnCount = sections.filter(s => sectionOn[s.key]).length;
+  const cur = steps[step];
+
+  // ── Pieces (plain render functions, not components — a component defined
+  //    here would remount on every keystroke and drop the input's focus) ──
+  const valueInput = (i: Item, autoFocus: boolean, wide = false) => (
+    i.format === 'bool' ? (
+      <select
+        className="form-select metric-input"
+        value={values[i.id] === 'true' ? 'true' : 'false'}
+        autoFocus={autoFocus}
+        disabled={!editable}
+        onChange={e => setValue(i.id, e.target.value)}
+      >
+        <option value="true">Mentioned</option>
+        <option value="false">Not found</option>
+      </select>
+    ) : (
+      <input
+        className={`form-input metric-input ${wide ? 'wide' : ''}`}
+        type="number"
+        inputMode="decimal"
+        min="0"
+        step={i.format === 'int' ? '1' : '0.01'}
+        placeholder="0"
+        value={values[i.id] ?? ''}
+        autoFocus={autoFocus}
+        disabled={!editable}
+        aria-label={i.label}
+        onChange={e => setValue(i.id, e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditing(null); }}
+      />
+    )
+  );
+
+  const card = (i: Item, isRow = false) => {
+    const shown = itemOn[i.id] !== false;
+    const isEditing = editing === i.id && i.editable && editable;
+    return (
+      <div key={i.id} className={`metric-card ${shown ? '' : 'off'} ${isRow ? 'is-row' : ''}`}>
+        <label className="metric-card-head">
+          <input type="checkbox" checked={shown} disabled={!editable} onChange={() => toggleItem(i.id)} />
+          <span title={i.label}>{i.label}</span>
+        </label>
+        <div className="metric-card-value">
+          {isEditing ? (
+            <>
+              {valueInput(i, true)}
+              <button className="metric-pencil done" onClick={() => setEditing(null)} aria-label="Done">
+                <Check size={13} />
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="metric-number">
+                {display(values[i.id] ?? '', i.format)}
+                {i.unit === 'position' && <small> pos</small>}
+              </span>
+              {i.editable && editable && (
+                <button className="metric-pencil" onClick={() => setEditing(i.id)} aria-label={`Edit ${i.label}`}>
+                  <Pencil size={12} />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  /** A figure typed straight in — for sources with no connection to fill it. */
+  const field = (i: Item) => (
+    <div key={i.id} className={`rb-field ${itemOn[i.id] !== false ? '' : 'off'}`}>
+      <label className="metric-card-head">
+        <input type="checkbox" checked={itemOn[i.id] !== false} disabled={!editable} onChange={() => toggleItem(i.id)} />
+        <span title={i.label}>{i.label}</span>
+      </label>
+      {valueInput(i, false, true)}
+      {i.format === 'percent' && <div className="rb-field-unit">Percent — e.g. 2.4</div>}
+      {i.id.endsWith('.position') && <div className="rb-field-unit">Average position — e.g. 18.5</div>}
+    </div>
+  );
+
+  const includeToggle = (key: string) => {
+    const has = hasData(key);
+    const on = !!sectionOn[key];
+    return (
+      <label className={`rb-include ${on ? 'on' : ''} ${has && editable ? '' : 'disabled'}`}>
+        <input type="checkbox" checked={on} disabled={!has || !editable} onChange={() => toggleSection(key)} />
+        Include in report
+      </label>
+    );
+  };
+
+  const renderOverview = () => (
+    <>
+      <div className="rb-panel-head">
+        <div>
+          <h2 className="rb-panel-title"><ListChecks size={18} /> Sections to include</h2>
+          <p className="rb-panel-sub">
+            Unticked sections are left out of the report and the PDF, even when they have data.
+            Each section has its own step where every figure can be checked and corrected.
+          </p>
+        </div>
+      </div>
+
+      {editable && (
+        <div className="composer-ai" style={{ marginBottom: 22 }}>
+          <label className="composer-ai-label" htmlFor="rb-instruction">
+            <Sparkles size={14} /> Describe what to include
+          </label>
+          <div className="composer-ai-row">
+            <input
+              id="rb-instruction"
+              className="form-input"
+              placeholder="e.g. hide average CTR and drop the business profile section"
+              value={instruction}
+              onChange={e => setInstruction(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); askAi(); } }}
+            />
+            <button className="btn btn-secondary" onClick={askAi} disabled={asking || !instruction.trim()}>
+              {asking ? <><Loader2 size={14} className="spin" /> Reading…</> : 'Apply'}
+            </button>
+          </div>
+          {aiNote && (
+            <div className={`composer-ai-note ${aiNote.ignored ? 'ignored' : ''}`}>
+              <Info size={13} />
+              {aiNote.ignored
+                ? (aiNote.text || 'That did not look like a report instruction, so nothing changed.')
+                : (aiNote.text || 'Selection updated.')}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="rb-group-label">Sections · {sectionsOnCount} of {sections.length} included</div>
+      <div className="rb-toggle-grid">
+        {sections.map((sec, idx) => {
+          const has = hasData(sec.key);
+          const on = !!sectionOn[sec.key];
+          const list = bySection[sec.key] || [];
+          const shown = list.filter(i => itemOn[i.id] !== false).length;
+          const src = isProvider(sec.key) ? (connected(sec.key) ? 'Auto from Google' : 'Manual entry') : 'From your data';
+          return (
+            <label key={sec.key} className={`rb-toggle ${on ? 'on' : ''} ${has ? '' : 'disabled'}`}>
+              <input type="checkbox" checked={on} disabled={!has || !editable} onChange={() => toggleSection(sec.key)} />
+              <span className="rb-toggle-text">
+                <span className="rb-toggle-title">{SECTION_ICON[sec.key]} {sec.label}</span>
+                <span className="rb-toggle-sub">
+                  {has
+                    ? `${shown} of ${list.length} shown · ${src}`
+                    : isProvider(sec.key) ? 'No figures yet — enter them on its step' : 'Nothing recorded this period'}
+                </span>
+              </span>
+              <button type="button" className="rb-jump" onClick={e => { e.preventDefault(); go(idx + 1); }}>Edit</button>
+            </label>
+          );
+        })}
+      </div>
+
+      <div className="rb-group-label" style={{ marginTop: 28 }}>Executive summary — KPI cards</div>
+      <p className="rb-panel-sub" style={{ margin: '0 0 12px' }}>
+        Tick the headline figures the client should see. A card still needs a value to appear —
+        this only hides the ones you don't want.
+      </p>
+      {(['gsc', 'ga4', 'gbp'] as const).map(key => {
+        const list = (bySection[key] || []).filter(i => i.kind === 'headline');
+        if (list.length === 0) return null;
+        return (
+          <div key={key} style={{ marginBottom: 14 }}>
+            <div className="composer-metric-label">{SECTION_ICON[key]} {PROVIDER_NAME[key]}</div>
+            <div className="rb-toggle-grid">
+              {list.map(i => (
+                <label key={i.id} className={`rb-toggle ${itemOn[i.id] !== false ? 'on' : ''} ${sectionOn[key] ? '' : 'muted'}`}>
+                  <input type="checkbox" checked={itemOn[i.id] !== false} disabled={!editable} onChange={() => toggleItem(i.id)} />
+                  <span className="rb-toggle-text">
+                    <span className="rb-toggle-title">{i.label}</span>
+                    <span className="rb-toggle-sub">{display(values[i.id] ?? '', i.format)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+
+  const renderSection = (key: string) => {
+    const sec = sections.find(s => s.key === key);
+    if (!sec) return null;
+    const list = bySection[key] || [];
+    const on = !!sectionOn[key];
+    const provider = isProvider(key);
+    const live = provider && connected(key);
+    const typedIn = provider && !live;
+    const dataPage = DATA_PAGE[key] && clientId ? DATA_PAGE[key](clientId) : null;
+    const rows = list.filter(i => i.kind === 'row');
+
+    return (
+      <>
+        <div className="rb-panel-head">
+          <div>
+            <h2 className="rb-panel-title">{SECTION_ICON[key]} {sec.label}</h2>
+            <p className="rb-panel-sub">{SECTION_SUB[key]}</p>
+          </div>
+          {includeToggle(key)}
+        </div>
+
+        {live ? (
+          <div className="rb-source auto">
+            <Plug size={15} />
+            <span>
+              <strong>Auto-filled from {PROVIDER_NAME[key]}.</strong> These figures were pulled from the
+              connected account for this period. They stay editable — use the pencil to correct any of them.
+            </span>
+          </div>
+        ) : typedIn ? (
+          <div className="rb-source manual">
+            <Pencil size={15} />
+            <span>
+              <strong>{PROVIDER_NAME[key]} isn't connected</strong>, so enter this period's figures by hand.{' '}
+              {key === 'gbp'
+                ? <>Figures kept under <Link to={dataPage || '#'}>GBP Data</Link> are filled in already.</>
+                : <><Link to={`/admin/clients/${clientId}/connections`}>Connect it</Link> to have them filled in automatically.</>}
+            </span>
+          </div>
+        ) : (
+          <div className="rb-source">
+            <Info size={15} />
+            <span>
+              Taken from what's recorded{dataPage ? <> under <Link to={dataPage}>{sec.label}</Link></> : null} for this period.
+              Untick anything the client shouldn't see — every figure can be corrected with the pencil.
+            </span>
+          </div>
+        )}
+
+        {!provider && list.length === 0 ? (
+          <div className="rb-empty">
+            Nothing recorded for {sec.label} in this period.
+            {dataPage && <div><Link to={dataPage} className="btn btn-secondary btn-sm">Add {sec.label.toLowerCase()}</Link></div>}
+          </div>
+        ) : (
+          <div className={`rb-body ${on ? '' : 'off'}`}>
+            {(['headline', 'summary'] as const).map(kind => {
+              const group = list.filter(i => i.kind === kind);
+              if (group.length === 0) return null;
+              return (
+                <div key={kind} className="rb-group">
+                  {list.some(i => i.kind !== kind) && <div className="rb-group-label">{KIND_LABEL[kind]}</div>}
+                  {typedIn && kind === 'headline'
+                    ? <div className="rb-fields">{group.map(field)}</div>
+                    : <div className="metric-grid">{group.map(i => card(i))}</div>}
+                </div>
+              );
+            })}
+
+            {typedIn && !hasData(key) && (
+              <p className="rb-hint">Enter {NEEDS[key]} to be able to include this section.</p>
+            )}
+
+            {rows.length > 0 && (
+              <div className="rb-group">
+                <div className="rb-group-label">
+                  <span>{KIND_LABEL.row} · {rows.filter(i => itemOn[i.id] !== false).length} of {rows.length} shown</span>
+                  {editable && (
+                    <span className="composer-bulk" style={{ margin: 0 }}>
+                      <button className="btn ghost btn-sm" onClick={() => setAllIn(key, true)}>Select all</button>
+                      <button className="btn ghost btn-sm" onClick={() => setAllIn(key, false)}>Clear all</button>
+                    </span>
+                  )}
+                </div>
+                <div className="metric-rows">{rows.map(i => card(i, true))}</div>
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderReview = () => (
+    <>
+      <div className="rb-panel-head">
+        <div>
+          <h2 className="rb-panel-title"><FileText size={18} /> Review &amp; generate</h2>
+          <p className="rb-panel-sub">
+            This is what the report will contain. Go back to any step to change it — nothing is
+            final until the report is published.
+          </p>
+        </div>
+      </div>
+      <div className="rb-review">
+        {sections.map((sec, idx) => {
+          const on = !!sectionOn[sec.key];
+          const list = bySection[sec.key] || [];
+          const shown = list.filter(i => itemOn[i.id] !== false).length;
+          const src = isProvider(sec.key) ? (connected(sec.key) ? 'Auto from Google' : 'Entered by hand') : 'From your data';
+          return (
+            <div key={sec.key} className={`rb-review-row ${on ? '' : 'off'}`}>
+              <span className="rb-review-name">{SECTION_ICON[sec.key]} {sec.label}</span>
+              <span className="rb-review-meta">
+                {on ? `${shown} of ${list.length} items · ${src}` : hasData(sec.key) ? 'Left out' : 'No data'}
+              </span>
+              <span className={`rb-pill ${on ? 'on' : ''}`}>{on ? 'Included' : 'Off'}</span>
+              <button type="button" className="rb-jump" onClick={() => go(idx + 1)}>Edit</button>
+            </div>
+          );
+        })}
+      </div>
+      {sectionsOnCount === 0 && (
+        <div className="notice notice-warning" style={{ marginTop: 14 }}>
+          <p className="notice-body">Nothing is switched on — the report would only carry its cover and summary.</p>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="rb">
+      <PageHeader
+        title="Build the report"
+        subtitle={`${client?.name}${periodLabel ? ` · ${periodLabel}` : ''} — choose what goes in and check the figures, then generate.`}
+        breadcrumbs={[
+          { label: 'Home', href: '/admin/clients' },
+          { label: client?.name || 'Client', href: `/admin/clients/${clientId}` },
+          { label: 'Report builder' },
+        ]}
+      />
+
+      {!editable && (
+        <div className="notice notice-warning" style={{ marginBottom: 16 }}>
+          <p className="notice-body">This report is published, so it can be looked through here but not changed.</p>
+        </div>
+      )}
+
+      <div className="rb-shell">
+        <aside className="rb-nav" aria-label="Report builder steps">
+          <div className="rb-tablist" role="tablist">
+            {steps.map((s, i) => {
+              const isSection = i > 0 && i < steps.length - 1;
+              const done = visited.has(i) && i !== step;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === step}
+                  className={`rb-tab ${i === step ? 'active' : ''} ${done ? 'done' : ''}`}
+                  onClick={() => go(i)}
+                >
+                  <span className="rb-tab-num">{done ? <Check size={13} /> : i + 1}</span>
+                  <span className="rb-tab-label">{s.label}</span>
+                  {isSection && !sectionOn[s.key] && <span className="rb-tab-state">Off</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="rb-progress">
+            <div className="rb-progress-track">
+              <div className="rb-progress-fill" style={{ width: `${Math.round((visited.size / steps.length) * 100)}%` }} />
+            </div>
+            <div className="rb-progress-text">{visited.size} / {steps.length} steps reviewed</div>
+            <div className={`rb-save-status ${saveState.err ? 'err' : ''}`}>{saveState.text}</div>
+          </div>
+        </aside>
+
+        <div className="rb-main">
+          <div className="rb-panel" key={cur.key}>
+            {cur.key === 'overview' ? renderOverview() : cur.key === 'review' ? renderReview() : renderSection(cur.key)}
+          </div>
+
+          <div className="rb-actionbar">
+            <button className="btn ghost" onClick={leave}>{editable ? 'Save & exit' : 'Back to client'}</button>
+            <span className="rb-save-hint">Changes save automatically as you move between steps</span>
+            <div className="rb-actionbar-nav">
+              <button className="btn btn-secondary" onClick={() => go(step - 1)} disabled={step === 0}>
+                <ArrowLeft size={14} /> Back
+              </button>
+              {step < steps.length - 1 && (
+                <button className="btn btn-secondary" onClick={() => go(step + 1)}>
+                  Continue <ArrowRight size={14} />
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={finish} disabled={finishing}>
+                {finishing
+                  ? <><Loader2 size={14} className="spin" /> Generating…</>
+                  : editable ? 'Generate Report' : 'View report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ReportBuilder;

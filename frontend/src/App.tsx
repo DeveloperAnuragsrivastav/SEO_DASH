@@ -23,6 +23,7 @@ import SearchConsole from './pages/admin/SearchConsole';
 import Users from './pages/admin/Users';
 import ManagerDashboard from './pages/admin/ManagerDashboard';
 import ReportView from './pages/ReportView';
+import ReportBuilder from './pages/ReportBuilder';
 
 import { AdminLayout } from './components/layout/AdminLayout';
 
@@ -62,6 +63,10 @@ const App: React.FC = () => {
 
                 {/* Reports stay inside the app shell — leaving it to read a
                     report made it feel like a different product. */}
+                {/* The builder comes before the report: it asks what to include,
+                    fills in connected sources and takes manual figures for the rest. */}
+                <Route path="/clients/:clientId/reports/:snapshotId/build" element={<ReportBuilder />} />
+                <Route path="/admin/clients/:clientId/reports/:snapshotId/build" element={<ReportBuilder />} />
                 <Route path="/clients/:clientId/reports/:snapshotId" element={<ReportView />} />
                 <Route path="/admin/clients/:clientId/reports/:snapshotId" element={<ReportView />} />
               </Route>

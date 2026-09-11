@@ -4,7 +4,6 @@ import api from '../api/client';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { SlidersHorizontal } from 'lucide-react';
-import ReportComposer from '../components/ReportComposer';
 import '../report.css';
 
 /** Width of one sheet in report_pdf.html. */
@@ -34,7 +33,14 @@ const ReportView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
-  const [showComposer, setShowComposer] = useState(searchParams.get('compose') === '1');
+
+  // Older links opened a composer over the finished report. Choosing what to
+  // include now happens in the builder, before the report is shown.
+  useEffect(() => {
+    if (searchParams.get('compose') === '1' && snapshotId && snapshotId !== 'multi') {
+      navigate(`/admin/clients/${clientId}/reports/${snapshotId}/build`, { replace: true });
+    }
+  }, []);
 
   // The report itself is the PDF's own template, rendered by the server.
   const [html, setHtml] = useState<string | null>(null);
@@ -180,24 +186,6 @@ const ReportView: React.FC = () => {
 
   return (
     <div className="report-view">
-      {showComposer && clientId && snapshotId && snapshotId !== 'multi' && (
-        <ReportComposer
-          clientId={clientId}
-          snapshotId={snapshotId}
-          onClose={() => setShowComposer(false)}
-          onSaved={async () => {
-            setShowComposer(false);
-            try {
-              const full = await api.get(`/clients/${clientId}/reports/${snapshotId}`);
-              setReport(full.data);
-              loadHtml();
-            } catch (e) {
-              // Handled by global interceptor
-            }
-          }}
-        />
-      )}
-
       {/* Toolbar — the same actions as before; the report below is the PDF itself */}
       <div className="report-toolbar">
         <div className="report-toolbar-id">
@@ -214,7 +202,7 @@ const ReportView: React.FC = () => {
           <Link to={`/admin/clients/${clientId}`} className="btn ghost">Back to client</Link>
 
           {report && report.status === 'draft' && snapshotId !== 'multi' && (
-            <button className="btn btn-secondary" onClick={() => setShowComposer(true)}>
+            <button className="btn btn-secondary" onClick={() => navigate(`/admin/clients/${clientId}/reports/${snapshotId}/build`)}>
               <SlidersHorizontal size={14} /> Sections &amp; Data
             </button>
           )}
