@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import Plot from 'react-plotly.js';
 import { Search } from 'lucide-react';
 import { rankClass } from './ReportUtils';
 
@@ -112,36 +111,27 @@ const RankingsSection: React.FC<RankingsSectionProps> = ({ rankings, keywords, m
         <span className="src man">Manual entry</span>
       </div>
       
-      {/* Position Distribution Chart */}
+      {/* Position Distribution — the PDF's position bands, same numbers */}
       <div className="card pad" style={{ marginBottom: 'var(--space-lg)' }}>
         <h3 className="h2" style={{ marginBottom: '12px' }}>Positioning Summary</h3>
-        <div style={{ width: '100%', height: '280px' }}>
-          <Plot
-            data={[
-              {
-                x: ['Top 10', '11–20', '21–50', 'Below 50'],
-                y: [
-                  rankings.summary?.top_10 || 0,
-                  rankings.summary?.['11_20'] || 0,
-                  rankings.summary?.['21_50'] || 0,
-                  rankings.summary?.['51_plus'] || 0
-                ],
-                type: 'bar',
-                marker: { color: 'var(--brand)' }, // Updated to match brand primary
-              }
-            ]}
-            layout={{
-              autosize: true,
-              margin: { t: 20, r: 20, b: 40, l: 40 },
-              paper_bgcolor: 'transparent',
-              plot_bgcolor: 'transparent',
-              font: { family: 'var(--body)', color: 'var(--text-secondary)' }
-            }}
-            useResizeHandler={true}
-            style={{ width: '100%', height: '100%' }}
-            config={{ displayModeBar: false, responsive: true }}
-          />
-        </div>
+        {(() => {
+          const bands = [
+            { label: 'Top 10', value: rankings.summary?.top_10 || 0 },
+            { label: '11–20', value: rankings.summary?.['11_20'] || 0 },
+            { label: '21–50', value: rankings.summary?.['21_50'] || 0 },
+            { label: 'Below 50', value: rankings.summary?.['51_plus'] || 0 },
+          ];
+          const total = bands.reduce((a, b) => a + b.value, 0) || 1;
+          return bands.map(b => (
+            <div className="position-row" key={b.label}>
+              <span>{b.label}</span>
+              <div className="track">
+                <div className="fill" style={{ width: `${Math.round((b.value / total) * 100)}%` }} />
+              </div>
+              <b>{b.value}</b>
+            </div>
+          ));
+        })()}
       </div>
 
       <div className="ctrl">

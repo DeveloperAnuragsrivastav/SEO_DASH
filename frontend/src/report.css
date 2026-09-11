@@ -191,6 +191,27 @@
   .report-cover-actions .btn { flex: 1; }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Below the cover, the on-screen report uses the PDF template's own
+   design language — Anton section headings over a gold rule, white
+   cards, black table header bands, gold-footed metric tiles — scaled
+   up from the PDF's 12px base to the app's reading size.
+   Tokens mirror report_pdf.html one for one.
+   ═══════════════════════════════════════════════════════════ */
+
+.report-view {
+  --r-ink: #12181A;
+  --r-structural: #1A1A18;
+  --r-yellow: #EDAA10;
+  --r-yellow-soft: #FDF4DC;
+  --r-line: #E2E8E7;
+  --r-line-soft: #EEF2F1;
+  --r-muted: #5C6867;
+  --r-zebra: #F7F9F9;
+  --r-paper: #fff;
+  --r-display: 'Anton', var(--body), sans-serif;
+}
+
 /* ── Section nav ─────────────────────────────────────────── */
 .report-view .nav {
   position: sticky;
@@ -217,22 +238,21 @@
 
 .report-view .nav a {
   padding: 12px 14px;
-  font-size: 13px;
-  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 3px solid transparent;
   white-space: nowrap;
-  font-weight: 500;
 }
 
-.report-view .nav a:hover {
-  color: var(--ink);
-}
+.report-view .nav a:hover { color: var(--ink); }
 
 .report-view .nav a.act {
   color: var(--ink);
-  border-bottom-color: var(--brand);
-  font-weight: 600;
+  border-bottom-color: var(--r-yellow);
 }
 
 /* ── Section shell ───────────────────────────────────────── */
@@ -253,121 +273,257 @@
   .report-view .report-section { padding: 28px 0 12px; }
 }
 
+/* ── Section heading: eyebrow, Anton title, gold rule ────── */
 .report-view .head {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   gap: 14px;
-  margin-bottom: 24px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line-2);
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 0;
+  position: relative;
+}
+
+/* The 3px gold bar the PDF puts under every section title */
+.report-view .head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--r-yellow);
+}
+
+.report-view .head .spacer { flex: 1; }
+
+.report-view .eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--r-ink);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .17em;
+  text-transform: uppercase;
 }
 
 .report-view .head h2 {
-  font-size: 26px;
+  margin: 0;
+  font-family: var(--r-display);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.08;
+  letter-spacing: -.012em;
+  padding-bottom: .04em;
+  color: var(--r-ink);
 }
 
-/* ── KPI overrides for report ───────────────────────────── */
+/* Nested card headings stay in the body face — only sections get Anton */
+.report-view .head h3,
+.report-view .card-header h3 {
+  font-family: var(--body);
+}
+
+.report-view .src {
+  color: #82898c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+/* ── Narrative ───────────────────────────────────────────── */
+/* The PDF sets the narrative as plain muted copy, not a boxed note. */
+.report-view .note {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--r-muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+/* ── Metric tiles ────────────────────────────────────────── */
+/* The PDF's .metric: a white card footed with a gold bar. */
 .report-view .kpi {
-  background: var(--card);
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-lg);
-  padding: 24px;
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  padding: 18px 18px 20px;
+  border: 1px solid var(--r-line);
+  border-radius: 6px;
+  background: var(--r-paper);
+  box-shadow: none;
+  transition: none;
+}
+
+.report-view .kpi::before { content: none; }
+
+.report-view .kpi::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--r-yellow);
 }
 
 .report-view .kpi:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  border-color: var(--amber-border);
-}
-
-/* Add a subtle glow bar at the top of KPIs */
-.report-view .kpi::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--brand), var(--amber-soft));
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.report-view .kpi:hover::before {
-  opacity: 1;
+  transform: none;
+  box-shadow: none;
+  border-color: var(--r-line);
 }
 
 .report-view .kpi .lab {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  margin-bottom: 0;
+  color: var(--r-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .report-view .kpi .val {
-  font-size: 38px;
+  margin: 18px 0 0;
+  font-size: 34px;
   font-weight: 700;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-  margin-bottom: 4px;
+  line-height: 1;
+  letter-spacing: -.05em;
+  color: var(--r-ink);
 }
 
 .report-view .kpi .sub {
-  font-size: 13px;
-  color: var(--text-tertiary);
+  margin-top: 7px;
+  color: #7c8588;
+  font-size: 11px;
 }
 
-/* ── Report cards ────────────────────────────────────────── */
+/* ── Cards ───────────────────────────────────────────────── */
 .report-view .card {
-  background: var(--card);
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  background: var(--r-paper);
+  border: 1px solid var(--r-line);
+  border-radius: 6px;
+  box-shadow: none;
   margin-bottom: 0;
   overflow: hidden;
 }
 
-/* ── Report tables ───────────────────────────────────────── */
+.report-view .card.table-wrapper,
+.report-view .card-header + .table-wrapper { overflow-x: auto; }
+
+.report-view .card-header {
+  padding-bottom: 14px;
+  border-bottom: 0;
+}
+
+.report-view .card-header h3,
+.report-view .card .h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--r-ink);
+}
+
+/* ── Tables: solid header band, quiet zebra rows ─────────── */
 .report-view table {
   width: 100%;
   border-collapse: collapse;
 }
 
+.report-view thead {
+  background: var(--r-structural);
+}
+
 .report-view th {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
+  padding: 11px 10px;
+  color: #fff;
+  /* The app's global table styles paint a white background on th, which
+     covers the band set on thead — set it on the cell itself. */
+  background: var(--r-structural);
+  border-bottom: 0;
+  font-family: var(--body);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
   text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  font-weight: 500;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
+.report-view th.num { text-align: right; }
+
+.report-view th:first-child { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+.report-view th:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+
 .report-view td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line-2);
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--r-line-soft);
   vertical-align: middle;
-  font-size: 14px;
+  font-size: 13px;
 }
 
-.report-view tbody tr:last-child td {
-  border-bottom: 0;
+.report-view tbody tr:nth-child(even),
+.report-view tbody tr:nth-child(even) td { background: var(--r-zebra); }
+.report-view tbody tr:nth-child(odd) td { background: transparent; }
+.report-view tbody tr:last-child td { border-bottom: 0; }
+.report-view tbody tr:hover,
+.report-view tbody tr:hover td { background: var(--r-yellow-soft); }
+
+/* Rank chips carry no colour of their own — the palette is white and gold */
+.report-view .rank,
+.report-view .r1, .report-view .r2, .report-view .r3 {
+  display: inline-block;
+  min-width: 28px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #f3f3f1;
+  color: var(--r-ink);
+  font-weight: 700;
+  text-align: center;
 }
 
-.report-view tbody tr:hover {
-  background: var(--bg-surface-hover);
+/* ── Filter chips + search ───────────────────────────────── */
+.report-view .ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.report-view .ctrl .spacer { flex: 1; }
+
+.report-view .chip {
+  padding: 6px 12px;
+  border: 1px solid var(--r-line);
+  border-radius: 99px;
+  background: var(--r-paper);
+  color: var(--r-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.report-view .chip.on {
+  border-color: #edd16a;
+  background: var(--r-yellow-soft);
+  color: #665213;
+}
+
+.report-view .search {
+  padding: 7px 12px;
+  border: 1px solid var(--r-line);
+  border-radius: 6px;
+  background: var(--r-paper);
+  font-size: 13px;
+  min-width: 180px;
 }
 
 /* ── Shots grid ──────────────────────────────────────────── */
@@ -379,11 +535,11 @@
 
 .report-view .shot-card .thumb {
   aspect-ratio: 16/9;
-  background: var(--bg-surface-hover);
-  border-radius: var(--radius-sm);
+  background: #f8f9fa;
+  border-radius: 4px;
   overflow: hidden;
   margin-bottom: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--r-line);
 }
 
 .report-view .shot-card .thumb img {
@@ -400,10 +556,10 @@
 /* ── Footer ──────────────────────────────────────────────── */
 .report-view .report-footer {
   margin-top: 64px;
-  background: rgba(15, 17, 21, 0.95);
-  color: rgba(255, 255, 255, 0.55);
+  background: var(--r-structural);
+  color: rgba(255, 255, 255, .55);
   padding: 48px 0 64px;
-  border-top: 1px solid var(--line);
+  border-radius: var(--radius-lg);
 }
 
 .report-view .report-footer h3 {
@@ -419,21 +575,15 @@
 }
 
 .report-view .srccard {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(255, 255, 255, .035);
+  border-radius: 6px;
   padding: 16px;
-  transition: all 0.2s ease;
-}
-
-.report-view .srccard:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .report-view .srccard b {
   display: block;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, .9);
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 4px;
@@ -453,9 +603,7 @@
   margin-right: 5px;
 }
 
-.report-view .dot.man {
-  background: var(--amber);
-}
+.report-view .dot.man { background: var(--r-yellow); }
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 980px) {
@@ -465,8 +613,7 @@
 @media (max-width: 640px) {
   .report-view .wrap { padding: 0 14px; }
   .report-view .kpi .val { font-size: 26px; }
-  .report-view .head h2 { font-size: 21px; }
-  .report-view .topbar .wrap { gap: 10px; }
+  .report-view .head h2 { font-size: 24px; }
   .report-view .hide-s { display: none; }
   .report-view .srcgrid { grid-template-columns: 1fr; }
 }
@@ -478,6 +625,87 @@
   .report-view .topbar, .report-view .nav { display: none !important; }
   .report-view .report-section { padding: 32px 48px; page-break-inside: avoid; border-bottom: none; }
   .report-view .report-section:not(:first-child) { page-break-before: always; }
-  .report-view .kpi, .report-view .card { border: 1px solid var(--line) !important; box-shadow: none !important; }
+  .report-view .kpi, .report-view .card { border: 1px solid var(--r-line) !important; box-shadow: none !important; }
   .report-view { background: white; }
 }
+
+/* ── Position bands (rankings) ───────────────────────────── */
+/* The PDF's .position-row: label, gold track, count. */
+.report-view .position-row {
+  display: grid;
+  grid-template-columns: 78px 1fr 28px;
+  gap: 12px;
+  align-items: center;
+  margin: 13px 0;
+  font-size: 12px;
+  color: var(--r-muted);
+}
+
+.report-view .position-row b {
+  text-align: right;
+  color: var(--r-ink);
+  font-size: 13px;
+}
+
+.report-view .track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #f0f1ef;
+}
+
+.report-view .fill {
+  height: 100%;
+  border-radius: 20px;
+  background: linear-gradient(90deg, var(--r-yellow), var(--r-structural));
+}
+
+/* The app's rank chips are colour-coded green / amber / grey; the PDF uses a
+   single neutral chip, and the report palette is white and gold only. */
+.report-view .rank,
+.report-view .rank.p1,
+.report-view .rank.p2,
+.report-view .rank.out {
+  background: #f3f3f1;
+  color: var(--r-ink);
+  font-weight: 700;
+}
+
+/* Source tags read as plain uppercase captions in the PDF, not pills. */
+.report-view .src,
+.report-view .src.man {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #82898c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+/* ── Activity-type bars (links) ──────────────────────────── */
+/* The PDF's .activity rows replace the pie chart. */
+.report-view .activity-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 28px;
+  gap: 12px;
+  align-items: center;
+  margin: 13px 0;
+  font-size: 12px;
+  color: var(--r-muted);
+}
+
+.report-view .activity-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-view .activity-row b {
+  text-align: right;
+  color: var(--r-ink);
+  font-size: 13px;
+}
+
+.report-view .fill.gold { background: var(--r-yellow); }

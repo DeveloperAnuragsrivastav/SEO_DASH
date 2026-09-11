@@ -1,5 +1,4 @@
 import React from 'react';
-import Plot from 'react-plotly.js';
 import { Link as LinkIcon } from 'lucide-react';
 
 interface LinksSectionProps {
@@ -95,30 +94,19 @@ const LinksSection: React.FC<LinksSectionProps> = ({ links }) => {
           
           <div className="card pad">
             <h3 className="h2" style={{ fontSize: '16px', marginBottom: '10px' }}>By Activity Type</h3>
-            <div style={{ width: '100%', height: '350px' }}>
-              <Plot
-                data={[
-                  {
-                    values: Object.values(linkTypes),
-                    labels: Object.keys(linkTypes),
-                    type: 'pie',
-                    hole: 0.4,
-                    marker: { colors: ['var(--brand)', 'var(--up)', 'var(--ink-2)', 'var(--ink-3)'] }
-                  }
-                ]}
-                layout={{
-                  autosize: true,
-                  margin: { t: 10, r: 10, b: 10, l: 10 },
-                  paper_bgcolor: 'transparent',
-                  font: { family: 'var(--body)', color: 'var(--text-secondary)' },
-                  showlegend: true,
-                  legend: { orientation: 'h', y: -0.1 }
-                }}
-                useResizeHandler={true}
-                style={{ width: '100%', height: '100%' }}
-                config={{ displayModeBar: false, responsive: true }}
-              />
-            </div>
+            {(() => {
+              const rows = Object.entries(linkTypes) as [string, number][];
+              const top = Math.max(1, ...rows.map(([, v]) => v));
+              return rows.map(([k, v]) => (
+                <div className="activity-row" key={k}>
+                  <span>{k}</span>
+                  <div className="track">
+                    <div className="fill gold" style={{ width: `${Math.round((v / top) * 100)}%` }} />
+                  </div>
+                  <b>{v}</b>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       )}
