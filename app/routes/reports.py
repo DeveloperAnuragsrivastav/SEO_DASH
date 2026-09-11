@@ -5,7 +5,7 @@ import uuid
 from typing import Any, Optional
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, File, UploadFile, Response
 from pydantic import BaseModel
 from sqlalchemy import select, text, func
 from sqlalchemy.orm import Session
@@ -192,6 +192,12 @@ class SectionSuggestRequest(BaseModel):
     instruction: str
 
 
+class CopyUpdate(BaseModel):
+    brand_line: str | None = None
+    titles: dict[str, str] | None = None
+    subtitles: dict[str, str] | None = None
+
+
 def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> ReportSnapshot:
     report = db.execute(
         select(ReportSnapshot).where(
@@ -268,6 +274,10 @@ def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Dep
         "items": composer.enumerate_items(snapshot, prompt_labels),
         "selectedItems": composer.current_items(snapshot),
         "editable": report.status != ReportStatus.published,
+        "copy": composer.current_copy(snapshot),
+        "copyHeadings": composer.COPY_HEADINGS,
+        "brandLineDefault": composer.DEFAULT_BRAND_LINE,
+        "hasCover": report.cover_mime is not None,
     }
 
 
@@ -389,6 +399,138 @@ def suggest_composer(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e))
 
 
+COVER_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _load_editable(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> ReportSnapshot:
+    report = _load_draft(client_id, snapshot_id, db)
+    if report.status == ReportStatus.published:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Published reports cannot be edited.")
+    return report
+
+
+def _sniff_image(data: bytes) -> Optional[str]:
+    """The image type from the file's own bytes — the browser's claim is not trusted."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+@router.put("/{snapshot_id}/copy")
+def set_report_copy(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: CopyUpdate, db: Session = Depends(get_db)):
+    """Headings, subtitles and the cover's brand line. A blank value restores the default."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    snapshot["copy"] = composer.merge_copy(snapshot, data.brand_line, data.titles, data.subtitles)
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"copy": composer.current_copy(snapshot)}
+
+
+@router.get("/{snapshot_id}/cover")
+def get_report_cover(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
+    report = _load_draft(client_id, snapshot_id, db)
+    if not report.cover_mime or not report.cover_image:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No cover screenshot.")
+    return Response(content=report.cover_image, media_type=report.cover_mime, headers={"Cache-Control": "no-store"})
+
+
+@router.put("/{snapshot_id}/cover")
+async def set_report_cover(
+    client_id: uuid.UUID,
+    snapshot_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """The website homepage screenshot shown on the cover. PNG, JPEG or WebP, up to 5 MB."""
+    report = _load_editable(client_id, snapshot_id, db)
+    data = await file.read(COVER_MAX_BYTES + 1)
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The file is empty.")
+    if len(data) > COVER_MAX_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "The cover screenshot must be 5 MB or smaller.")
+    mime = _sniff_image(data)
+    if not mime:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The cover screenshot must be a PNG, JPEG or WebP image.")
+    report.cover_image = data
+    report.cover_mime = mime
+    db.commit()
+    return {"hasCover": True}
+
+
+@router.delete("/{snapshot_id}/cover")
+def delete_report_cover(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
+    report = _load_editable(client_id, snapshot_id, db)
+    report.cover_image = None
+    report.cover_mime = None
+    db.commit()
+    return {"hasCover": False}
+
+
+@router.post("/{snapshot_id}/fetch/{provider}")
+def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str, db: Session = Depends(get_db)):
+    """Pull fresh Search Console or Analytics figures into a draft, for its own window.
+
+    Only that provider's block and its period-on-period deltas change. The
+    selection, the other sections and hand edits elsewhere are left alone.
+    """
+    if provider not in ("gsc", "ga4"):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Only Search Console and Analytics can be fetched.")
+    report = _load_editable(client_id, snapshot_id, db)
+
+    name = "Search Console" if provider == "gsc" else "Google Analytics"
+    conn = db.execute(
+        select(Connection).where(Connection.client_id == client_id, Connection.provider == ProviderType(provider))
+    ).scalars().first()
+    if not conn or conn.status != ConnectionStatus.connected:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{name} is not connected for this client.")
+
+    start, end = report.start_date, report.end_date
+    try:
+        if provider == "gsc":
+            live = pull_gsc_data(db, conn.id, start, end)
+            block = {**live["totals"], "top_pages": live["top_pages"]}
+        else:
+            live = pull_ga4_data(db, conn.id, start, end)
+            block = {
+                **live["totals"],
+                "traffic_sources": live["traffic_sources"],
+                "devices": live["devices"],
+                "top_pages": live["top_pages"],
+                "countries": live.get("countries", []),
+            }
+    except Exception as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not fetch from {name}: {e}")
+
+    # The pull commits on the same session, which expires this row — reload
+    # it before writing, or the write would be based on stale JSON.
+    db.refresh(report)
+    snapshot = dict(report.snapshot or {})
+    snapshot[provider] = block
+
+    # Same previous window the report generator compares against.
+    prev_end = start - datetime.timedelta(days=1)
+    prev_start = prev_end - datetime.timedelta(days=30)
+    previous = _resolve_metrics(db, client_id, prev_start, prev_end, provider)
+    deltas = dict(snapshot.get("kpi_deltas") or {})
+    deltas[provider] = {
+        k: v - previous.get(k, 0)
+        for k, v in block.items()
+        if isinstance(v, (int, float)) and isinstance(previous.get(k, 0), (int, float))
+    }
+    snapshot["kpi_deltas"] = deltas
+
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return get_composer(client_id, snapshot_id, db)
+
+
 @router.get("/history", response_model=list[ReportHistoryResponse])
 def get_report_history(client_id: uuid.UUID, db: Session = Depends(get_db)):
     """Fetch a lightweight history of all generated report snapshots."""
@@ -494,6 +636,12 @@ def _report_inputs(request: Request, db: Session, client_id: uuid.UUID, snapshot
                 if s_obj and s_obj.file_data:
                     b64 = base64.b64encode(s_obj.file_data).decode("utf-8")
                     img["base64_data"] = f"data:{s_obj.mime_type or 'image/png'};base64,{b64}"
+
+    # The most recent snapshot's cover screenshot, inlined like the rest.
+    last = snapshots[-1]
+    if getattr(last, "cover_mime", None) and last.cover_image:
+        encoded = base64.b64encode(last.cover_image).decode("ascii")
+        comparative_data["cover_screenshot"] = f"data:{last.cover_mime};base64,{encoded}"
 
     return client, comparative_data, client_data, base_url
 
@@ -942,6 +1090,8 @@ def _build_comparative_report(snapshots):
         comparative_data["included_sections"] = latest_snap["included_sections"]
     if isinstance(latest_snap.get("included_items"), dict):
         comparative_data["included_items"] = latest_snap["included_items"]
+    if isinstance(latest_snap.get("copy"), dict):
+        comparative_data["copy"] = latest_snap["copy"]
 
     # Daily clicks for the trend chart. Recorded values only — an empty list
     # means the chart is skipped rather than drawn from nothing.

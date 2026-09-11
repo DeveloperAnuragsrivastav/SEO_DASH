@@ -341,3 +341,86 @@ def write_edit(snapshot: dict, item_id: str, value: Any) -> bool:
         return False
 
     return False
+
+
+# ── Editable copy ──────────────────────────────────────────────────────────
+# Every heading can be retitled and given a subtitle, and the cover's brand
+# line changed — as in the reference builder. Defaults are the template's own
+# wording, so a report nobody touched reads exactly as it did before.
+
+DEFAULT_BRAND_LINE = "Monthly SEO Report"
+
+COPY_HEADINGS: list[dict[str, str]] = [
+    {"key": "exec_summary", "section": "basics", "title": "{period} Insights"},
+    {"key": "key_metrics", "section": "basics", "title": "Key Metrics"},
+    {"key": "gsc", "section": "gsc", "title": "Google Search Console"},
+    {"key": "gsc_pages", "section": "gsc", "title": "Top Pages (GSC)"},
+    {"key": "ga4", "section": "ga4", "title": "Google Analytics 4"},
+    {"key": "ga4_sources", "section": "ga4", "title": "Top Traffic Sources (GA4)"},
+    {"key": "ga4_pages", "section": "ga4", "title": "Top Landing Pages (GA4)"},
+    {"key": "ga4_devices", "section": "ga4", "title": "Device Breakdown (GA4)"},
+    {"key": "ga4_countries", "section": "ga4", "title": "Top Countries (GA4)"},
+    {"key": "rankings", "section": "rankings", "title": "Rankings"},
+    {"key": "ai_visibility", "section": "ai_visibility", "title": "AI Visibility"},
+    {"key": "links", "section": "links", "title": "Links Built"},
+    {"key": "work", "section": "work", "title": "Work Done & Proof"},
+]
+_HEADING_DEFAULT = {h["key"]: h["title"] for h in COPY_HEADINGS}
+
+BRAND_LINE_MAX = 80
+TITLE_MAX = 120
+SUBTITLE_MAX = 280
+
+
+def current_copy(snapshot: dict) -> dict:
+    """The stored overrides only — anything absent means "use the default"."""
+    stored = _s(snapshot).get("copy")
+    stored = stored if isinstance(stored, dict) else {}
+
+    def pick(field: str) -> dict[str, str]:
+        raw = stored.get(field)
+        raw = raw if isinstance(raw, dict) else {}
+        return {k: str(v) for k, v in raw.items() if k in _HEADING_DEFAULT and str(v or "").strip()}
+
+    return {
+        "brand_line": str(stored.get("brand_line") or "").strip(),
+        "titles": pick("titles"),
+        "subtitles": pick("subtitles"),
+    }
+
+
+def merge_copy(snapshot: dict, brand_line: str | None = None,
+               titles: dict | None = None, subtitles: dict | None = None) -> dict:
+    """Apply an edit to the stored copy. A blank value clears that override,
+    unknown headings are ignored, and every value is trimmed and capped."""
+    copy = current_copy(snapshot)
+    if brand_line is not None:
+        copy["brand_line"] = str(brand_line).strip()[:BRAND_LINE_MAX]
+    for field, incoming, limit in (("titles", titles, TITLE_MAX), ("subtitles", subtitles, SUBTITLE_MAX)):
+        if not isinstance(incoming, dict):
+            continue
+        for key, value in incoming.items():
+            if key not in _HEADING_DEFAULT:
+                continue
+            text_ = str(value or "").strip()[:limit]
+            if text_:
+                copy[field][key] = text_
+            else:
+                copy[field].pop(key, None)
+    return copy
+
+
+def copy_text(copy: dict | None, key: str, field: str, tokens: dict[str, str] | None = None) -> str:
+    """A heading's title or subtitle: the override if there is one, else the default."""
+    stored = copy.get(f"{field}s") if isinstance(copy, dict) else None
+    text_ = str(stored.get(key) or "").strip() if isinstance(stored, dict) else ""
+    if not text_ and field == "title":
+        text_ = _HEADING_DEFAULT.get(key, "")
+    for token, value in (tokens or {}).items():
+        text_ = text_.replace(token, value)
+    return text_
+
+
+def brand_line(copy: dict | None) -> str:
+    stored = str(copy.get("brand_line") or "").strip() if isinstance(copy, dict) else ""
+    return stored or DEFAULT_BRAND_LINE

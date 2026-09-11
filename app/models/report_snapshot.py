@@ -3,7 +3,7 @@ from typing import Optional
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, Enum, ForeignKey, Text, UniqueConstraint, text
+from sqlalchemy import Date, Enum, ForeignKey, LargeBinary, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +43,11 @@ class ReportSnapshot(Base):
     published_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
+
+    # Homepage screenshot for the cover's browser frame. Deferred: the bytes
+    # load only when the report is rendered, never with an ordinary read.
+    cover_image: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    cover_mime: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     client = relationship("Client", back_populates="report_snapshots")

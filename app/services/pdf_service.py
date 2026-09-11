@@ -174,9 +174,24 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
             return False
         return chosen_items.get(item_id, True) is not False
 
+    # Editable headings and brand line. Tokens let an override still carry
+    # live values, e.g. "{period} results for {client}".
+    copy = comparative_data.get("copy") if isinstance(comparative_data.get("copy"), dict) else {}
+    tokens = {"{period}": display_label, "{client}": client.get("name", "") or ""}
+
+    def heading(key: str) -> str:
+        return composer.copy_text(copy, key, "title", tokens)
+
+    def subheading(key: str) -> str:
+        return composer.copy_text(copy, key, "subtitle", tokens)
+
     return template.render(
         sections=sections,
         mo=metric_on,
+        ct=heading,
+        cs=subheading,
+        brand_line=composer.brand_line(copy),
+        cover_screenshot=comparative_data.get("cover_screenshot"),
         comparative_data=comparative_data,
         months=comparative_data.get("months", []),
         gsc=comparative_data.get("gsc", {}),

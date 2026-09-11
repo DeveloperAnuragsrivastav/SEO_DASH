@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   Sparkles, Loader2, Info, Pencil, Check, ArrowLeft, ArrowRight,
   Search, BarChart2, MapPin, Crosshair, Bot, Link as LinkIcon, CheckSquare,
-  ListChecks, FileText, Plug,
+  ListChecks, FileText, Plug, RefreshCw, ImagePlus, Trash2, Type, SlidersHorizontal,
 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import PageSkeleton from '../components/ui/PageSkeleton';
@@ -24,6 +24,11 @@ interface Item {
 }
 
 interface Section { key: string; label: string }
+interface Heading { key: string; section: string; title: string }
+interface Copy { brand_line: string; titles: Record<string, string>; subtitles: Record<string, string> }
+interface Step { key: string; kind: 'basics' | 'overview' | 'section' | 'review'; label: string }
+
+const EMPTY_COPY: Copy = { brand_line: '', titles: {}, subtitles: {} };
 
 const SECTION_ICON: Record<string, React.ReactNode> = {
   gsc: <Search size={15} />,
@@ -52,6 +57,9 @@ const PROVIDER_NAME: Record<string, string> = {
   gbp: 'Google Business Profile',
 };
 
+/** Sources the builder can pull fresh figures from on demand. */
+const FETCHABLE: Record<string, string> = { gsc: 'GSC', ga4: 'GA4' };
+
 /** What a provider section needs before the server will include it. */
 const NEEDS: Record<string, string> = {
   gsc: 'clicks or impressions',
@@ -69,6 +77,8 @@ const DATA_PAGE: Record<string, (clientId: string) => string> = {
 };
 
 const KIND_LABEL: Record<Item['kind'], string> = { headline: 'Figures', summary: 'Summary', row: 'Rows' };
+
+const COVER_MAX = 5 * 1024 * 1024;
 
 /* Values are held as the text a person types. Percentages are typed as
    percent ("0.13") but the snapshot stores fractions (0.0013). */
@@ -119,6 +129,19 @@ const ReportBuilder: React.FC = () => {
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<string | null>(null);
 
+  // Headings, subtitles and the cover's brand line
+  const [headings, setHeadings] = useState<Heading[]>([]);
+  const [copy, setCopy] = useState<Copy>(EMPTY_COPY);
+  const [brandDefault, setBrandDefault] = useState('Monthly SEO Report');
+  const savedCopy = useRef(JSON.stringify(EMPTY_COPY));
+
+  // Cover screenshot
+  const [hasCover, setHasCover] = useState(false);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+
+  const [fetching, setFetching] = useState<string | null>(null);
+
   const [instruction, setInstruction] = useState('');
   const [asking, setAsking] = useState(false);
   const [aiNote, setAiNote] = useState<{ text: string; ignored: boolean } | null>(null);
@@ -127,6 +150,45 @@ const ReportBuilder: React.FC = () => {
   const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
   const [saveState, setSaveState] = useState<{ text: string; err?: boolean }>({ text: '' });
   const [finishing, setFinishing] = useState(false);
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
+
+  /** Take a composer payload as the new truth for every figure and tick. */
+  const applyComposer = (d: any) => {
+    setEditable(d.editable !== false);
+    setSections(d.sections || []);
+    setAvailable(d.available || {});
+    setSectionOn(d.selectedSections || {});
+    setItems(d.items || []);
+    setItemOn(d.selectedItems || {});
+    // In a provider section with nothing in it yet, zero only means "not
+    // entered": show the field empty so typing 7 gives 7, not 07.
+    const avail = d.available || {};
+    const text = Object.fromEntries((d.items || []).map((i: Item) => {
+      const t = toText(i);
+      return [i.id, i.section in PROVIDER_NAME && !avail[i.section] && Number(t) === 0 ? '' : t];
+    }));
+    setValues(text);
+    setSaved(text);
+    setEditing(null);
+    if (d.copyHeadings) setHeadings(d.copyHeadings);
+    if (d.brandLineDefault) setBrandDefault(d.brandLineDefault);
+    const c: Copy = { ...EMPTY_COPY, ...(d.copy || {}) };
+    setCopy(c);
+    savedCopy.current = JSON.stringify(c);
+    setHasCover(!!d.hasCover);
+  };
+
+  const loadCover = useCallback(async () => {
+    try {
+      const res = await api.get(`${base}/cover`, { responseType: 'blob', skipErrorToast: true } as any);
+      setCoverUrl(URL.createObjectURL(res.data));
+    } catch (e) {
+      setCoverUrl(null);
+    }
+  }, [base]);
+
+  // Release the previous preview whenever it is replaced, and on the way out.
+  useEffect(() => () => { if (coverUrl) URL.revokeObjectURL(coverUrl); }, [coverUrl]);
 
   useEffect(() => {
     if (!clientId || !snapshotId) return;
@@ -138,25 +200,11 @@ const ReportBuilder: React.FC = () => {
       api.get(`/clients/${clientId}/connections`).catch(() => ({ data: [] })),
     ]).then(([c, r, comp, conn]) => {
       if (cancelled) return;
-      const d = comp.data || {};
       setClient(c.data);
       setReport(r.data);
       setConnections(conn.data || []);
-      setEditable(d.editable !== false);
-      setSections(d.sections || []);
-      setAvailable(d.available || {});
-      setSectionOn(d.selectedSections || {});
-      setItems(d.items || []);
-      setItemOn(d.selectedItems || {});
-      // In a provider section with nothing in it yet, zero only means "not
-      // entered": show the field empty so typing 7 gives 7, not 07.
-      const avail = d.available || {};
-      const text = Object.fromEntries((d.items || []).map((i: Item) => {
-        const t = toText(i);
-        return [i.id, i.section in PROVIDER_NAME && !avail[i.section] && Number(t) === 0 ? '' : t];
-      }));
-      setValues(text);
-      setSaved(text);
+      applyComposer(comp.data || {});
+      if (comp.data?.hasCover) loadCover();
     }).catch(() => {
       // Handled by global interceptor
     }).finally(() => { if (!cancelled) setLoading(false); });
@@ -177,14 +225,14 @@ const ReportBuilder: React.FC = () => {
 
   // ── Saving: queued one at a time, like the reference builder's autosave ──
   const dirty = useRef(false);
-  const latest = useRef({ items, values, saved, sectionOn, itemOn });
-  latest.current = { items, values, saved, sectionOn, itemOn };
+  const latest = useRef({ items, values, saved, sectionOn, itemOn, copy });
+  latest.current = { items, values, saved, sectionOn, itemOn, copy };
   const chain = useRef<Promise<unknown>>(Promise.resolve());
 
   const persist = useCallback(async () => {
     if (!dirty.current) return;
     dirty.current = false;
-    const { items, values, saved, sectionOn, itemOn } = latest.current;
+    const { items, values, saved, sectionOn, itemOn, copy } = latest.current;
     setSaveState({ text: 'Saving…' });
     try {
       const edits: Record<string, number | boolean> = {};
@@ -204,6 +252,13 @@ const ReportBuilder: React.FC = () => {
       }
       const res = await api.put(`${base}/composer`, { sections: sectionOn, items: itemOn });
       if (res.data?.selectedSections) setSectionOn(res.data.selectedSections);
+
+      const copyJson = JSON.stringify(copy);
+      if (copyJson !== savedCopy.current) {
+        await api.put(`${base}/copy`, copy);
+        savedCopy.current = copyJson;
+      }
+
       const t = new Date();
       setSaveState({ text: `Saved ✓ ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` });
     } catch (e) {
@@ -218,6 +273,50 @@ const ReportBuilder: React.FC = () => {
     chain.current = run.catch(() => {});
     return run;
   }, [persist]);
+
+  // ── Leaving with unsaved changes ──
+  useEffect(() => {
+    // Closing or reloading the tab: the browser's own prompt.
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirty.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    // Any link inside the app — sidebar, breadcrumbs, "Connect it" — is held
+    // until the person chooses what to do with their changes.
+    const onClick = (e: MouseEvent) => {
+      if (!dirty.current || e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo(url.pathname + url.search + url.hash);
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('click', onClick, true);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('click', onClick, true);
+    };
+  }, []);
+
+  const saveAndLeave = async () => {
+    const to = leaveTo;
+    if (!to) return;
+    try { await queueSave(); } catch (e) { return; }
+    setLeaveTo(null);
+    navigate(to);
+  };
+
+  const leaveWithoutSaving = () => {
+    const to = leaveTo;
+    dirty.current = false;
+    setLeaveTo(null);
+    if (to) navigate(to);
+  };
 
   // ── Edits ──
   const autoIncluded = useRef<Set<string>>(new Set());
@@ -260,6 +359,16 @@ const ReportBuilder: React.FC = () => {
     }
   };
 
+  const setBrand = (text: string) => { setCopy(c => ({ ...c, brand_line: text })); dirty.current = true; };
+  const setTitle = (key: string, text: string) => {
+    setCopy(c => ({ ...c, titles: { ...c.titles, [key]: text } }));
+    dirty.current = true;
+  };
+  const setSubtitle = (key: string, text: string) => {
+    setCopy(c => ({ ...c, subtitles: { ...c.subtitles, [key]: text } }));
+    dirty.current = true;
+  };
+
   const askAi = async () => {
     if (!instruction.trim()) return;
     setAsking(true);
@@ -276,11 +385,56 @@ const ReportBuilder: React.FC = () => {
     setAsking(false);
   };
 
+  /** Replace one source's figures with fresh ones from Google, for this report's window. */
+  const fetchFrom = async (key: string) => {
+    setFetching(key);
+    // Save first, so nothing typed elsewhere is lost when the payload comes back.
+    try { await queueSave(); } catch (e) { setFetching(null); return; }
+    try {
+      const res = await api.post(`${base}/fetch/${key}`);
+      applyComposer(res.data || {});
+      toast.success(`Fresh ${PROVIDER_NAME[key]} figures fetched.`);
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setFetching(null);
+  };
+
+  const uploadCover = async (file: File) => {
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { toast.error('Use a PNG, JPEG or WebP image.'); return; }
+    if (file.size > COVER_MAX) { toast.error('The screenshot must be 5 MB or smaller.'); return; }
+    setCoverBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.put(`${base}/cover`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setHasCover(true);
+      await loadCover();
+      toast.success('Cover screenshot added.');
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setCoverBusy(false);
+  };
+
+  const removeCover = async () => {
+    setCoverBusy(true);
+    try {
+      await api.delete(`${base}/cover`);
+      setHasCover(false);
+      setCoverUrl(null);
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setCoverBusy(false);
+  };
+
   // ── Steps ──
-  const steps = useMemo(() => [
-    { key: 'overview', label: 'Sections to include' },
-    ...sections.map(s => ({ key: s.key, label: s.label })),
-    { key: 'review', label: 'Review & generate' },
+  const steps = useMemo<Step[]>(() => [
+    { key: 'basics', kind: 'basics', label: 'Report basics' },
+    { key: 'overview', kind: 'overview', label: 'Sections to include' },
+    ...sections.map(s => ({ key: s.key, kind: 'section' as const, label: s.label })),
+    { key: 'review', kind: 'review', label: 'Review & generate' },
   ], [sections]);
 
   const go = (i: number) => {
@@ -291,6 +445,7 @@ const ReportBuilder: React.FC = () => {
     setVisited(v => new Set(v).add(i));
     document.querySelector('.app-content')?.scrollTo({ top: 0, behavior: 'smooth' });
   };
+  const goTo = (key: string) => go(steps.findIndex(s => s.key === key));
 
   const reportPage = `/admin/clients/${clientId}/reports/${snapshotId}`;
 
@@ -333,6 +488,8 @@ const ReportBuilder: React.FC = () => {
     ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' })
     : '';
   const sectionsOnCount = sections.filter(s => sectionOn[s.key]).length;
+  const customHeadings = Object.keys(copy.titles).filter(k => copy.titles[k]?.trim()).length
+    + Object.keys(copy.subtitles).filter(k => copy.subtitles[k]?.trim()).length;
   const cur = steps[step];
 
   // ── Pieces (plain render functions, not components — a component defined
@@ -426,6 +583,135 @@ const ReportBuilder: React.FC = () => {
     );
   };
 
+  /** Title + subtitle for each heading this step prints. */
+  const headingEditor = (group: string) => {
+    const list = headings.filter(h => h.section === group);
+    if (list.length === 0) return null;
+    return (
+      <div className="rb-group">
+        <div className="rb-group-label"><span className="rb-inline"><Type size={12} /> Headings in the report</span></div>
+        <div className="rb-copy">
+          {list.map(h => (
+            <div key={h.key} className="rb-copy-row">
+              {list.length > 1 && <div className="rb-copy-caption">{h.title.replace('{period}', periodLabel)}</div>}
+              <label className="rb-copy-field">
+                <span>Title</span>
+                <input
+                  className="form-input"
+                  maxLength={120}
+                  placeholder={h.title}
+                  value={copy.titles[h.key] ?? ''}
+                  disabled={!editable}
+                  onChange={e => setTitle(h.key, e.target.value)}
+                />
+              </label>
+              <label className="rb-copy-field">
+                <span>Subtitle <em>optional</em></span>
+                <input
+                  className="form-input"
+                  maxLength={280}
+                  placeholder="A supporting line under the title"
+                  value={copy.subtitles[h.key] ?? ''}
+                  disabled={!editable}
+                  onChange={e => setSubtitle(h.key, e.target.value)}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+        <p className="rb-note">
+          A blank title keeps the default shown in grey. Write {'{period}'} for the report month
+          and {'{client}'} for the client's name.
+        </p>
+      </div>
+    );
+  };
+
+  const fetchButton = (key: string) => {
+    if (!FETCHABLE[key] || !editable) return null;
+    const live = connected(key);
+    return (
+      <button
+        className="btn btn-secondary btn-sm rb-fetch"
+        onClick={() => fetchFrom(key)}
+        disabled={!!fetching || !live}
+        title={live ? `Replace these figures with fresh ones from ${PROVIDER_NAME[key]}` : 'Connect it first'}
+      >
+        {fetching === key
+          ? <><Loader2 size={13} className="spin" /> Fetching…</>
+          : <><RefreshCw size={13} /> Fetch from {FETCHABLE[key]}</>}
+      </button>
+    );
+  };
+
+  const renderBasics = () => (
+    <>
+      <div className="rb-panel-head">
+        <div>
+          <h2 className="rb-panel-title"><SlidersHorizontal size={18} /> Report basics</h2>
+          <p className="rb-panel-sub">
+            The cover and the opening page. Everything here is optional — blank fields keep the defaults.
+          </p>
+        </div>
+      </div>
+
+      <div className="rb-group">
+        <div className="rb-group-label">Brand line</div>
+        <input
+          className="form-input rb-brand"
+          maxLength={80}
+          placeholder={brandDefault}
+          value={copy.brand_line}
+          disabled={!editable}
+          onChange={e => setBrand(e.target.value)}
+        />
+        <p className="rb-note">The small gold label above the title on the cover.</p>
+      </div>
+
+      <div className="rb-group">
+        <div className="rb-group-label">Website homepage screenshot</div>
+        <div className="rb-cover">
+          {coverUrl ? (
+            <div className="rb-cover-frame">
+              <div className="rb-cover-bar"><i /><i /><i /><span>{client?.domain}</span></div>
+              <img src={coverUrl} alt="Cover screenshot" />
+            </div>
+          ) : (
+            <div className="rb-cover-empty"><ImagePlus size={22} /><span>No screenshot yet</span></div>
+          )}
+          <div className="rb-cover-actions">
+            <p className="rb-note" style={{ marginTop: 0 }}>
+              Shown on the cover inside a browser frame, beside the title. A clean capture of the
+              homepage works best. PNG, JPEG or WebP, up to 5 MB.
+            </p>
+            {editable && (
+              <div className="rb-cover-buttons">
+                <label className={`btn btn-secondary btn-sm ${coverBusy ? 'is-disabled' : ''}`}>
+                  {coverBusy ? <Loader2 size={14} className="spin" /> : <ImagePlus size={14} />}
+                  {hasCover ? 'Replace' : 'Upload screenshot'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    hidden
+                    disabled={coverBusy}
+                    onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadCover(f); }}
+                  />
+                </label>
+                {hasCover && (
+                  <button className="btn ghost btn-sm" onClick={removeCover} disabled={coverBusy}>
+                    <Trash2 size={14} /> Remove
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {headingEditor('basics')}
+    </>
+  );
+
   const renderOverview = () => (
     <>
       <div className="rb-panel-head">
@@ -469,7 +755,7 @@ const ReportBuilder: React.FC = () => {
 
       <div className="rb-group-label">Sections · {sectionsOnCount} of {sections.length} included</div>
       <div className="rb-toggle-grid">
-        {sections.map((sec, idx) => {
+        {sections.map(sec => {
           const has = hasData(sec.key);
           const on = !!sectionOn[sec.key];
           const list = bySection[sec.key] || [];
@@ -486,7 +772,7 @@ const ReportBuilder: React.FC = () => {
                     : isProvider(sec.key) ? 'No figures yet — enter them on its step' : 'Nothing recorded this period'}
                 </span>
               </span>
-              <button type="button" className="rb-jump" onClick={e => { e.preventDefault(); go(idx + 1); }}>Edit</button>
+              <button type="button" className="rb-jump" onClick={e => { e.preventDefault(); goTo(sec.key); }}>Edit</button>
             </label>
           );
         })}
@@ -545,9 +831,11 @@ const ReportBuilder: React.FC = () => {
           <div className="rb-source auto">
             <Plug size={15} />
             <span>
-              <strong>Auto-filled from {PROVIDER_NAME[key]}.</strong> These figures were pulled from the
-              connected account for this period. They stay editable — use the pencil to correct any of them.
+              <strong>Auto-filled from {PROVIDER_NAME[key]}.</strong> Pulled from the connected account
+              for this period. Every figure stays editable with the pencil
+              {FETCHABLE[key] ? ' — fetch again to replace them with the latest.' : '.'}
             </span>
+            {fetchButton(key)}
           </div>
         ) : typedIn ? (
           <div className="rb-source manual">
@@ -556,8 +844,9 @@ const ReportBuilder: React.FC = () => {
               <strong>{PROVIDER_NAME[key]} isn't connected</strong>, so enter this period's figures by hand.{' '}
               {key === 'gbp'
                 ? <>Figures kept under <Link to={dataPage || '#'}>GBP Data</Link> are filled in already.</>
-                : <><Link to={`/admin/clients/${clientId}/connections`}>Connect it</Link> to have them filled in automatically.</>}
+                : <><Link to={`/admin/clients/${clientId}/connections`}>Connect it</Link> to fetch them automatically.</>}
             </span>
+            {fetchButton(key)}
           </div>
         ) : (
           <div className="rb-source">
@@ -609,6 +898,8 @@ const ReportBuilder: React.FC = () => {
             )}
           </div>
         )}
+
+        {headingEditor(key)}
       </>
     );
   };
@@ -625,7 +916,15 @@ const ReportBuilder: React.FC = () => {
         </div>
       </div>
       <div className="rb-review">
-        {sections.map((sec, idx) => {
+        <div className="rb-review-row">
+          <span className="rb-review-name"><SlidersHorizontal size={15} /> Report basics</span>
+          <span className="rb-review-meta">
+            {copy.brand_line.trim() || brandDefault} · {hasCover ? 'Cover screenshot added' : 'No cover screenshot'}
+            {customHeadings > 0 ? ` · ${customHeadings} custom heading${customHeadings === 1 ? '' : 's'}` : ''}
+          </span>
+          <button type="button" className="rb-jump" onClick={() => goTo('basics')}>Edit</button>
+        </div>
+        {sections.map(sec => {
           const on = !!sectionOn[sec.key];
           const list = bySection[sec.key] || [];
           const shown = list.filter(i => itemOn[i.id] !== false).length;
@@ -637,7 +936,7 @@ const ReportBuilder: React.FC = () => {
                 {on ? `${shown} of ${list.length} items · ${src}` : hasData(sec.key) ? 'Left out' : 'No data'}
               </span>
               <span className={`rb-pill ${on ? 'on' : ''}`}>{on ? 'Included' : 'Off'}</span>
-              <button type="button" className="rb-jump" onClick={() => go(idx + 1)}>Edit</button>
+              <button type="button" className="rb-jump" onClick={() => goTo(sec.key)}>Edit</button>
             </div>
           );
         })}
@@ -672,7 +971,6 @@ const ReportBuilder: React.FC = () => {
         <aside className="rb-nav" aria-label="Report builder steps">
           <div className="rb-tablist" role="tablist">
             {steps.map((s, i) => {
-              const isSection = i > 0 && i < steps.length - 1;
               const done = visited.has(i) && i !== step;
               return (
                 <button
@@ -685,7 +983,7 @@ const ReportBuilder: React.FC = () => {
                 >
                   <span className="rb-tab-num">{done ? <Check size={13} /> : i + 1}</span>
                   <span className="rb-tab-label">{s.label}</span>
-                  {isSection && !sectionOn[s.key] && <span className="rb-tab-state">Off</span>}
+                  {s.kind === 'section' && !sectionOn[s.key] && <span className="rb-tab-state">Off</span>}
                 </button>
               );
             })}
@@ -701,7 +999,10 @@ const ReportBuilder: React.FC = () => {
 
         <div className="rb-main">
           <div className="rb-panel" key={cur.key}>
-            {cur.key === 'overview' ? renderOverview() : cur.key === 'review' ? renderReview() : renderSection(cur.key)}
+            {cur.kind === 'basics' ? renderBasics()
+              : cur.kind === 'overview' ? renderOverview()
+              : cur.kind === 'review' ? renderReview()
+              : renderSection(cur.key)}
           </div>
 
           <div className="rb-actionbar">
@@ -725,6 +1026,23 @@ const ReportBuilder: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {leaveTo && (
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setLeaveTo(null); }}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="rb-leave-title">
+            <h2 className="modal-title" id="rb-leave-title">Save your changes?</h2>
+            <p className="modal-desc">
+              You've changed this report since it was last saved. Save before you go, or the
+              changes will be lost.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setLeaveTo(null)}>Stay</button>
+              <button className="btn ghost" onClick={leaveWithoutSaving}>Leave without saving</button>
+              <button className="btn btn-primary" onClick={saveAndLeave}>Save &amp; leave</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

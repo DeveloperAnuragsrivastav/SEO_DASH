@@ -4066,3 +4066,91 @@ input[type=number] { -moz-appearance: textfield; }
   .rb-actionbar-nav .btn { flex: 1; min-width: 0; justify-content: center; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
   .rb-actionbar > .btn.ghost { order: 2; align-self: center; padding: 3px 10px; font-size: 12.5px; }
 }
+
+/* ── Report builder: headings, brand line, cover screenshot, fetch ── */
+
+.rb-note { margin: 7px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.rb-inline { display: inline-flex; align-items: center; gap: 6px; }
+.rb-brand { max-width: 420px; }
+
+.rb-copy { display: flex; flex-direction: column; gap: 10px; }
+.rb-copy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+}
+@media (max-width: 720px) { .rb-copy-row { grid-template-columns: 1fr; } }
+.rb-copy-caption { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.rb-copy-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.rb-copy-field em { font-style: normal; font-weight: 500; color: var(--ink-4); }
+.rb-copy-field .form-input { height: 34px; }
+.rb-panel .rb-group + .rb-group,
+.rb-body + .rb-group,
+.rb-empty + .rb-group { margin-top: 24px; }
+
+/* Fetch sits at the end of the source note, wrapping under it when narrow */
+.rb-source { flex-wrap: wrap; }
+.rb-source > span { flex: 1; min-width: 220px; }
+.rb-fetch { flex-shrink: 0; white-space: nowrap; }
+
+/* Cover screenshot: preview in the same browser frame the cover uses */
+.rb-cover { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; }
+.rb-cover-frame {
+  width: 280px;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.rb-cover-bar { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; background: var(--canvas-2); }
+.rb-cover-bar i { width: 7px; height: 7px; border-radius: 50%; background: var(--n-300); }
+.rb-cover-bar i:nth-child(1) { background: #F26B5E; }
+.rb-cover-bar i:nth-child(2) { background: #F4BE4F; }
+.rb-cover-bar i:nth-child(3) { background: #5DC76C; }
+.rb-cover-bar span {
+  flex: 1;
+  min-width: 0;
+  height: 13px;
+  margin-left: 6px;
+  padding: 0 7px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--ink-3);
+  font-size: 9px;
+  line-height: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-cover-frame img { display: block; width: 100%; height: 170px; object-fit: cover; object-position: top; }
+.rb-cover-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  width: 280px;
+  max-width: 100%;
+  height: 192px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.rb-cover-actions { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 200px; }
+.rb-cover-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+label.btn { cursor: pointer; }
+.btn.is-disabled { opacity: 0.5; pointer-events: none; }

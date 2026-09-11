@@ -195,6 +195,59 @@
             color: var(--yellow);
         }
 
+        /* Homepage screenshot in a browser frame, right of the headline */
+        .cover.has-shot h1 { max-width: 420px; }
+
+        .cover-shot {
+            position: absolute;
+            top: 100px;
+            right: 54px;
+            width: 236px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .18);
+            border-radius: 7px;
+            background: #fff;
+            box-shadow: 0 14px 34px rgba(0, 0, 0, .35);
+        }
+
+        .cover-shot-bar {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            height: 16px;
+            padding: 0 7px;
+            background: #EEF0F2;
+        }
+
+        .cover-shot-bar i { width: 5px; height: 5px; border-radius: 50%; background: #C9CDD2; }
+        .cover-shot-bar i:nth-child(1) { background: #F26B5E; }
+        .cover-shot-bar i:nth-child(2) { background: #F4BE4F; }
+        .cover-shot-bar i:nth-child(3) { background: #5DC76C; }
+
+        .cover-shot-bar span {
+            flex: 1;
+            min-width: 0;
+            height: 9px;
+            margin-left: 6px;
+            padding: 0 6px;
+            overflow: hidden;
+            border-radius: 4px;
+            background: #fff;
+            color: #80868B;
+            font-size: 5.5px;
+            line-height: 9px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .cover-shot img {
+            display: block;
+            width: 100%;
+            height: 132px;
+            object-fit: cover;
+            object-position: top;
+        }
+
         .date-row {
             display: flex;
             align-items: center;
@@ -1368,23 +1421,30 @@
     
     <!-- Page 1: Cover, Executive Summary, Key Metrics -->
     <section class="report-page page-one">
-        <header class="cover">
+        <header class="cover{% if cover_screenshot %} has-shot{% endif %}">
             <div class="cover-inner">
                 <div class="brandline">
                     <div class="brandcopy"><strong>{{ client_name }}</strong><small>{{ client_domain }}</small></div>
                     <div class="ez-logo"><img src="{{ brand_logo }}" alt="" /></div>
                 </div>
-                <p class="report-label">Monthly SEO Report</p>
+                <p class="report-label">{{ brand_line }}</p>
                 <h1 style="margin: 0; font-size: 37px; line-height: 1;">Performance Report<br /><span>{{ display_label }}</span></h1>
                 <div class="date-row">
                     <span class="status">Report Generated</span>
                     <span>Generated {{ generated_at_display }}</span>
                 </div>
+                {% if cover_screenshot %}
+                <!-- The client's homepage in a browser frame, as the reference cover has -->
+                <div class="cover-shot" aria-hidden="true">
+                    <div class="cover-shot-bar"><i></i><i></i><i></i><span>{{ client_domain }}</span></div>
+                    <img src="{{ cover_screenshot }}" alt="" />
+                </div>
+                {% endif %}
             </div>
         </header>
         <div class="page-inner page-one-content">
             <span class="eyebrow">Executive summary</span>
-            <h2 class="section-heading">{{ display_label }} Insights</h2>
+            <h2 class="section-heading">{{ ct('exec_summary') }}</h2>{% if cs('exec_summary') %}<p class="section-desc">{{ cs('exec_summary') }}</p>{% endif %}
             <div class="section-rule"></div>
             {% if narrative %}
             <div class="page-note">{{ narrative }}</div>
@@ -1393,7 +1453,7 @@
             {% endif %}
             
             <span class="eyebrow" style="margin-top:55px">Performance at a glance</span>
-            <h2 class="section-heading">Key Metrics</h2>
+            <h2 class="section-heading">{{ ct('key_metrics') }}</h2>{% if cs('key_metrics') %}<p class="section-desc">{{ cs('key_metrics') }}</p>{% endif %}
             <div class="section-rule"></div>
             
             {% set total_keywords = keywords | length %}
@@ -1548,7 +1608,7 @@
             <!-- GSC Section -->
             <div class="heading-row">
                 <div><span class="eyebrow">Search Performance</span>
-                    <h2 class="section-heading">Google Search Console</h2>
+                    <h2 class="section-heading">{{ ct('gsc') }}</h2>{% if cs('gsc') %}<p class="section-desc">{{ cs('gsc') }}</p>{% endif %}
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GSC · auto</span></span>
             </div>
             <div class="section-rule"></div>
@@ -1572,7 +1632,7 @@
             <!-- GA4 Section -->
             <div class="heading-row">
                 <div><span class="eyebrow">Website Traffic</span>
-                    <h2 class="section-heading">Google Analytics 4</h2>
+                    <h2 class="section-heading">{{ ct('ga4') }}</h2>{% if cs('ga4') %}<p class="section-desc">{{ cs('ga4') }}</p>{% endif %}
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
@@ -1646,7 +1706,7 @@
             
             <div class="heading-row">
                 <div><span class="eyebrow">Page performance</span>
-                    <h2 class="section-heading">Top Pages (GSC)</h2>
+                    <h2 class="section-heading">{{ ct('gsc_pages') }}</h2>{% if cs('gsc_pages') %}<p class="section-desc">{{ cs('gsc_pages') }}</p>{% endif %}
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GSC · auto</span></span>
             </div>
             <div class="section-rule"></div>
@@ -1689,7 +1749,7 @@
             {% if ga4_traffic_sources %}
             <div class="heading-row">
                 <div><span class="eyebrow">Acquisition</span>
-                    <h2 class="section-heading">Top Traffic Sources (GA4)</h2>
+                    <h2 class="section-heading">{{ ct('ga4_sources') }}</h2>{% if cs('ga4_sources') %}<p class="section-desc">{{ cs('ga4_sources') }}</p>{% endif %}
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
@@ -1722,7 +1782,7 @@
             {% if ga4_top_pages %}
             <div class="heading-row">
                 <div><span class="eyebrow">Engagement</span>
-                    <h2 class="section-heading">Top Landing Pages (GA4)</h2>
+                    <h2 class="section-heading">{{ ct('ga4_pages') }}</h2>{% if cs('ga4_pages') %}<p class="section-desc">{{ cs('ga4_pages') }}</p>{% endif %}
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
@@ -1756,7 +1816,7 @@
             <div style="break-inside: avoid; page-break-inside: avoid; margin-top:28px;">
                 <div class="heading-row">
                     <div><span class="eyebrow">Audience</span>
-                        <h2 class="section-heading">Device Breakdown (GA4)</h2>
+                        <h2 class="section-heading">{{ ct('ga4_devices') }}</h2>{% if cs('ga4_devices') %}<p class="section-desc">{{ cs('ga4_devices') }}</p>{% endif %}
                     </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
                 </div>
                 <div class="section-rule"></div>
@@ -1783,7 +1843,7 @@
             <div style="break-inside: avoid; page-break-inside: avoid; margin-top:28px; margin-bottom:28px;">
                 <div class="heading-row">
                     <div><span class="eyebrow">Audience</span>
-                        <h2 class="section-heading">Top Countries (GA4)</h2>
+                        <h2 class="section-heading">{{ ct('ga4_countries') }}</h2>{% if cs('ga4_countries') %}<p class="section-desc">{{ cs('ga4_countries') }}</p>{% endif %}
                     </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
                 </div>
                 <div class="section-rule"></div>
@@ -1823,7 +1883,7 @@
         <div class="page-inner">
             <div class="heading-row">
                 <div><span class="eyebrow">Keyword performance</span>
-                    <h2 class="section-heading">Rankings</h2>
+                    <h2 class="section-heading">{{ ct('rankings') }}</h2>{% if cs('rankings') %}<p class="section-desc">{{ cs('rankings') }}</p>{% endif %}
                 </div>
             </div>
             <div class="section-rule"></div>
@@ -1912,7 +1972,7 @@
         <div class="page-inner">
             <span class="eyebrow">Search generative experience</span>
             <div class="heading-row">
-                <h2 class="section-heading">AI Visibility</h2>
+                <div><h2 class="section-heading">{{ ct('ai_visibility') }}</h2>{% if cs('ai_visibility') %}<p class="section-desc">{{ cs('ai_visibility') }}</p>{% endif %}</div>
             </div>
             <div class="section-rule"></div>
             <div class="ai-grid">
@@ -1952,7 +2012,7 @@
         <div class="page-inner">
             <div class="heading-row">
                 <div><span class="eyebrow">Off-page SEO</span>
-                    <h2 class="section-heading">Links Built</h2>
+                    <h2 class="section-heading">{{ ct('links') }}</h2>{% if cs('links') %}<p class="section-desc">{{ cs('links') }}</p>{% endif %}
                 </div>
             </div>
             <div class="section-rule"></div>
@@ -2016,7 +2076,7 @@
         <div class="page-inner">
             <div class="heading-row">
                 <div><span class="eyebrow">Project delivery</span>
-                    <h2 class="section-heading">Work Done & Proof</h2>
+                    <h2 class="section-heading">{{ ct('work') }}</h2>{% if cs('work') %}<p class="section-desc">{{ cs('work') }}</p>{% endif %}
                 </div>
             </div>
             <div class="section-rule"></div>
