@@ -220,42 +220,49 @@ const ReportView: React.FC = () => {
         />
       )}
 
-      {/* Report header — lives inside the app shell, so no second dark bar */}
-      <div className="report-head">
-        <div className="report-head-id">
-          {client?.logo_url
-            ? <span className="report-logo"><img src={client.logo_url} alt="" /></span>
-            : <span className="report-logo is-empty">Client logo</span>}
-          <div className="report-head-text">
-            <h1 className="page-title">{client?.name}</h1>
-            <p className="page-subtitle">
-              {client?.domain}
-              {windowLabel && <> · {windowLabel}</>}
-            </p>
+      {/* Report cover — the same masthead the PDF opens with */}
+      <div className="report-cover">
+        <div className="report-cover-inner">
+          <div className="report-cover-id">
+            {client?.logo_url
+              ? <span className="report-logo"><img src={client.logo_url} alt="" /></span>
+              : <span className="report-logo is-empty">Client logo</span>}
+            <div className="report-head-text">
+              <h2 className="report-cover-name">{client?.name}</h2>
+              <p className="report-cover-domain">{client?.domain}</p>
+            </div>
           </div>
-          <span className={`badge ${report?.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
-            {(report?.status || 'no report').toUpperCase()}
-          </span>
-        </div>
 
-        <div className="report-head-actions">
-          <Link to={`/admin/clients/${clientId}`} className="btn ghost">Back to client</Link>
+          <p className="report-eyebrow">Monthly SEO Report</p>
+          <h1 className="report-cover-title">
+            Performance Report
+            {windowLabel && <span>{windowLabel}</span>}
+          </h1>
 
-          {report && report.status === 'draft' && snapshotId !== 'multi' && (
-            <button className="btn btn-secondary" onClick={() => setShowComposer(true)}>
-              <SlidersHorizontal size={14} /> Sections &amp; Data
-            </button>
-          )}
+          <div className="report-cover-meta">
+            <span className="report-status">{(report?.status || 'no report').toUpperCase()}</span>
+            {report?.generated_at && <span>Generated {new Date(report.generated_at).toLocaleString()}</span>}
+          </div>
 
-          {report && (
-            <button className="btn btn-secondary" onClick={handleDownloadPDF} disabled={downloadingPDF}>
-              {downloadingPDF ? 'Generating PDF…' : 'Download PDF'}
-            </button>
-          )}
+          <div className="report-cover-actions">
+            <Link to={`/admin/clients/${clientId}`} className="btn ghost">Back to client</Link>
 
-          {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (
-            <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
-          )}
+            {report && report.status === 'draft' && snapshotId !== 'multi' && (
+              <button className="btn btn-secondary" onClick={() => setShowComposer(true)}>
+                <SlidersHorizontal size={14} /> Sections &amp; Data
+              </button>
+            )}
+
+            {report && (
+              <button className="btn btn-secondary" onClick={handleDownloadPDF} disabled={downloadingPDF}>
+                {downloadingPDF ? 'Generating PDF…' : 'Download PDF'}
+              </button>
+            )}
+
+            {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (
+              <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
+            )}
+          </div>
         </div>
       </div>
 

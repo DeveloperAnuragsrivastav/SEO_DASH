@@ -184,8 +184,11 @@
             max-width: 565px;
             margin: 0;
             font-size: 37px;
-            line-height: .99;
-            letter-spacing: -.075em;
+            /* Anton is already condensed; the old -.075em ran the glyphs into
+               each other, and line-height .99 clipped their tops. */
+            line-height: 1.08;
+            letter-spacing: -.012em;
+            padding-bottom: .06em;
         }
 
         .cover h1 span {
@@ -256,7 +259,7 @@
             border-radius: 10px;
             background: var(--forest);
             color: #fff;
-            box-shadow: 0 6px 20px rgba(18, 63, 65, .25);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
         }
 
         .callout-box h3 {
@@ -854,7 +857,7 @@
             border: 1px solid var(--line);
             border-radius: 12px;
             background: #fff;
-            box-shadow: 0 2px 10px rgba(18, 63, 65, .05);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .05);
         }
 
         .small-metric span {
@@ -1039,7 +1042,7 @@
             min-width: 23px;
             padding: 2px 5px;
             border-radius: 4px;
-            background: #e8f4eb;
+            background: #f3f3f1;
             color: #136643;
             font-weight: 700;
             text-align: center;
@@ -1054,9 +1057,9 @@
 
         .ai-metric {
             padding: 11px;
-            border: 1px solid #cfe4f8;
+            border: 1px solid var(--line);
             border-radius: 5px;
-            background: var(--blue-soft);
+            background: #fff;
         }
 
         .ai-metric span {
@@ -1069,7 +1072,7 @@
         .ai-metric strong {
             display: block;
             margin-top: 9px;
-            color: var(--blue);
+            color: var(--ink);
             font-size: 21px;
             line-height: 1;
             letter-spacing: -.06em;
@@ -1819,7 +1822,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Keyword performance</span>
                     <h2 class="section-heading">Rankings</h2>
-                </div><span class="pill">Tracking</span>
+                </div>
             </div>
             <div class="section-rule"></div>
             <div class="card">
@@ -1907,7 +1910,7 @@
         <div class="page-inner">
             <span class="eyebrow">Search generative experience</span>
             <div class="heading-row">
-                <h2 class="section-heading">AI Visibility</h2><span class="pill">Tracking</span>
+                <h2 class="section-heading">AI Visibility</h2>
             </div>
             <div class="section-rule"></div>
             <div class="ai-grid">
@@ -1948,7 +1951,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Off-page SEO</span>
                     <h2 class="section-heading">Links Built</h2>
-                </div><span class="pill">Delivery</span>
+                </div>
             </div>
             <div class="section-rule"></div>
             <div class="links-summary">
@@ -2012,7 +2015,7 @@
             <div class="heading-row">
                 <div><span class="eyebrow">Project delivery</span>
                     <h2 class="section-heading">Work Done & Proof</h2>
-                </div><span class="pill">Delivery</span>
+                </div>
             </div>
             <div class="section-rule"></div>
             

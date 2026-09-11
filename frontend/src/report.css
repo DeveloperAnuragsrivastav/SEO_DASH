@@ -10,66 +10,185 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Report header ───────────────────────────────────────────
-   The report renders inside the app shell, so it uses a normal page
-   header rather than a second full-width bar of its own. */
+/* ── Report cover ────────────────────────────────────────────
+   The same masthead the PDF opens with, so the report on screen and
+   the report in the client's inbox read as one document. */
 
-.report-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
+.report-cover {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 24px;
+  padding: 30px 36px 28px;
+  border-radius: var(--radius-lg);
+  background: #1A1A18;
+  color: #fff;
 }
 
-.report-head-id {
+/* The two arcs from the cover design. Decorative only. */
+.report-cover::before,
+.report-cover::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.report-cover::before {
+  width: 330px;
+  height: 330px;
+  top: -96px;
+  right: -66px;
+  border: 1px solid rgba(17, 85, 155, .86);
+}
+
+.report-cover::after {
+  width: 420px;
+  height: 420px;
+  top: -130px;
+  right: -120px;
+  border: 1px solid rgba(237, 170, 16, .8);
+}
+
+.report-cover-inner { position: relative; z-index: 1; }
+
+/* Client identity — logo, name, domain */
+.report-cover-id {
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
+  margin-bottom: 26px;
 }
 
-.report-head-text { min-width: 0; }
-.report-head-text .page-title { font-size: 22px; }
+.report-cover-id .report-head-text { min-width: 0; }
 
-.report-logo {
+.report-cover-name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  color: #fff;
+}
+
+.report-cover-domain {
+  margin: 2px 0 0;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .52);
+}
+
+.report-cover .report-logo {
   display: grid;
   place-items: center;
   height: 44px;
   min-width: 84px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, .16);
   border-radius: var(--radius-md);
-  background: var(--card);
+  background: rgba(255, 255, 255, .05);
   flex: none;
 }
 
-.report-logo img { max-height: 34px; width: auto; display: block; }
+.report-cover .report-logo img { max-height: 34px; width: auto; display: block; }
 
-.report-logo.is-empty {
+.report-cover .report-logo.is-empty {
   border-style: dashed;
-  font-family: var(--body);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  color: rgba(255, 255, 255, .45);
   white-space: nowrap;
 }
 
-.report-head-actions {
+/* Headline */
+.report-eyebrow {
+  margin: 0 0 6px;
+  color: var(--brand-500, #EDAA10);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.report-cover-title {
+  margin: 0;
+  max-width: 620px;
+  font-family: 'Anton', var(--body), sans-serif;
+  font-weight: 400;
+  font-size: 44px;
+  /* Anton is already condensed — tight tracking runs the glyphs together,
+     and a line-height under 1 clips their tops. */
+  line-height: 1.08;
+  letter-spacing: -.012em;
+  padding-bottom: .06em;
+  color: #fff;
+}
+
+.report-cover-title span { display: block; color: var(--brand-500, #EDAA10); }
+
+.report-cover-meta {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .62);
+}
+
+.report-status {
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: rgba(237, 170, 16, .16);
+  color: var(--brand-500, #EDAA10);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.report-status::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+}
+
+/* Actions — same buttons, sitting on the cover */
+.report-cover-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+}
+
+.report-cover-actions .btn.btn-secondary,
+.report-cover-actions .btn.ghost {
+  border-color: rgba(255, 255, 255, .22);
+  background: rgba(255, 255, 255, .06);
+  color: #fff;
+}
+
+.report-cover-actions .btn.btn-secondary:hover,
+.report-cover-actions .btn.ghost:hover {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .34);
 }
 
 @media (max-width: 720px) {
-  .report-head-id { width: 100%; }
-  .report-head-actions { width: 100%; }
-  .report-head-actions .btn { flex: 1; }
-  .report-logo { display: none; }
+  .report-cover { padding: 24px 20px; }
+  .report-cover-title { font-size: 31px; }
+  .report-cover .report-logo { display: none; }
+  .report-cover-actions .btn { flex: 1; }
 }
 
 /* ── Section nav ─────────────────────────────────────────── */
