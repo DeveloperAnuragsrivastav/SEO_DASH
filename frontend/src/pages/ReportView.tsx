@@ -14,8 +14,14 @@ const SHEET_PX = 794;
    behind the sheet, and open links in a new tab rather than inside the frame. */
 const SCREEN_HEAD = `<base target="_blank"><style>
   html, body { background: transparent !important; }
-  .report-page { margin: 0 auto !important; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 28px rgba(0,0,0,.06); }
 </style>`;
+
+/* The template has two layouts: on screen every section is an A4-tall sheet
+   with generous padding; in print (which the PDF renderer emulates) sections
+   flow into each other. The frame renders as screen, so without this every
+   short section left a near-empty A4 page behind it. Applying the print rules
+   everywhere makes the frame lay out exactly as the PDF does. */
+const asPrinted = (html: string) => html.replace('@media print {', '@media all {');
 
 const ReportView: React.FC = () => {
   const { clientId, snapshotId } = useParams<{ clientId: string; snapshotId: string }>();
@@ -46,7 +52,7 @@ const ReportView: React.FC = () => {
     setHtmlError(false);
     try {
       const { data } = await api.get(htmlEndpoint, { responseType: 'text' });
-      setHtml(String(data).replace('</head>', `${SCREEN_HEAD}</head>`));
+      setHtml(asPrinted(String(data)).replace('</head>', `${SCREEN_HEAD}</head>`));
     } catch (e) {
       setHtmlError(true);
       // Handled by global interceptor

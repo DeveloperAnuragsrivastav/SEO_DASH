@@ -748,6 +748,11 @@
 .report-sheet {
   margin: 0 auto;
   overflow: hidden;
+  border-radius: 4px;
+  background: #fff;
+  /* One shadow around the whole document — per-section shadows drew a seam
+     between every pair of sections. */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .06), 0 8px 28px rgba(0, 0, 0, .06);
 }
 
 .report-sheet iframe {
