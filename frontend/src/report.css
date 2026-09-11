@@ -709,3 +709,49 @@
 }
 
 .report-view .fill.gold { background: var(--r-yellow); }
+
+/* ── In-app report: toolbar + the PDF sheet itself ───────── */
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.report-toolbar-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.report-toolbar-name { font-size: 18px; font-weight: 700; color: var(--ink); }
+.report-toolbar-period { font-size: 13px; color: var(--ink-3); }
+
+.report-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .report-toolbar-actions { width: 100%; }
+  .report-toolbar-actions .btn { flex: 1; }
+}
+
+.report-stage { width: 100%; }
+
+.report-sheet {
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.report-sheet iframe {
+  display: block;
+  border: 0;
+  background: transparent;
+}

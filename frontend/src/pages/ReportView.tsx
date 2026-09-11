@@ -1,18 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { fmt, deltaEl } from '../components/report/ReportUtils';
-import ExecutiveSummary from '../components/report/ExecutiveSummary';
-import TrafficSection from '../components/report/TrafficSection';
-import RankingsSection from '../components/report/RankingsSection';
-import AIVisibilitySection from '../components/report/AIVisibilitySection';
-import LinksSection from '../components/report/LinksSection';
-import WorkDoneSection from '../components/report/WorkDoneSection';
-import { MousePointerClick, Users, TrendingUp, Bot, SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import ReportComposer from '../components/ReportComposer';
 import '../report.css';
+
+/** Width of one sheet in report_pdf.html. */
+const SHEET_PX = 794;
+
+/* Screen-only adjustments layered onto the PDF template: drop the grey desk
+   behind the sheet, and open links in a new tab rather than inside the frame. */
+const SCREEN_HEAD = `<base target="_blank"><style>
+  html, body { background: transparent !important; }
+  .report-page { margin: 0 auto !important; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 28px rgba(0,0,0,.06); }
+</style>`;
 
 const ReportView: React.FC = () => {
   const { clientId, snapshotId } = useParams<{ clientId: string; snapshotId: string }>();
@@ -25,66 +28,34 @@ const ReportView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
-  const [activeSection, setActiveSection] = useState('executive-summary');
   const [showComposer, setShowComposer] = useState(searchParams.get('compose') === '1');
 
-  const snap = report?.snapshot || {};
-  const months = snap.months || [];
-  const windowLabel = months.length > 0 
-    ? (months.length === 1 ? months[0] : `${months[0]} – ${months[months.length - 1]}`)
-    : (report ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' }) : '');
+  // The report itself is the PDF's own template, rendered by the server.
+  const [html, setHtml] = useState<string | null>(null);
+  const [htmlError, setHtmlError] = useState(false);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const [scale, setScale] = useState(1);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLIFrameElement>(null);
 
-  const gsc = snap.gsc || {};
-  const ga4 = snap.ga4 || {};
-  const gbp = snap.gbp || {};
-  const deltas = snap.kpi_deltas || { gsc: {}, ga4: {}, gbp: {} };
+  const htmlEndpoint = snapshotId === 'multi'
+    ? `/clients/${clientId}/reports/multi/html?count=${count}`
+    : `/clients/${clientId}/reports/${snapshotId}/html`;
 
-  // Rows the composer unticked never reach the page. Ids mirror the server's
-  // report_composer module, so app and PDF drop exactly the same rows.
-  const chosenItems = snap.included_items || {};
-  const keepRow = (id: string) => chosenItems[id] !== false;
+  const loadHtml = useCallback(async () => {
+    setHtmlError(false);
+    try {
+      const { data } = await api.get(htmlEndpoint, { responseType: 'text' });
+      setHtml(String(data).replace('</head>', `${SCREEN_HEAD}</head>`));
+    } catch (e) {
+      setHtmlError(true);
+      // Handled by global interceptor
+    }
+  }, [htmlEndpoint]);
 
-  const rawRankings = snap.rankings || { summary: {}, keywords: [] };
-  const rankings = {
-    ...rawRankings,
-    keywords: (rawRankings.keywords || []).filter(
-      (kw: any, i: number) => keepRow(`rankings.kw.${kw.keyword_id ?? `i${i}`}`)
-    ),
-  };
-  const aiVis = (snap.ai_visibility || []).filter(
-    (m: any, i: number) => keepRow(`ai_visibility.${m.prompt_id ?? i}.${m.platform ?? 'unknown'}`)
-  );
-  const links = (snap.links || []).filter(
-    (l: any, i: number) => keepRow(`links.${l.id ?? `i${i}`}`)
-  );
-  const activities = (snap.activities || []).filter((_: any, i: number) => keepRow(`work.act.${i}`));
-  const screenshots = (snap.screenshots || []).filter(
-    (sh: any, i: number) => keepRow(`work.shot.${sh.id ?? `i${i}`}`)
-  );
-
-  const gscClicks = gsc.clicks || 0;
-  const ga4Sessions = ga4.sessions || 0;
-  const ga4Users = ga4.users || 0;
-
-  const aiMentioned = aiVis.filter((m: any) => m.mentioned).length;
-  const aiTotal = aiVis.length;
-
-  // Smart section detection — determine which sections have real data
-  // A section shows only if it has data AND the composer left it switched on.
-  // An absent selection means "show whatever has data", i.e. the old behaviour.
-  const included = snap.included_sections || {};
-  const on = (key: string) => included[key] !== false;
-
-  const showMetric = (id: string) => chosenItems[id] !== false;
-  const metricOn = chosenItems;
-
-  const hasGSC = on('gsc') && (gscClicks > 0 || (gsc.impressions || 0) > 0);
-  const hasGA4 = on('ga4') && (ga4Sessions > 0 || (ga4.users || 0) > 0);
-  const hasGBP = on('gbp') && ((gbp.calls || 0) > 0 || (gbp.direction_requests || 0) > 0 || (gbp.website_clicks || 0) > 0 || (gbp.searches || 0) > 0);
-  const hasRankings = on('rankings') && (rankings.keywords || []).length > 0;
-  const hasAI = on('ai_visibility') && aiTotal > 0;
-  const hasLinks = on('links') && links.length > 0;
-  const hasWork = on('work') && (activities.length > 0 || screenshots.length > 0);
+  const windowLabel = report
+    ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' })
+    : '';
 
   useEffect(() => {
     if (!clientId || !snapshotId) return;
@@ -97,18 +68,29 @@ const ReportView: React.FC = () => {
     ]).then(([c, r]) => {
       setClient(c.data);
       setReport(r.data);
+      if (r.data) loadHtml();
     }).finally(() => setLoading(false));
   }, [clientId, snapshotId]);
 
-  // Intersection observer for nav highlighting
-  useEffect(() => {
-    const sections = document.querySelectorAll('section.report-section');
-    const obs = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) setActiveSection(e.target.id); });
-    }, { rootMargin: '-120px 0px -70% 0px' });
-    sections.forEach(s => obs.observe(s));
-    return () => obs.disconnect();
-  }, [report]);
+  // Fit the fixed-width sheet to whatever space the app shell leaves.
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const fit = () => setScale(Math.min(1, el.clientWidth / SHEET_PX));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [html]);
+
+  // The sheet is content-sized; size the frame to it so the app scrolls, not the frame.
+  const measure = () => {
+    const doc = frameRef.current?.contentDocument;
+    if (!doc) return;
+    setSheetHeight(doc.documentElement.scrollHeight);
+    // Web fonts land after load and change the height; measure again then.
+    doc.fonts?.ready.then(() => setSheetHeight(doc.documentElement.scrollHeight));
+  };
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -183,24 +165,6 @@ const ReportView: React.FC = () => {
 
   if (loading) return <div className="loader-container"><div className="spinner" /></div>;
 
-  // Build dynamic nav — only show sections with data
-  const sections = [
-    { id: 'executive-summary', label: 'Executive Summary', show: true },
-    { id: 'search', label: 'Traffic & Conversions', show: hasGSC || hasGA4 || hasGBP },
-    { id: 'rankings', label: 'Rankings', show: hasRankings },
-    { id: 'ai', label: 'AI Visibility', show: hasAI },
-    { id: 'links', label: 'Links Built', show: hasLinks },
-    { id: 'work', label: 'Work Done', show: hasWork },
-  ].filter(s => s.show);
-
-  // Build dynamic top KPIs — only show cards with non-zero values
-  const topKpis = [
-    hasGSC && showMetric('gsc.clicks') && gscClicks > 0 && { icon: <MousePointerClick size={16} color="var(--brand)" />, label: 'Search Clicks', value: fmt(gscClicks), sub: <>{deltaEl(gscClicks, gscClicks - (deltas.gsc?.clicks || 0))} vs prev</> },
-    hasGA4 && showMetric('ga4.sessions') && ga4Sessions > 0 && { icon: <Users size={16} color="var(--brand)" />, label: 'Website Sessions', value: fmt(ga4Sessions), sub: `${fmt(ga4Users)} users` },
-    hasRankings && (rankings.summary?.improved || 0) > 0 && { icon: <TrendingUp size={16} color="var(--brand)" />, label: 'Rankings Improved', value: rankings.summary?.improved || 0, sub: `${rankings.summary?.declined || 0} declined` },
-    hasAI && aiMentioned > 0 && { icon: <Bot size={16} color="var(--brand)" />, label: 'AI Brand Mentions', value: aiMentioned, sub: `of ${aiTotal} tracked prompts` },
-  ].filter(Boolean) as { icon: any; label: string; value: any; sub: any }[];
-
   return (
     <div className="report-view">
       {showComposer && clientId && snapshotId && snapshotId !== 'multi' && (
@@ -213,6 +177,7 @@ const ReportView: React.FC = () => {
             try {
               const full = await api.get(`/clients/${clientId}/reports/${snapshotId}`);
               setReport(full.data);
+              loadHtml();
             } catch (e) {
               // Handled by global interceptor
             }
@@ -220,64 +185,39 @@ const ReportView: React.FC = () => {
         />
       )}
 
-      {/* Report cover — the same masthead the PDF opens with */}
-      <div className="report-cover">
-        <div className="report-cover-inner">
-          <div className="report-cover-id">
-            {client?.logo_url
-              ? <span className="report-logo"><img src={client.logo_url} alt="" /></span>
-              : <span className="report-logo is-empty">Client logo</span>}
-            <div className="report-head-text">
-              <h2 className="report-cover-name">{client?.name}</h2>
-              <p className="report-cover-domain">{client?.domain}</p>
-            </div>
-          </div>
+      {/* Toolbar — the same actions as before; the report below is the PDF itself */}
+      <div className="report-toolbar">
+        <div className="report-toolbar-id">
+          <span className="report-toolbar-name">{client?.name}</span>
+          {windowLabel && <span className="report-toolbar-period">{windowLabel}</span>}
+          {report && (
+            <span className={`badge ${report.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
+              {String(report.status).toUpperCase()}
+            </span>
+          )}
+        </div>
 
-          <p className="report-eyebrow">Monthly SEO Report</p>
-          <h1 className="report-cover-title">
-            Performance Report
-            {windowLabel && <span>{windowLabel}</span>}
-          </h1>
+        <div className="report-toolbar-actions">
+          <Link to={`/admin/clients/${clientId}`} className="btn ghost">Back to client</Link>
 
-          <div className="report-cover-meta">
-            <span className="report-status">{(report?.status || 'no report').toUpperCase()}</span>
-            {report?.generated_at && <span>Generated {new Date(report.generated_at).toLocaleString()}</span>}
-          </div>
+          {report && report.status === 'draft' && snapshotId !== 'multi' && (
+            <button className="btn btn-secondary" onClick={() => setShowComposer(true)}>
+              <SlidersHorizontal size={14} /> Sections &amp; Data
+            </button>
+          )}
 
-          <div className="report-cover-actions">
-            <Link to={`/admin/clients/${clientId}`} className="btn ghost">Back to client</Link>
+          {report && (
+            <button className="btn btn-secondary" onClick={handleDownloadPDF} disabled={downloadingPDF}>
+              {downloadingPDF ? 'Generating PDF…' : 'Download PDF'}
+            </button>
+          )}
 
-            {report && report.status === 'draft' && snapshotId !== 'multi' && (
-              <button className="btn btn-secondary" onClick={() => setShowComposer(true)}>
-                <SlidersHorizontal size={14} /> Sections &amp; Data
-              </button>
-            )}
-
-            {report && (
-              <button className="btn btn-secondary" onClick={handleDownloadPDF} disabled={downloadingPDF}>
-                {downloadingPDF ? 'Generating PDF…' : 'Download PDF'}
-              </button>
-            )}
-
-            {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (
-              <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
-            )}
-          </div>
+          {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (
+            <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
+          )}
         </div>
       </div>
 
-      {/* Section nav */}
-      <nav className="nav">
-        <div className="wrap">
-          {sections.map(s => (
-            <a key={s.id} href={`#${s.id}`} className={activeSection === s.id ? 'act' : ''}>
-              {s.label}
-            </a>
-          ))}
-        </div>
-      </nav>
-
-      {/* No report state */}
       {!report ? (
         <div className="wrap" style={{ padding: '80px 24px', textAlign: 'center' }}>
           <h2 className="h1" style={{ marginBottom: '16px' }}>Snapshot not found</h2>
@@ -286,48 +226,35 @@ const ReportView: React.FC = () => {
             {generating ? 'Generating…' : 'Generate report'}
           </button>
         </div>
+      ) : htmlError ? (
+        <div className="wrap" style={{ padding: '64px 24px', textAlign: 'center' }}>
+          <p className="text-subtle" style={{ marginBottom: '20px' }}>The report could not be loaded.</p>
+          <button className="btn btn-secondary" onClick={loadHtml}>Try again</button>
+        </div>
+      ) : !html ? (
+        <div className="loader-container"><div className="spinner" /></div>
       ) : (
-        <div className="wrap">
-          
-          <ExecutiveSummary 
-            narrative={report.narrative} 
-            monthLabel={windowLabel} 
-            status={report.status} 
-            publishedAt={report.published_at} 
-          />
-          
-          {topKpis.length > 0 && (
-            <div className={`grid g${topKpis.length}`} style={{ marginBottom: 'var(--space-xl)' }}>
-              {topKpis.map((kpi, i) => (
-                <div className="kpi" key={i}>
-                  <div className="lab">{kpi.icon} {kpi.label}</div>
-                  <div className="val">{kpi.value}</div>
-                  <div className="sub">{kpi.sub}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {(hasGSC || hasGA4 || hasGBP) && (
-            <TrafficSection metricOn={metricOn} gsc={gsc} ga4={ga4} gbp={gbp} deltas={deltas} />
-          )}
-          
-          {hasRankings && (
-            <RankingsSection rankings={rankings} keywords={rankings.keywords || []} months={months} />
-          )}
-          
-          {hasAI && (
-            <AIVisibilitySection aiVisibility={aiVis} totalKeywords={rankings.keywords?.length || 0} aiMentioned={aiMentioned} aiTotal={aiTotal} months={months} />
-          )}
-          
-          {hasLinks && (
-            <LinksSection links={links} months={months} />
-          )}
-          
-          {hasWork && (
-            <WorkDoneSection activities={activities} screenshots={screenshots} months={months} />
-          )}
-
+        <div className="report-stage" ref={stageRef}>
+          <div
+            className="report-sheet"
+            style={{ width: SHEET_PX * scale, height: sheetHeight * scale }}
+          >
+            {/* No scripts are allowed in the frame: the template is static, and it
+                carries text people typed. Same-origin only so it can be measured. */}
+            <iframe
+              ref={frameRef}
+              title="Report"
+              srcDoc={html}
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              onLoad={measure}
+              style={{
+                width: SHEET_PX,
+                height: sheetHeight || 1200,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -401,7 +401,7 @@ def get_report_history(client_id: uuid.UUID, db: Session = Depends(get_db)):
     return snapshots
 
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 import io
 
 @router.get("/multi")
@@ -428,9 +428,8 @@ def get_multi_report(client_id: uuid.UUID, count: int = 1, db: Session = Depends
     }
 
 
-@router.get("/multi/pdf")
-async def download_report_pdf(request: Request, client_id: uuid.UUID, count: int = 1, snapshot_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
-    """Generate and return a PDF of the report using Playwright/Chromium."""
+def _load_snapshots(db: Session, client_id: uuid.UUID, count: int, snapshot_id: Optional[uuid.UUID]):
+    """Snapshots for a report, oldest first — the order the template renders."""
     if snapshot_id:
         snapshots = db.execute(
             select(ReportSnapshot).where(ReportSnapshot.client_id == client_id, ReportSnapshot.id == snapshot_id)
@@ -439,24 +438,31 @@ async def download_report_pdf(request: Request, client_id: uuid.UUID, count: int
         snapshots = db.execute(
             select(ReportSnapshot).where(ReportSnapshot.client_id == client_id).order_by(ReportSnapshot.end_date.desc()).limit(count)
         ).scalars().all()
-    
     if not snapshots:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reports not found.")
-    
-    # Render chronologically (oldest first in the PDF)
     snapshots.reverse()
-    
+    return snapshots
+
+
+def _report_inputs(request: Request, db: Session, client_id: uuid.UUID, snapshots):
+    """Everything report_pdf.html needs. Shared by the PDF download and the
+    in-app view so the two render from identical input."""
+    import base64
+
     client = db.get(Client, client_id)
     if not client:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found.")
-    
+
+    # Must be set before the logo fetch below — it used to be assigned after,
+    # so any client with a relative logo_url failed with UnboundLocalError.
+    base_url = str(request.base_url).rstrip("/")
+
     comparative_data = _build_comparative_report(snapshots)
-    
-    client_logo_url = client.logo_url
+
     client_logo_b64 = ""
+    client_logo_url = client.logo_url
     if client_logo_url and client_logo_url.strip():
         import httpx
-        import base64
         fetch_url = base_url + client_logo_url if client_logo_url.startswith("/") else client_logo_url
         try:
             with httpx.Client(timeout=5.0) as c:
@@ -475,11 +481,9 @@ async def download_report_pdf(request: Request, client_id: uuid.UUID, count: int
         "logo_b64": client_logo_b64,
         "theme_color": client.theme_color,
     }
-    
-    base_url = str(request.base_url).rstrip("/")
-    
-    # Inject base64 screenshots directly to avoid Playwright network issues
-    import base64
+
+    # Inline screenshots so neither Playwright nor the in-app frame has to
+    # fetch them over an authenticated route.
     for img in comparative_data.get("screenshots", []):
         file_url = img.get("file_url")
         if file_url:
@@ -491,21 +495,38 @@ async def download_report_pdf(request: Request, client_id: uuid.UUID, count: int
                     b64 = base64.b64encode(s_obj.file_data).decode("utf-8")
                     img["base64_data"] = f"data:{s_obj.mime_type or 'image/png'};base64,{b64}"
 
-    
-    from app.services.pdf_service import generate_report_pdf as gen_pdf
-    pdf_bytes = await gen_pdf(comparative_data, client_data, base_url)
-    
-    # Build a clean filename
-    safe_name = client.name.replace(" ", "_").replace("/", "_")
-    filename = f"{safe_name}_{count}M_SEO_Report.pdf"
-    
+    return client, comparative_data, client_data, base_url
+
+
+def _pdf_response(pdf_bytes: bytes, filename: str) -> StreamingResponse:
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/multi/pdf")
+async def download_report_pdf(request: Request, client_id: uuid.UUID, count: int = 1, snapshot_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
+    """Generate and return a PDF of the report using Playwright/Chromium."""
+    from app.services.pdf_service import generate_report_pdf as gen_pdf
+
+    snapshots = _load_snapshots(db, client_id, count, snapshot_id)
+    client, comparative_data, client_data, base_url = _report_inputs(request, db, client_id, snapshots)
+    pdf_bytes = await gen_pdf(comparative_data, client_data, base_url)
+
+    safe_name = client.name.replace(" ", "_").replace("/", "_")
+    return _pdf_response(pdf_bytes, f"{safe_name}_{count}M_SEO_Report.pdf")
+
+
+@router.get("/multi/html", response_class=HTMLResponse)
+def view_report_html(request: Request, client_id: uuid.UUID, count: int = 1, snapshot_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
+    """The PDF's own template as HTML, for showing the report inside the app."""
+    from app.services.pdf_service import render_report_html
+
+    snapshots = _load_snapshots(db, client_id, count, snapshot_id)
+    _, comparative_data, client_data, base_url = _report_inputs(request, db, client_id, snapshots)
+    return HTMLResponse(render_report_html(comparative_data, client_data, base_url))
 
 
 @router.get("/count")
@@ -543,71 +564,24 @@ def get_latest_report(client_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.get("/{snapshot_id}/pdf")
 async def download_single_report_pdf(request: Request, client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
     """Generate and return a PDF of a single report snapshot."""
-    snapshot = db.execute(
-        select(ReportSnapshot).where(ReportSnapshot.client_id == client_id, ReportSnapshot.id == snapshot_id)
-    ).scalar_one_or_none()
-    if not snapshot:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
-
-    client = db.get(Client, client_id)
-    if not client:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found.")
-
-    comparative_data = _build_comparative_report([snapshot])
-
-    client_logo_url = client.logo_url
-    client_logo_b64 = ""
-    if client_logo_url and client_logo_url.strip():
-        import httpx
-        import base64
-        fetch_url = base_url + client_logo_url if client_logo_url.startswith("/") else client_logo_url
-        try:
-            with httpx.Client(timeout=5.0) as c:
-                resp = c.get(fetch_url)
-                if resp.status_code == 200:
-                    b64 = base64.b64encode(resp.content).decode("utf-8")
-                    ctype = resp.headers.get("content-type", "image/png")
-                    client_logo_b64 = f"data:{ctype};base64,{b64}"
-        except Exception:
-            pass
-
-    client_data = {
-        "name": client.name,
-        "domain": client.domain,
-        "logo_url": client.logo_url,
-        "logo_b64": client_logo_b64,
-        "theme_color": client.theme_color,
-    }
-
-    base_url = str(request.base_url).rstrip("/")
-    
-    # Inject base64 screenshots directly to avoid Playwright network issues
-    import base64
-    for img in comparative_data.get("screenshots", []):
-        file_url = img.get("file_url")
-        if file_url:
-            parts = file_url.split("/")
-            if len(parts) >= 5 and parts[-1] == "image":
-                sid = parts[-2]
-                s_obj = db.execute(select(Screenshot).where(Screenshot.id == sid)).scalar_one_or_none()
-                if s_obj and s_obj.file_data:
-                    b64 = base64.b64encode(s_obj.file_data).decode("utf-8")
-                    img["base64_data"] = f"data:{s_obj.mime_type or 'image/png'};base64,{b64}"
-
-
     from app.services.pdf_service import generate_report_pdf as gen_pdf
+
+    snapshots = _load_snapshots(db, client_id, 1, snapshot_id)
+    client, comparative_data, client_data, base_url = _report_inputs(request, db, client_id, snapshots)
     pdf_bytes = await gen_pdf(comparative_data, client_data, base_url)
 
     safe_name = client.name.replace(" ", "_").replace("/", "_")
-    filename = f"{safe_name}_SEO_Report.pdf"
+    return _pdf_response(pdf_bytes, f"{safe_name}_SEO_Report.pdf")
 
-    return StreamingResponse(
-        io.BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-        },
-    )
+
+@router.get("/{snapshot_id}/html", response_class=HTMLResponse)
+def view_single_report_html(request: Request, client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
+    """The PDF's own template as HTML, for showing the report inside the app."""
+    from app.services.pdf_service import render_report_html
+
+    snapshots = _load_snapshots(db, client_id, 1, snapshot_id)
+    _, comparative_data, client_data, base_url = _report_inputs(request, db, client_id, snapshots)
+    return HTMLResponse(render_report_html(comparative_data, client_data, base_url))
 
 
 @router.get("/{snapshot_id}")
