@@ -273,3 +273,187 @@ def suggest_report_sections(
         bool(parsed.get("ignored", False)),
         str(parsed.get("note") or "")[:200],
     )
+
+
+# ── Section commentary ──────────────────────────────────────────────────────
+# One short paragraph under every section of the report: what the numbers
+# mean for the business, what the agency did about it, and what comes next.
+
+SECTION_TOPIC = {
+    "gsc": "Google Search Console — how often the site shows up and gets clicked in Google search",
+    "ga4": "Google Analytics — visits to the website and what visitors go on to do",
+    "gbp": "Google Business Profile — calls, direction requests and website clicks from Google Search and Maps",
+    "rankings": "Keyword rankings — where the tracked keywords rank on Google",
+    "ai_visibility": "AI visibility — whether AI assistants such as ChatGPT mention the brand for tracked prompts",
+    "links": "Links built — backlinks earned for the site this period",
+    "work": "Work done — SEO tasks delivered on the site this period",
+}
+
+
+def _change(current: float, delta: Any) -> Optional[dict]:
+    """The change against the previous period, or None when there was no
+    previous figure to compare with (the report stores prev = 0 then)."""
+    try:
+        current, delta = float(current or 0), float(delta or 0)
+    except (TypeError, ValueError):
+        return None
+    previous = current - delta
+    if previous <= 0:
+        return None
+    return {"previous": round(previous, 2), "change": round(delta, 2), "change_pct": round(delta / previous * 100, 1)}
+
+
+def section_facts(snapshot: dict, section: str, shown: Optional[dict] = None) -> dict:
+    """The figures one section's commentary may use — only what the client sees."""
+    snap = snapshot or {}
+    shown = shown or {}
+    deltas = snap.get("kpi_deltas") or {}
+    months = ((snap.get("period") or {}).get("months") or 1)
+
+    def visible(item_id: str) -> bool:
+        return shown.get(item_id, True) is not False
+
+    def figures(provider: str, keys: dict[str, str]) -> dict:
+        block = snap.get(provider) or {}
+        out = {}
+        for key, name in keys.items():
+            if not visible(f"{provider}.{key}") or block.get(key) is None:
+                continue
+            value = block.get(key)
+            if key == "ctr":
+                value = round(float(value or 0) * 100, 2)
+            elif isinstance(value, float):
+                value = round(value, 2)
+            out[name] = value
+            ch = _change(block.get(key), (deltas.get(provider) or {}).get(key))
+            if ch and key != "ctr":
+                out[f"{name}_change_vs_previous"] = ch
+        return out
+
+    if section == "gsc":
+        facts = figures("gsc", {"clicks": "clicks", "impressions": "impressions", "ctr": "click_through_rate_pct", "position": "average_position"})
+        facts["top_pages_by_clicks"] = [
+            {"page": p.get("page"), "clicks": p.get("clicks")} for p in (snap.get("gsc") or {}).get("top_pages", [])[:3]
+        ]
+    elif section == "ga4":
+        facts = figures("ga4", {"sessions": "sessions", "users": "monthly_users" if months > 1 else "users",
+                                "engaged_sessions": "engaged_sessions", "conversions": "conversions"})
+        dur = (snap.get("ga4") or {}).get("avg_session_duration")
+        if dur:
+            facts["average_visit_seconds"] = round(float(dur))
+        facts["top_sources"] = [
+            {"source": s.get("source"), "sessions": s.get("sessions")} for s in (snap.get("ga4") or {}).get("traffic_sources", [])[:3]
+        ]
+    elif section == "gbp":
+        facts = figures("gbp", {"calls": "calls", "direction_requests": "direction_requests",
+                                "website_clicks": "website_clicks", "bookings": "bookings"})
+    elif section == "rankings":
+        rankings = snap.get("rankings") or {}
+        summary = rankings.get("summary") or {}
+        facts = {k: summary.get(k) for k in ("top_10", "11_20", "21_50", "51_plus", "improved", "declined") if summary.get(k) is not None}
+        facts["keywords"] = [
+            {"keyword": k.get("term"), "position": k.get("position"), "positions_gained_since_start": k.get("change")}
+            for k in (rankings.get("keywords") or [])[:6]
+        ]
+    elif section == "ai_visibility":
+        rows = snap.get("ai_visibility") or []
+        by_platform: dict[str, list[int]] = {}
+        for m in rows:
+            tally = by_platform.setdefault(str(m.get("platform") or "unknown").replace("_", " "), [0, 0])
+            tally[1] += 1
+            tally[0] += 1 if m.get("mentioned") else 0
+        facts = {
+            "prompt_checks": len(rows),
+            "brand_mentioned": sum(1 for m in rows if m.get("mentioned")),
+            "by_platform": {k: f"{v[0]} of {v[1]}" for k, v in by_platform.items()},
+        }
+    elif section == "links":
+        rows = snap.get("links") or []
+        kinds: dict[str, int] = {}
+        for l in rows:
+            kinds[l.get("activity_type") or "other"] = kinds.get(l.get("activity_type") or "other", 0) + (l.get("count") or 1)
+        facts = {"links_built": sum(l.get("count") or 1 for l in rows),
+                 "unique_domains": len({l.get("domain") for l in rows if l.get("domain")}),
+                 "by_type": kinds}
+    elif section == "work":
+        facts = {"tasks": [{"task": a.get("activity_type"), "count": a.get("count")} for a in (snap.get("activities") or [])],
+                 "screenshots_attached": len(snap.get("screenshots") or [])}
+    else:
+        facts = {}
+
+    if months > 1 and section in ("gsc", "ga4", "gbp"):
+        key = {"gsc": "clicks", "ga4": "sessions", "gbp": "calls"}[section]
+        facts[f"{key}_by_month"] = {p.get("label"): (p.get(section) or {}).get(key) for p in snap.get("periods") or []}
+    return {k: v for k, v in facts.items() if v not in (None, [], {})}
+
+
+def generate_section_summaries(client_name: str, period_label: str, snapshot: dict,
+                               sections: list[str], shown: Optional[dict] = None) -> dict[str, str]:
+    """A commentary paragraph for each requested section, written from its figures."""
+    openai_api_key = settings.OPENAI_API_KEY
+    if not openai_api_key:
+        raise ValueError("OPENAI_API_KEY is not set in configuration.")
+
+    facts = {s: section_facts(snapshot, s, shown) for s in sections if s in SECTION_TOPIC}
+    facts = {s: f for s, f in facts.items() if f}
+    if not facts:
+        return {}
+
+    snap = snapshot or {}
+    period = snap.get("period") or {}
+    months = period.get("months") or 1
+    compare = period.get("compare") or {}
+    work_done = [f"{a.get('activity_type')} ×{a.get('count')}" for a in (snap.get("activities") or [])][:15]
+    link_kinds: dict[str, int] = {}
+    for l in snap.get("links") or []:
+        link_kinds[l.get("activity_type") or "other"] = link_kinds.get(l.get("activity_type") or "other", 0) + (l.get("count") or 1)
+
+    prompt_text = f"""Client: {client_name}
+Report period: {period_label or 'this period'}{f' ({months} months combined)' if months > 1 else ''}
+Previous period for comparison: {compare.get('range') if compare.get('hasData') else 'no earlier data stored — do not describe growth, describe the baseline'}
+Work the agency delivered in this period (the ONLY work you may mention): {', '.join(work_done) or 'none recorded'}
+Links built in this period: {', '.join(f'{k} ×{v}' for k, v in link_kinds.items()) or 'none recorded'}
+
+Write the report commentary for these sections: {', '.join(facts)}.
+What each section is about:
+{json.dumps({s: SECTION_TOPIC[s] for s in facts}, indent=2)}
+
+Figures per section (exact; "*_change_vs_previous" is present only when an earlier period exists):
+{json.dumps(facts, indent=2, default=str)}
+
+For each section write ONE paragraph of 3 to 4 sentences, about 60 to 90 words, in this order:
+1. The outcome in plain words for a business owner, quoting the key figures exactly as given (round sensibly; give CTR as a percentage).
+2. Why it moved — tie it to the delivered work above only where that plausibly relates; otherwise to what the figures show.
+3. What happens next — one concrete step for the coming month.
+
+Rules:
+- Use only figures that appear above. Never invent numbers, percentages, tasks, tools or causes.
+- If a figure fell, say so plainly and constructively. Do not claim growth when there is no previous period.
+- No markdown, bullet points, headings, greetings or sign-offs.
+- Return a JSON object whose keys are exactly: {', '.join(facts)}."""
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": (
+                "You are a senior SEO account manager writing the commentary in a client's performance report. "
+                "The reader is a business owner, not a marketer. Show them where their money is working by tying "
+                "figures to business outcomes — but never overstate, and never invent anything."
+            )},
+            {"role": "user", "content": prompt_text},
+        ],
+        "temperature": 0.4,
+        "response_format": {"type": "json_object"},
+    }
+    headers = {"Authorization": f"Bearer {openai_api_key}", "Content-Type": "application/json"}
+
+    with httpx.Client(timeout=60.0) as client:
+        response = client.post(OPENAI_API_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+
+    try:
+        result = json.loads(content)
+    except json.JSONDecodeError:
+        return {}
+    return {s: str(result[s]).strip() for s in facts if isinstance(result.get(s), str) and str(result[s]).strip()}

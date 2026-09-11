@@ -151,6 +151,8 @@ def _pull_ga4_data_structured(property_id: str, start_date: date, end_date: date
     all_dim_rows.extend(_execute_ga4_query(client, property_id, start_date, end_date, ["date", "sessionSource"]))
     all_dim_rows.extend(_execute_ga4_query(client, property_id, start_date, end_date, ["date", "deviceCategory"]))
     all_dim_rows.extend(_execute_ga4_query(client, property_id, start_date, end_date, ["date", "pagePath"]))
+    # Countries are stored too, so a report built from saved data can show them.
+    all_dim_rows.extend(_execute_ga4_query(client, property_id, start_date, end_date, ["date", "country"]))
 
     return {
         "totals": totals,

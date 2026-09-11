@@ -6,9 +6,12 @@ import {
   Sparkles, Loader2, Info, Pencil, Check, ArrowLeft, ArrowRight,
   Search, BarChart2, MapPin, Crosshair, Bot, Link as LinkIcon, CheckSquare,
   ListChecks, FileText, Plug, RefreshCw, ImagePlus, Trash2, Type, SlidersHorizontal,
+  Upload, Download, CalendarRange,
 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import PageSkeleton from '../components/ui/PageSkeleton';
+import PeriodPicker from '../components/PeriodPicker';
+import '../builder.css';
 
 type Format = 'int' | 'percent' | 'decimal' | 'bool' | 'none';
 
@@ -21,6 +24,35 @@ interface Item {
   editable: boolean;
   kind: 'headline' | 'summary' | 'row';
   unit?: string;
+  /** The figure has a saved copy an edit can also correct. */
+  writable?: boolean;
+}
+
+interface Period {
+  months: number;
+  start: string;
+  end: string;
+  labels: string[];
+  label: string;
+  range?: string;
+  compare?: { range?: string; hasData?: boolean };
+}
+
+interface PeriodRow {
+  label: string;
+  range?: string;
+  start: string;
+  end: string;
+  [provider: string]: any;
+}
+
+interface UploadSpec {
+  title: string;
+  hint: string;
+  endpoint: string;
+  columns: string;
+  sample: string;
+  accept?: string;
 }
 
 interface Section { key: string; label: string }
@@ -79,6 +111,34 @@ const DATA_PAGE: Record<string, (clientId: string) => string> = {
 const KIND_LABEL: Record<Item['kind'], string> = { headline: 'Figures', summary: 'Summary', row: 'Rows' };
 
 const COVER_MAX = 5 * 1024 * 1024;
+
+/** Month columns for a combined report, one per cycle. */
+const PERIOD_COLS: Record<string, [string, string, Format][]> = {
+  gsc: [['clicks', 'Clicks', 'int'], ['impressions', 'Impressions', 'int'], ['ctr', 'CTR', 'percent'], ['position', 'Avg. position', 'decimal']],
+  ga4: [['sessions', 'Sessions', 'int'], ['users', 'Users', 'int'], ['engaged_sessions', 'Engaged', 'int'], ['conversions', 'Conversions', 'int']],
+  gbp: [['calls', 'Calls', 'int'], ['direction_requests', 'Directions', 'int'], ['website_clicks', 'Website clicks', 'int'], ['bookings', 'Bookings', 'int']],
+};
+
+const COMBINED_NOTE: Record<string, string> = {
+  gsc: 'Clicks and impressions add up across the months; CTR and position are recalculated from them, not averaged.',
+  ga4: 'Sessions, engaged sessions and conversions add up; users show the average month, since the same person visits in several months.',
+  gbp: 'Business Profile figures add up across the months.',
+};
+
+const fmtCell = (v: any, f: Format): string => {
+  if (v === undefined || v === null || v === '') return '—';
+  const n = Number(v) || 0;
+  if (f === 'percent') return `${(n * 100).toFixed(2)}%`;
+  if (f === 'decimal') return n.toFixed(1);
+  return Math.round(n).toLocaleString();
+};
+
+/** "September 2026" → "Sep'26", the month header the upload sheets use. */
+const monthCol = (label: string): string | null => {
+  const d = new Date(`1 ${label}`);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.toLocaleString('en', { month: 'short' })}'${String(d.getFullYear()).slice(2)}`;
+};
 
 /* Values are held as the text a person types. Percentages are typed as
    percent ("0.13") but the snapshot stores fractions (0.0013). */
@@ -142,6 +202,18 @@ const ReportBuilder: React.FC = () => {
 
   const [fetching, setFetching] = useState<string | null>(null);
 
+  // The months this report covers
+  const [period, setPeriod] = useState<Period | null>(null);
+  const [periods, setPeriods] = useState<PeriodRow[]>([]);
+  const [showPeriod, setShowPeriod] = useState(false);
+  const [periodBusy, setPeriodBusy] = useState(false);
+
+  // Figures whose edit should also correct the saved data they came from
+  const [writeBack, setWriteBack] = useState<Set<string>>(() => new Set());
+
+  // A section busy reading an uploaded sheet
+  const [sectionBusy, setSectionBusy] = useState<{ key: string; text: string } | null>(null);
+
   const [instruction, setInstruction] = useState('');
   const [asking, setAsking] = useState(false);
   const [aiNote, setAiNote] = useState<{ text: string; ignored: boolean } | null>(null);
@@ -176,6 +248,9 @@ const ReportBuilder: React.FC = () => {
     setCopy(c);
     savedCopy.current = JSON.stringify(c);
     setHasCover(!!d.hasCover);
+    setPeriod(d.period || null);
+    setPeriods(d.periods || []);
+    setWriteBack(new Set());
   };
 
   const loadCover = useCallback(async () => {
@@ -225,14 +300,14 @@ const ReportBuilder: React.FC = () => {
 
   // ── Saving: queued one at a time, like the reference builder's autosave ──
   const dirty = useRef(false);
-  const latest = useRef({ items, values, saved, sectionOn, itemOn, copy });
-  latest.current = { items, values, saved, sectionOn, itemOn, copy };
+  const latest = useRef({ items, values, saved, sectionOn, itemOn, copy, writeBack });
+  latest.current = { items, values, saved, sectionOn, itemOn, copy, writeBack };
   const chain = useRef<Promise<unknown>>(Promise.resolve());
 
   const persist = useCallback(async () => {
     if (!dirty.current) return;
     dirty.current = false;
-    const { items, values, saved, sectionOn, itemOn, copy } = latest.current;
+    const { items, values, saved, sectionOn, itemOn, copy, writeBack } = latest.current;
     setSaveState({ text: 'Saving…' });
     try {
       const edits: Record<string, number | boolean> = {};
@@ -247,8 +322,18 @@ const ReportBuilder: React.FC = () => {
       // Figures first: a typed-in section only counts as having data once its
       // numbers are stored, and the server checks that before switching it on.
       if (Object.keys(edits).length > 0) {
-        await api.put(`${base}/values`, { edits });
+        const alsoSaved = Object.keys(edits).filter(id => writeBack.has(id));
+        const res = await api.put(`${base}/values`, { edits, writeBack: alsoSaved });
         setSaved(prev => ({ ...prev, ...sent }));
+        if (alsoSaved.length > 0) {
+          setWriteBack(prev => {
+            const next = new Set(prev);
+            alsoSaved.forEach(id => next.delete(id));
+            return next;
+          });
+          const done = (res.data?.wroteBack || []).length;
+          if (done) toast.success(`Saved data updated for ${done} figure${done === 1 ? '' : 's'}.`);
+        }
       }
       const res = await api.put(`${base}/composer`, { sections: sectionOn, items: itemOn });
       if (res.data?.selectedSections) setSectionOn(res.data.selectedSections);
@@ -357,6 +442,78 @@ const ReportBuilder: React.FC = () => {
       autoIncluded.current.add(item.section);
       setSectionOn(s => ({ ...s, [item.section]: true }));
     }
+  };
+
+  const setWB = (id: string, on: boolean) => {
+    setWriteBack(prev => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
+    dirty.current = true;
+  };
+
+  /** Upload a sheet for one section, then re-read that section from saved data. */
+  const uploadSheet = async (key: string, spec: UploadSpec, file: File) => {
+    setSectionBusy({ key, text: 'Reading the sheet and updating this section…' });
+    // Save first — the refreshed section replaces what is on screen.
+    try { await queueSave(); } catch (e) { setSectionBusy(null); return; }
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.post(spec.endpoint, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const res = await api.post(`${base}/refresh/${key}`);
+      applyComposer(res.data || {});
+      toast.success('Sheet added — this section is updated.');
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setSectionBusy(null);
+  };
+
+  const uploadShots = async (files: FileList) => {
+    if (files.length === 0) return;
+    setSectionBusy({ key: 'work', text: 'Adding the screenshots…' });
+    try { await queueSave(); } catch (e) { setSectionBusy(null); return; }
+    try {
+      const fd = new FormData();
+      fd.append('month', `${(period?.end || new Date().toISOString()).slice(0, 7)}-01`);
+      Array.from(files).forEach(f => fd.append('files', f));
+      await api.post(`/clients/${clientId}/screenshots/bulk`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const res = await api.post(`${base}/refresh/work`);
+      applyComposer(res.data || {});
+      toast.success(`${files.length} screenshot${files.length === 1 ? '' : 's'} added.`);
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setSectionBusy(null);
+  };
+
+  const downloadSample = (key: string, spec: UploadSpec) => {
+    const blob = new Blob([`${spec.columns}\n${spec.sample}\n`], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${key}-sample.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  /** Recalculate the report for a different number of months — nothing is pulled. */
+  const changePeriod = async (months: number) => {
+    setPeriodBusy(true);
+    try { await queueSave(); } catch (e) { setPeriodBusy(false); return; }
+    try {
+      const res = await api.post(`${base}/period`, { months });
+      applyComposer(res.data || {});
+      setShowPeriod(false);
+      toast.success(`The report now covers ${res.data?.period?.label || `${months} months`}.`);
+    } catch (err: any) {
+      // Handled by global interceptor
+    }
+    setPeriodBusy(false);
   };
 
   const setBrand = (text: string) => { setCopy(c => ({ ...c, brand_line: text })); dirty.current = true; };
@@ -484,9 +641,12 @@ const ReportBuilder: React.FC = () => {
     );
   }
 
-  const periodLabel = report?.end_date
+  const periodLabel = period?.label || (report?.end_date
     ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' })
-    : '';
+    : '');
+  const monthCols = (period?.labels || []).map(monthCol).filter(Boolean) as string[];
+  const lastCol = monthCols[monthCols.length - 1] || "Sep'26";
+  const sampleDay = period?.end || new Date().toISOString().slice(0, 10);
   const sectionsOnCount = sections.filter(s => sectionOn[s.key]).length;
   const customHeadings = Object.keys(copy.titles).filter(k => copy.titles[k]?.trim()).length
     + Object.keys(copy.subtitles).filter(k => copy.subtitles[k]?.trim()).length;
@@ -528,7 +688,7 @@ const ReportBuilder: React.FC = () => {
     const shown = itemOn[i.id] !== false;
     const isEditing = editing === i.id && i.editable && editable;
     return (
-      <div key={i.id} className={`metric-card ${shown ? '' : 'off'} ${isRow ? 'is-row' : ''}`}>
+      <div key={i.id} className={`metric-card ${shown ? '' : 'off'} ${isRow ? 'is-row' : ''} ${isEditing ? 'editing' : ''}`}>
         <label className="metric-card-head">
           <input type="checkbox" checked={shown} disabled={!editable} onChange={() => toggleItem(i.id)} />
           <span title={i.label}>{i.label}</span>
@@ -555,6 +715,9 @@ const ReportBuilder: React.FC = () => {
             </>
           )}
         </div>
+        {isEditing
+          ? writeBackChoice(i)
+          : writeBack.has(i.id) && <span className="rb-wb-tag">Also updates saved data</span>}
       </div>
     );
   };
@@ -567,10 +730,165 @@ const ReportBuilder: React.FC = () => {
         <span title={i.label}>{i.label}</span>
       </label>
       {valueInput(i, false, true)}
+      {values[i.id] !== saved[i.id] && writeBackChoice(i)}
       {i.format === 'percent' && <div className="rb-field-unit">Percent — e.g. 2.4</div>}
       {i.id.endsWith('.position') && <div className="rb-field-unit">Average position — e.g. 18.5</div>}
     </div>
   );
+
+  /** Where a changed figure applies: only this report, or the saved data too. */
+  const writeBackChoice = (i: Item) => {
+    if (!i.writable || !editable) return null;
+    const on = writeBack.has(i.id);
+    return (
+      <div className="rb-wb" role="radiogroup" aria-label={`Where the change to ${i.label} applies`}>
+        <button type="button" role="radio" aria-checked={!on} className={`rb-wb-opt ${on ? '' : 'on'}`} onClick={() => setWB(i.id, false)}>
+          This report only
+        </button>
+        <button type="button" role="radio" aria-checked={on} className={`rb-wb-opt ${on ? 'on' : ''}`} onClick={() => setWB(i.id, true)}>
+          Also update saved data
+        </button>
+      </div>
+    );
+  };
+
+  /** Which sheet a section takes, when its data is entered by hand. */
+  const uploadSpecFor = (key: string): UploadSpec | null => {
+    const m = lastCol;
+    switch (key) {
+      case 'gsc':
+        return connected('gsc') ? null : {
+          title: 'Upload a Search Console sheet', hint: 'One row per day.',
+          endpoint: `/clients/${clientId}/manual-gsc/upload_csv`,
+          columns: 'date,clicks,impressions,ctr,position', sample: `${sampleDay},120,4500,0.027,12.4`,
+        };
+      case 'ga4':
+        return connected('ga4') ? null : {
+          title: 'Upload an Analytics sheet', hint: 'One row per day.',
+          endpoint: `/clients/${clientId}/manual-ga4/upload_csv`,
+          columns: 'date,sessions,users,engaged_sessions,conversions,revenue', sample: `${sampleDay},761,589,147,3,0`,
+        };
+      case 'gbp':
+        return connected('gbp') ? null : {
+          title: 'Upload a Business Profile sheet', hint: 'One row per month.',
+          endpoint: `/clients/${clientId}/manual-gbp/upload_csv`,
+          columns: 'Date,Impressions Desktop Maps,Impressions Desktop Search,Impressions Mobile Maps,Impressions Mobile Search,Calls,Direction Requests,Website Clicks,Bookings',
+          sample: `${m},100,50,300,150,5,2,10,1`,
+        };
+      case 'rankings': {
+        const cols = monthCols.length ? monthCols : [m];
+        return {
+          title: 'Upload keyword rankings', hint: 'One row per keyword, one column per month.',
+          endpoint: `/clients/${clientId}/keywords/upload_csv`,
+          columns: `Keyword,SV,Initial Ranking,${cols.join(',')}`,
+          sample: `best seo agency,1900,24,${cols.map((_, n) => Math.max(1, 18 - n * 3)).join(',')}`,
+          accept: '.csv,.xlsx',
+        };
+      }
+      case 'ai_visibility':
+        return {
+          title: 'Upload AI prompt checks', hint: 'One row per prompt — Yes or No for each AI tool.',
+          endpoint: `/clients/${clientId}/ai_mentions/upload_csv`,
+          columns: 'Month,Prompts,ChatGPT,AI Overview,Google Gemini,Perplexity,Claude', sample: `${m},Best pizza in NY,Yes,No,Yes,Yes,No`,
+        };
+      case 'links':
+        return {
+          title: 'Upload links built', hint: 'One row per link.',
+          endpoint: `/clients/${clientId}/links/upload_csv`,
+          columns: 'Month,Activity Name,URL,Count', sample: `${m},Guest Post,https://example.com/article,1`,
+        };
+      case 'work':
+        return {
+          title: 'Upload work delivered', hint: 'One row per task.',
+          endpoint: `/clients/${clientId}/work/upload_csv`,
+          columns: 'Activity Type,Count,Notes', sample: 'Optimized Homepage,1,Updated meta titles',
+        };
+      default:
+        return null;
+    }
+  };
+
+  const uploadBox = (key: string) => {
+    const spec = uploadSpecFor(key);
+    if (!spec || !editable) return null;
+    return (
+      <div className="rb-upload">
+        <div className="rb-upload-text">
+          <Upload size={16} />
+          <span>
+            <strong>{spec.title}</strong>
+            {spec.hint}{' '}
+            {(() => {
+              // A long header list wraps into noise; name a few, the sample has them all.
+              const cols = spec.columns.split(',');
+              return cols.length <= 5
+                ? <>Columns: <code>{cols.join(', ')}</code></>
+                : <span title={cols.join(', ')}>Columns: <code>{cols.slice(0, 3).join(', ')}</code> and {cols.length - 3} more — download the sample for the full layout.</span>;
+            })()}
+          </span>
+        </div>
+        <div className="rb-upload-actions">
+          <button className="btn ghost btn-sm" onClick={() => downloadSample(key, spec)}>
+            <Download size={13} /> Sample
+          </button>
+          {key === 'work' && (
+            <label className={`btn btn-secondary btn-sm ${sectionBusy ? 'is-disabled' : ''}`}>
+              <ImagePlus size={13} /> Add screenshots
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                hidden
+                disabled={!!sectionBusy}
+                onChange={e => { const f = e.target.files; if (f) uploadShots(f); e.target.value = ''; }}
+              />
+            </label>
+          )}
+          <label className={`btn btn-primary btn-sm ${sectionBusy ? 'is-disabled' : ''}`}>
+            <Upload size={13} /> Upload sheet
+            <input
+              type="file"
+              accept={spec.accept || '.csv'}
+              hidden
+              disabled={!!sectionBusy}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadSheet(key, spec, f); }}
+            />
+          </label>
+        </div>
+      </div>
+    );
+  };
+
+  /** Each month of a combined report, beside the combined figure. */
+  const monthTable = (key: string) => {
+    const cols = PERIOD_COLS[key];
+    if (!cols || periods.length < 2) return null;
+    return (
+      <div className="rb-group">
+        <div className="rb-group-label">Month by month</div>
+        <div className="rb-month-table">
+          <table>
+            <thead>
+              <tr><th>Month</th>{cols.map(([k, name]) => <th key={k}>{name}</th>)}</tr>
+            </thead>
+            <tbody>
+              {periods.map(p => (
+                <tr key={p.end}>
+                  <td title={p.range}>{p.label}</td>
+                  {cols.map(([k, , f]) => <td key={k}>{fmtCell(p[key]?.[k], f)}</td>)}
+                </tr>
+              ))}
+              <tr className="total">
+                <td>Combined</td>
+                {cols.map(([k, , f]) => <td key={k}>{display(values[`${key}.${k}`] ?? '', f)}</td>)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="rb-note">{COMBINED_NOTE[key]}</p>
+      </div>
+    );
+  };
 
   const includeToggle = (key: string) => {
     const has = hasData(key);
@@ -654,6 +972,30 @@ const ReportBuilder: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {period && (
+        <div className="rb-period">
+          <div className="rb-period-main">
+            <CalendarRange size={18} />
+            <div>
+              <div className="rb-period-title">
+                {period.label}{period.months > 1 ? ` · ${period.months} months combined` : ''}
+              </div>
+              <div className="rb-period-sub">
+                {period.range || ''}{period.range ? ' · ' : ''}
+                {period.compare?.hasData
+                  ? `compared with ${period.compare.range || 'the period before'}`
+                  : 'no earlier period saved, so figures are shown without a comparison'}
+              </div>
+            </div>
+          </div>
+          {editable && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowPeriod(true)} disabled={periodBusy}>
+              <CalendarRange size={14} /> Change period
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="rb-group">
         <div className="rb-group-label">Brand line</div>
@@ -858,10 +1200,11 @@ const ReportBuilder: React.FC = () => {
           </div>
         )}
 
+        {uploadBox(key)}
+
         {!provider && list.length === 0 ? (
           <div className="rb-empty">
-            Nothing recorded for {sec.label} in this period.
-            {dataPage && <div><Link to={dataPage} className="btn btn-secondary btn-sm">Add {sec.label.toLowerCase()}</Link></div>}
+            Nothing recorded for {sec.label} in this period yet{editable ? ' — upload a sheet above to add it.' : '.'}
           </div>
         ) : (
           <div className={`rb-body ${on ? '' : 'off'}`}>
@@ -879,8 +1222,10 @@ const ReportBuilder: React.FC = () => {
             })}
 
             {typedIn && !hasData(key) && (
-              <p className="rb-hint">Enter {NEEDS[key]} to be able to include this section.</p>
+              <p className="rb-hint">Enter {NEEDS[key]}, or upload a sheet, to be able to include this section.</p>
             )}
+
+            {monthTable(key)}
 
             {rows.length > 0 && (
               <div className="rb-group">
@@ -999,6 +1344,9 @@ const ReportBuilder: React.FC = () => {
 
         <div className="rb-main">
           <div className="rb-panel" key={cur.key}>
+            {sectionBusy && sectionBusy.key === cur.key && (
+              <div className="rb-busy" role="status"><Loader2 size={22} className="spin" /><span>{sectionBusy.text}</span></div>
+            )}
             {cur.kind === 'basics' ? renderBasics()
               : cur.kind === 'overview' ? renderOverview()
               : cur.kind === 'review' ? renderReview()
@@ -1026,6 +1374,23 @@ const ReportBuilder: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showPeriod && clientId && snapshotId && (
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !periodBusy) setShowPeriod(false); }}>
+          <div className="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="rb-period-title">
+            <h2 className="modal-title" id="rb-period-title">Report period</h2>
+            <PeriodPicker
+              clientId={clientId}
+              snapshotId={snapshotId}
+              initialMonths={period?.months || 1}
+              busy={periodBusy}
+              confirmText={(m, label) => (m === (period?.months || 1) ? 'Keep this period' : `Recalculate for ${label}`)}
+              onConfirm={m => (m === (period?.months || 1) ? setShowPeriod(false) : changePeriod(m))}
+              onCancel={() => setShowPeriod(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {leaveTo && (
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setLeaveTo(null); }}>

@@ -16,13 +16,14 @@ from app.models.report_snapshot import ReportSnapshot
 from app.services.ga4_service import pull_ga4_data
 from app.services.gbp_service import pull_gbp_data
 from app.services.openai_service import generate_report_narrative
+from app.services.report_period import build_report_data
 from app.services.gsc_service import pull_gsc_data
 from app.routes.reports import _resolve_metrics, _resolve_rankings, _resolve_ai_visibility, _resolve_links, _resolve_activities, _resolve_screenshots, _compute_kpi_deltas, get_month_boundaries
 
 logger = logging.getLogger(__name__)
 
 @celery_app.task(name="generate_snapshot_report", bind=True, max_retries=3)
-def generate_snapshot_report(self, client_id_str: str):
+def generate_snapshot_report(self, client_id_str: str, months: int = 1):
     """
     Background task to generate the rolling 30-day SEO report asynchronously.
     """
@@ -47,7 +48,7 @@ def generate_snapshot_report(self, client_id_str: str):
                 
             existing = db.execute(
                 select(ReportSnapshot).where(ReportSnapshot.client_id == client_id, ReportSnapshot.end_date == end_date)
-            ).scalar_one_or_none()
+            ).scalars().first()
             
             if existing:
                 if existing.status == ReportStatus.published:
@@ -78,49 +79,27 @@ def generate_snapshot_report(self, client_id_str: str):
                     except Exception as e:
                         logger.error(f"Live pull failed for {conn.provider.value}: {e}")
 
-            # Build GSC snapshot
+            # The current cycle as Google gave it, for the sources that are connected.
+            live = {}
             if gsc_live_data:
-                gsc_snapshot = {
-                    **gsc_live_data["totals"],
-                    "top_pages": gsc_live_data["top_pages"],
-                }
-            else:
-                gsc_snapshot = _resolve_metrics(db, client_id, start_date, end_date, "gsc")
-
-            # Build GA4 snapshot
+                live["gsc"] = {**gsc_live_data["totals"], "top_pages": gsc_live_data["top_pages"]}
             if ga4_live_data:
-                ga4_snapshot = {
+                live["ga4"] = {
                     **ga4_live_data["totals"],
                     "traffic_sources": ga4_live_data["traffic_sources"],
                     "devices": ga4_live_data["devices"],
                     "top_pages": ga4_live_data["top_pages"],
                     "countries": ga4_live_data.get("countries", []),
                 }
-            else:
-                ga4_snapshot = _resolve_metrics(db, client_id, start_date, end_date, "ga4")
 
-            # Build Snapshot
-            snapshot: dict[str, Any] = {
-                "gsc": gsc_snapshot,
-                "ga4": ga4_snapshot,
-                "gbp": _resolve_metrics(db, client_id, start_date, end_date, "gbp"),
-                "rankings": _resolve_rankings(db, client_id, start_date, end_date, prev_start, prev_end),
-                "ai_visibility": _resolve_ai_visibility(db, client_id, start_date, end_date),
-                "links": _resolve_links(db, client_id, start_date, end_date),
-                "activities": _resolve_activities(db, client_id, start_date, end_date),
-                "screenshots": _resolve_screenshots(db, client_id, start_date, end_date),
-            }
-
-            prev_snapshot = {
-                "gsc": _resolve_metrics(db, client_id, prev_start, prev_end, "gsc"),
-                "ga4": _resolve_metrics(db, client_id, prev_start, prev_end, "ga4"),
-                "gbp": _resolve_metrics(db, client_id, prev_start, prev_end, "gbp"),
-            }
-            snapshot["kpi_deltas"] = _compute_kpi_deltas(snapshot, prev_snapshot)
+            # Older cycles are read from what is already stored — only the
+            # current cycle was pulled above.
+            snapshot: dict[str, Any] = build_report_data(db, client_id, end_date, months, live=live)
+            window_start = datetime.date.fromisoformat(snapshot["period"]["start"])
 
             # 3. Narrative Auto-Draft
             try:
-                date_range_label = f"{start_date.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')}"
+                date_range_label = f"{window_start.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')}"
                 narrative = generate_report_narrative(client.name, date_range_label, snapshot)
             except Exception as e:
                 logger.error(f"Groq narrative generation failed: {e}")
@@ -128,6 +107,11 @@ def generate_snapshot_report(self, client_id_str: str):
 
             # 4. Write Report
             if existing:
+                # Regenerating a draft keeps what the person already chose.
+                for keep in ("included_sections", "included_items", "copy"):
+                    if keep in (existing.snapshot or {}):
+                        snapshot[keep] = existing.snapshot[keep]
+                existing.start_date = window_start
                 existing.snapshot = snapshot
                 if not existing.narrative or existing.narrative == "Narrative auto-generation failed. Please draft manually.":
                     existing.narrative = narrative
@@ -137,7 +121,7 @@ def generate_snapshot_report(self, client_id_str: str):
             else:
                 report = ReportSnapshot(
                     client_id=client_id,
-                    start_date=start_date,
+                    start_date=window_start,
                     end_date=end_date,
                     status=ReportStatus.draft,
                     snapshot=snapshot,

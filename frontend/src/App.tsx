@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -10,7 +10,6 @@ import Login from './pages/Login';
 import Clients from './pages/admin/Clients';
 import ClientDashboard from './pages/admin/ClientDashboard';
 import Connections from './pages/admin/Connections';
-import ManualEntryHub from './pages/admin/ManualEntryHub';
 import Keywords from './pages/admin/Keywords';
 import AIPrompts from './pages/admin/AIPrompts';
 import Screenshots from './pages/admin/Screenshots';
@@ -24,8 +23,15 @@ import Users from './pages/admin/Users';
 import ManagerDashboard from './pages/admin/ManagerDashboard';
 import ReportView from './pages/ReportView';
 import ReportBuilder from './pages/ReportBuilder';
+import ReportPreparing from './pages/ReportPreparing';
 
 import { AdminLayout } from './components/layout/AdminLayout';
+
+/** Data is added inside the report builder now; old links land on the client. */
+const ToClientOverview: React.FC = () => {
+  const { clientId } = useParams<{ clientId: string }>();
+  return <Navigate to={`/admin/clients/${clientId}`} replace />;
+};
 
 const App: React.FC = () => {
   return (
@@ -43,12 +49,12 @@ const App: React.FC = () => {
                 <Route path="/admin/clients" element={<Clients />} />
                 <Route path="/admin/clients/:clientId" element={<ClientDashboard />} />
                 <Route path="/admin/clients/:clientId/connections" element={<Connections />} />
-                <Route path="/admin/clients/:clientId/manual-entry" element={<ManualEntryHub />} />
+                <Route path="/admin/clients/:clientId/manual-entry" element={<ToClientOverview />} />
                 <Route path="/clients/:clientId/keywords" element={<Keywords />} />
                 <Route path="/clients/:clientId/ai-prompts" element={<AIPrompts />} />
                 <Route path="/clients/:clientId/screenshots" element={<Screenshots />} />
                 <Route path="/clients/:clientId/ai-mentions-data" element={<AIMentionsData />} />
-                <Route path="/clients/:clientId/manual-metrics" element={<ManualEntryHub />} />
+                <Route path="/clients/:clientId/manual-metrics" element={<ToClientOverview />} />
                 <Route path="/clients/:clientId/gbp" element={<GBPManagement />} />
                 <Route path="/clients/:clientId/google-analytics" element={<GoogleAnalytics />} />
                 <Route path="/clients/:clientId/search-console" element={<SearchConsole />} />
@@ -65,6 +71,7 @@ const App: React.FC = () => {
                     report made it feel like a different product. */}
                 {/* The builder comes before the report: it asks what to include,
                     fills in connected sources and takes manual figures for the rest. */}
+                <Route path="/admin/clients/:clientId/reports/new" element={<ReportPreparing />} />
                 <Route path="/clients/:clientId/reports/:snapshotId/build" element={<ReportBuilder />} />
                 <Route path="/admin/clients/:clientId/reports/:snapshotId/build" element={<ReportBuilder />} />
                 <Route path="/clients/:clientId/reports/:snapshotId" element={<ReportView />} />

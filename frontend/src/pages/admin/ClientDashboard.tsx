@@ -7,12 +7,14 @@ import {
   Palette, RefreshCw, FileText, Download, ArrowRight, ArrowUpRight,
   SearchX, Loader2, MousePointerClick, Users, TrendingUp, Bot,
   Crosshair, BarChart2, MapPin, Search, Link as LinkIcon, CheckSquare,
-  Image as ImageIcon, Inbox, Plug
+  Image as ImageIcon, Plug
 } from 'lucide-react';
 
 import PageHeader from '../../components/ui/PageHeader';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import Sparkline from '../../components/ui/Sparkline';
+import PeriodPicker from '../../components/PeriodPicker';
+import type { PeriodsInfo } from '../../components/PeriodPicker';
 
 const ClientDashboard: React.FC = () => {
   const { clientId } = useParams();
@@ -22,7 +24,6 @@ const ClientDashboard: React.FC = () => {
   const [reportCount, setReportCount] = useState<number>(0);
   const [connections, setConnections] = useState<any[]>([]);
   const [syncing, setSyncing] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sections, setSections] = useState<any[] | null>(null);
   const [trends, setTrends] = useState<any>(null);
@@ -39,6 +40,7 @@ const ClientDashboard: React.FC = () => {
   const [downloading, setDownloading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [openingDraft, setOpeningDraft] = useState(false);
 
   useEffect(() => {
     if (!clientId) return;
@@ -120,67 +122,28 @@ const ClientDashboard: React.FC = () => {
     setSyncing(false);
   };
 
-  const handleGenerate = async () => {
-    setGenerating(true);
-    const toastId = toast.info('Report generation started (this may take a minute)...', { duration: 60000 });
-    try {
-      await api.post(`/clients/${clientId}/reports/generate`, {});
-
-      let reportData = null;
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 3000));
+  /** A period was chosen: generate a new report, or reopen this cycle's draft. */
+  const onPickPeriod = async (months: number, info: PeriodsInfo) => {
+    if (info.mode === 'new') {
+      setShowGenerateModal(false);
+      navigate(`/admin/clients/${clientId}/reports/new?months=${months}`);
+      return;
+    }
+    if (info.mode === 'draft' && info.report_id) {
+      if (months !== (info.months || 1)) {
+        setOpeningDraft(true);
         try {
-          const full = await api.get(`/clients/${clientId}/reports/latest`);
-          if (full.data && full.data.id) {
-            // Check if the generated report is newer than the old one (or if there wasn't one)
-            if (!report || full.data.id !== report.id) {
-              reportData = full.data;
-              break;
-            }
-          }
-        } catch (e) {
-          // ignore 404s while processing
+          await api.post(`/clients/${clientId}/reports/${info.report_id}/period`, { months });
+        } catch (err: any) {
+          // Handled by global interceptor
+          setOpeningDraft(false);
+          return;
         }
+        setOpeningDraft(false);
       }
-
-      toast.dismiss(toastId);
-      if (reportData) {
-        setReport(reportData);
-        setReportCount(prev => prev + 1); // Optimistically increment
-        toast.success('Data collected — now choose what goes in the report.');
-        // The builder asks what to include before the report is shown.
-        navigate(`/admin/clients/${clientId}/reports/${reportData.id}/build`);
-      } else {
-        toast.error('Report generation timed out.');
-      }
-    } catch (err: any) {
-      toast.dismiss(toastId);
-      // Handled by global interceptor
+      setShowGenerateModal(false);
+      navigate(`/admin/clients/${clientId}/reports/${info.report_id}/build`);
     }
-    setGenerating(false);
-  };
-
-  const handleDownloadPDF = async (count: number) => {
-    setDownloading(true);
-    const toastId = toast.loading('Generating PDF...', { duration: 60000 });
-    try {
-      const response = await api.get(`/clients/${clientId}/reports/multi/pdf?count=${count}`, {
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${client.name.replace(/\s+/g, '_')}_${count}M_SEO_Report.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      toast.dismiss(toastId);
-      toast.success('PDF downloaded successfully!');
-    } catch (err: any) {
-      toast.dismiss(toastId);
-      // Handled by global interceptor
-    }
-    setDownloading(false);
   };
 
   const handleDownloadHistoricalPDF = async (snapshotId: string, monthLabel: string) => {
@@ -208,16 +171,24 @@ const ClientDashboard: React.FC = () => {
 
   const openGenerateModal = async () => {
     setShowGenerateModal(true);
-    if (history.length === 0) {
-      setLoadingHistory(true);
-      try {
-        const res = await api.get(`/clients/${clientId}/reports/history`);
-        setHistory(res.data || []);
-      } catch (err) {
-        // Handled by global interceptor
-      }
-      setLoadingHistory(false);
+    setLoadingHistory(true);
+    try {
+      const res = await api.get(`/clients/${clientId}/reports/history`);
+      setHistory(res.data || []);
+    } catch (err) {
+      // Handled by global interceptor
     }
+    setLoadingHistory(false);
+  };
+
+  /** A report's name: its month, or the first and last month it combines. */
+  const reportName = (snap: any) => {
+    const start = new Date(snap.start_date);
+    const end = new Date(snap.end_date);
+    const month = (d: Date) => d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    if (days <= 31) return month(end);
+    return `${month(new Date(start.getTime() + 29 * 86400000))} – ${month(end)}`;
   };
 
   let daysRemaining = 0;
@@ -292,9 +263,10 @@ const ClientDashboard: React.FC = () => {
   // Don't ask until the section preferences have actually loaded.
   const unresolved = sections === null ? [] : TRAFFIC_SOURCES.filter(s => trafficMode(s.key) === 'unset');
 
-  const periodLabel = report?.end_date
+  // A report names its own period — one month, or the months it combines.
+  const periodLabel = report?.snapshot?.period?.label || (report?.end_date
     ? new Date(report.end_date).toLocaleString('default', { month: 'long', year: 'numeric' })
-    : '';
+    : '');
 
   /** Real recorded series only — an absent metric renders without a chart. */
   const seriesOf = (provider: string, key: string): number[] => {
@@ -446,9 +418,6 @@ const ClientDashboard: React.FC = () => {
         breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Clients', href: '/admin/clients' }, { label: client.name }]}
         actions={
           <>
-            <Link to={`/admin/clients/${clientId}/manual-entry`} className="btn btn-secondary">
-              <Inbox size={15} /> Add Data
-            </Link>
             <button className="btn btn-secondary" onClick={() => setShowWhitelabel(true)}>
               <Palette size={15} /> Whitelabel Settings
             </button>
@@ -463,16 +432,11 @@ const ClientDashboard: React.FC = () => {
             <span className="empty-state-icon"><FileText size={22} /></span>
             <h3>No report generated yet</h3>
             <p>
-              Add this client's data, then generate the first report. Once generated,
-              this page shows headline performance at a glance.
+              Choose the period and generate the first report. This month is fetched from Google
+              where it is connected; everything else is added with a sheet inside the report builder.
             </p>
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Link to={`/admin/clients/${clientId}/manual-entry`} className="btn btn-secondary">
-                <Inbox size={15} /> Add Data
-              </Link>
-              <button className="btn btn-primary" onClick={handleGenerate} disabled={generating}>
-                {generating ? <><Loader2 size={15} className="spin" /> Generating…</> : 'Generate First Report'}
-              </button>
+              <button className="btn btn-primary" onClick={openGenerateModal}>Generate First Report</button>
             </div>
           </div>
         </div>
@@ -553,8 +517,13 @@ const ClientDashboard: React.FC = () => {
 
             <div className="report-card-actions">
               <button className="btn ghost" onClick={openGenerateModal}>All reports</button>
-              <Link to={`/admin/clients/${clientId}/reports/${report.id}`} className="btn btn-primary">
-                Open report <ArrowRight size={14} />
+              <Link
+                to={report.status === 'draft'
+                  ? `/admin/clients/${clientId}/reports/${report.id}/build`
+                  : `/admin/clients/${clientId}/reports/${report.id}`}
+                className="btn btn-primary"
+              >
+                {report.status === 'draft' ? 'Continue building' : 'Open report'} <ArrowRight size={14} />
               </Link>
             </div>
           </div>
@@ -661,9 +630,9 @@ const ClientDashboard: React.FC = () => {
                     <span className="data-row-name">{src.name}</span>
                   </div>
                   {mode === 'manual' ? (
-                    <Link to={`/admin/clients/${clientId}/manual-entry`} className="src man">
+                    <span className="src man" title="Added with a sheet inside the report builder">
                       Entered manually
-                    </Link>
+                    </span>
                   ) : (
                     <span className="src" title={c ? (isConnected ? c.property_id : c.status) : ''}>
                       {isConnected ? c.property_id : (c?.status || 'not connected')}
@@ -725,66 +694,59 @@ const ClientDashboard: React.FC = () => {
       {showGenerateModal && (
         <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowGenerateModal(false); }}>
           <div className="modal modal-lg" role="dialog" aria-modal="true">
-            <h2 className="modal-title">Generate / View Reports</h2>
-            <p className="modal-desc">Open a rolling multi-month view, or export any period as PDF.</p>
+            <h2 className="modal-title">Reports</h2>
+            <p className="modal-desc">Generate this month's report — on its own, or combined with earlier months — or open one already made.</p>
 
-            {reportCount > 0 && (
-              <>
-                <div className="overline" style={{ marginBottom: 10 }}>Rolling Periods</div>
-                <div className="stack scroll-y" style={{ maxHeight: '260px' }}>
-                  {Array.from({ length: Math.min(reportCount, 12) }, (_, i) => i + 1).map(num => (
-                    <div key={num} className="list-row">
-                      <span style={{ fontWeight: 600, fontSize: 13.5 }}>{num === 1 ? 'This Month' : `${num} Months`}</span>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <Link to={`/admin/clients/${clientId}/reports/multi?count=${num}`} className="btn btn-primary btn-sm">Open in App</Link>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleDownloadPDF(num)} disabled={downloading}>
-                          {downloading ? <Loader2 size={13} className="spin" /> : <Download size={13} />} PDF
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
+            <div className="overline" style={{ marginBottom: 10 }}>Report period</div>
+            {clientId && (
+              <PeriodPicker
+                clientId={clientId}
+                busy={openingDraft}
+                confirmText={(m, label, info) => info.mode === 'draft'
+                  ? (m === (info.months || 1) ? 'Open the draft' : `Update the draft to ${label}`)
+                  : `Generate ${label}`}
+                onConfirm={onPickPeriod}
+              />
             )}
 
-            <div className="overline" style={{ margin: '22px 0 10px' }}>Past Single-Month Snapshots</div>
-
+            <div className="overline" style={{ margin: '24px 0 10px' }}>All reports</div>
             {loadingHistory ? (
-              <p className="text-subtle text-sm" style={{ textAlign: 'center', padding: '16px' }}>Loading history…</p>
+              <p className="text-subtle text-sm" style={{ textAlign: 'center', padding: '16px' }}>Loading reports…</p>
             ) : history.length > 0 ? (
-              <div className="stack scroll-y" style={{ maxHeight: '220px' }}>
+              <div className="stack scroll-y" style={{ maxHeight: '240px' }}>
                 {history.map(snap => {
-                  const dateLabel = new Date(snap.end_date).toLocaleString('default', { month: 'long', year: 'numeric' });
+                  const name = reportName(snap);
+                  const draft = snap.status === 'draft';
                   return (
                     <div key={snap.id} className="list-row">
                       <div>
-                        <span style={{ fontWeight: 600, fontSize: '13.5px', display: 'block' }}>{dateLabel}</span>
-                        <span className="text-subtle text-xs">{new Date(snap.generated_at).toLocaleString()}</span>
+                        <span style={{ fontWeight: 600, fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {name}
+                          <span className={`badge ${draft ? 'badge-warning' : 'badge-success'}`}>{String(snap.status).toUpperCase()}</span>
+                        </span>
+                        <span className="text-subtle text-xs">
+                          Generated {snap.generated_at ? new Date(snap.generated_at).toLocaleString() : '—'}
+                        </span>
                       </div>
-                      <button className="btn btn-secondary btn-sm" onClick={() => handleDownloadHistoricalPDF(snap.id, dateLabel)} disabled={downloading}>
-                        {downloading ? <Loader2 size={13} className="spin" /> : <Download size={13} />} PDF
-                      </button>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <Link
+                          to={draft ? `/admin/clients/${clientId}/reports/${snap.id}/build` : `/admin/clients/${clientId}/reports/${snap.id}`}
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setShowGenerateModal(false)}
+                        >
+                          {draft ? 'Continue' : 'Open'}
+                        </Link>
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleDownloadHistoricalPDF(snap.id, name)} disabled={downloading}>
+                          {downloading ? <Loader2 size={13} className="spin" /> : <Download size={13} />} PDF
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <p className="text-subtle text-sm" style={{ textAlign: 'center', padding: '16px' }}>No past snapshots available.</p>
+              <p className="text-subtle text-sm" style={{ textAlign: 'center', padding: '16px' }}>No reports yet.</p>
             )}
-
-            <div className="callout">
-              <div>
-                <h4 className="callout-title">Generate New Snapshot</h4>
-                <p className="callout-desc">Captures the latest data to append to the report history.</p>
-              </div>
-              <button
-                className="btn btn-secondary"
-                onClick={() => { setShowGenerateModal(false); handleGenerate(); }}
-                disabled={generating || (daysRemaining > 0 && report?.status !== 'published')}
-              >
-                {generating ? <><Loader2 size={15} className="spin" /> Generating…</> : 'Generate New'}
-              </button>
-            </div>
 
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowGenerateModal(false)}>Close</button>

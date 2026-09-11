@@ -198,6 +198,37 @@
         /* Homepage screenshot in a browser frame, right of the headline */
         .cover.has-shot h1 { max-width: 420px; }
 
+        /* Section commentary */
+        .section-story {
+            margin: 2px 0 18px;
+            padding: 13px 16px 12px;
+            border: 1px solid var(--line);
+            border-left: 4px solid var(--yellow);
+            border-radius: 6px;
+            background: #FFFDF6;
+            break-inside: avoid;
+        }
+
+        .section-story-label {
+            display: block;
+            margin-bottom: 6px;
+            color: #8A6508;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
+
+        .section-story p {
+            margin: 0 0 5px;
+            color: #2F3437;
+            font-size: 10.5px;
+            line-height: 1.6;
+        }
+
+        .section-story p:last-child { margin-bottom: 0; }
+        .period-card { margin: 0 0 18px; }
+
         .cover-shot {
             position: absolute;
             top: 100px;
@@ -1534,6 +1565,53 @@
     <small class="vs">vs {{ prev | round(0) | int | fmt }} prior period</small>
   {%- endif -%}
 {%- endmacro %}
+{# Commentary under a section: what the figures mean, what was done, what's next #}
+{% macro story(key) -%}
+  {%- set text = nar(key) -%}
+  {%- if text -%}
+  <div class="section-story">
+    <span class="section-story-label">What this means</span>
+    {% for para in text.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+  </div>
+  {%- endif -%}
+{%- endmacro %}
+
+{# A combined report shows each month it covers #}
+{% macro month_table(provider) -%}
+  {%- if period_rows | length > 1 -%}
+  <div class="card period-card">
+    <div class="card-title"><span>Month by month</span></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          {% if provider == 'gsc' %}<th>Clicks</th><th>Impressions</th><th>CTR</th><th>Avg. position</th>
+          {% else %}<th>Sessions</th><th>Users</th><th>Engaged</th><th>Conversions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in period_rows %}{% set r = p.get(provider) or {} %}
+        <tr>
+          <td style="font-weight:600">{{ p.get('label') }}</td>
+          {% if provider == 'gsc' %}
+          <td>{{ r.get('clicks') | fmt if r.get('clicks') is not none else '—' }}</td>
+          <td>{{ r.get('impressions') | fmt if r.get('impressions') is not none else '—' }}</td>
+          <td>{{ '%.2f' | format((r.get('ctr') or 0) * 100) ~ '%' if r.get('ctr') is not none else '—' }}</td>
+          <td>{{ '%.1f' | format(r.get('position')) if r.get('position') is not none else '—' }}</td>
+          {% else %}
+          <td>{{ r.get('sessions') | fmt if r.get('sessions') is not none else '—' }}</td>
+          <td>{{ r.get('users') | fmt if r.get('users') is not none else '—' }}</td>
+          <td>{{ r.get('engaged_sessions') | fmt if r.get('engaged_sessions') is not none else '—' }}</td>
+          <td>{{ r.get('conversions') | fmt if r.get('conversions') is not none else '—' }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {%- endif -%}
+{%- endmacro %}
+
 {# ── Charts ported from the reference generator ──────────────────────
    trend_svg() and bar_chart_html() in uploads/includes/functions.php.
    Same geometry, same proportions; colour comes from the report theme. #}
@@ -1612,6 +1690,7 @@
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GSC · auto</span></span>
             </div>
             <div class="section-rule"></div>
+            {{ story('gsc') }}{{ month_table('gsc') }}
             <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
                 {% if mo('gsc.clicks') %}<div class="small-metric"><span>Search Clicks</span><strong>{{ gsc.get('clicks', 0) | fmt }}</strong>{{ change_line(gsc.get('clicks', 0), deltas.get('gsc', {}).get('clicks', 0)) }}</div>{% endif %}
                 {% if mo('gsc.impressions') %}<div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong>{{ change_line(gsc.get('impressions', 0), deltas.get('gsc', {}).get('impressions', 0)) }}</div>{% endif %}
@@ -1636,6 +1715,7 @@
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
+            {{ story('ga4') }}{{ month_table('ga4') }}
             {% set show_conv = ga4.get('conversions', 0) > 0 %}
             {% set show_cart = ga4.get('add_to_carts', 0) > 0 %}
             {% set show_dur = ga4.get('avg_session_duration', 0) > 0 %}
@@ -1662,7 +1742,7 @@
 {% endif %}
             <!-- GBP Section -->
             {% set show_calls = gbp.get('calls', 0) > 0 and mo('gbp.calls') %}
-            {% set show_dir = gbp.get('directions', 0) > 0 and mo('gbp.direction_requests') %}
+            {% set show_dir = gbp.get('direction_requests', gbp.get('directions', 0)) > 0 and mo('gbp.direction_requests') %}
             {% set show_clicks = gbp.get('website_clicks', 0) > 0 and mo('gbp.website_clicks') %}
             {% set show_searches = gbp.get('searches', 0) > 0 %}
             {% set show_calls = show_calls and sections.gbp %}
@@ -1674,11 +1754,12 @@
             <div class="gbp" style="grid-template-columns: 1.25fr repeat({{ gbp_cols }}, 1fr);">
                 <div class="gbp-title">Google Business Profile</div>
                 {% if show_calls %}<div class="gbp-stat"><span>Calls</span><strong>{{ gbp.get('calls', 0) | fmt }}</strong></div>{% endif %}
-                {% if show_dir %}<div class="gbp-stat"><span>Direction Requests</span><strong>{{ gbp.get('directions', 0) | fmt }}</strong></div>{% endif %}
+                {% if show_dir %}<div class="gbp-stat"><span>Direction Requests</span><strong>{{ gbp.get('direction_requests', gbp.get('directions', 0)) | fmt }}</strong></div>{% endif %}
                 {% if show_clicks %}<div class="gbp-stat"><span>Website Clicks</span><strong>{{ gbp.get('website_clicks', 0) | fmt }}</strong></div>{% endif %}
                 {% if show_searches %}<div class="gbp-stat"><span>Searches</span><strong>{{ gbp.get('searches', 0) | fmt }}</strong></div>{% endif %}
             </div>
             {% endif %}
+            {% if sections.gbp %}{{ story('gbp') }}{% endif %}
             <div class="chart-row">
                 <div class="visual-card">
                     <p class="chart-caption">GA4 engagement funnel</p>
@@ -1692,7 +1773,7 @@
                     <p class="chart-caption">Google Business Profile actions</p>
                     {% set gbp_rows = [] %}
                     {% if mo('gbp.calls') and gbp.get('calls', 0) %}{% set _ = gbp_rows.append({'k': 'Calls', 'v': gbp.get('calls', 0)}) %}{% endif %}
-                    {% if mo('gbp.direction_requests') and gbp.get('directions', 0) %}{% set _ = gbp_rows.append({'k': 'Direction requests', 'v': gbp.get('directions', 0)}) %}{% endif %}
+                    {% if mo('gbp.direction_requests') and gbp.get('direction_requests', gbp.get('directions', 0)) %}{% set _ = gbp_rows.append({'k': 'Direction requests', 'v': gbp.get('direction_requests', gbp.get('directions', 0))}) %}{% endif %}
                     {% if mo('gbp.website_clicks') and gbp.get('website_clicks', 0) %}{% set _ = gbp_rows.append({'k': 'Website clicks', 'v': gbp.get('website_clicks', 0)}) %}{% endif %}
                     {% if gbp.get('searches', 0) %}{% set _ = gbp_rows.append({'k': 'Local searches', 'v': gbp.get('searches', 0)}) %}{% endif %}
                     {{ bar_list(gbp_rows, 'k', 'v', 'var(--forest)') }}
@@ -1887,6 +1968,7 @@
                 </div>
             </div>
             <div class="section-rule"></div>
+            {{ story('rankings') }}
             <div class="card">
                 <div class="card-title"><span>Positioning Summary</span></div>
                 
@@ -1975,6 +2057,7 @@
                 <div><h2 class="section-heading">{{ ct('ai_visibility') }}</h2>{% if cs('ai_visibility') %}<p class="section-desc">{{ cs('ai_visibility') }}</p>{% endif %}</div>
             </div>
             <div class="section-rule"></div>
+            {{ story('ai_visibility') }}
             <div class="ai-grid">
                 <div class="ai-metric"><span>Brand Mentions</span><strong>{{ ai_mentioned }}</strong></div>
                 <div class="ai-metric"><span>Total Prompts</span><strong>{{ ai_total }}</strong></div>
@@ -2016,6 +2099,7 @@
                 </div>
             </div>
             <div class="section-rule"></div>
+            {{ story('links') }}
             <div class="links-summary">
                 <div class="metric"><span>Links Created</span><strong>{{ links | length }}</strong><small>In {{ display_label }}</small></div>
                 <div class="metric blue"><span>Unique Domains</span><strong>{{ unique_domains }}</strong></div>
@@ -2080,6 +2164,7 @@
                 </div>
             </div>
             <div class="section-rule"></div>
+            {{ story('work') }}
             
             <div class="delivery-layout">
                 <div class="card">

@@ -9,7 +9,6 @@ import {
   Users,
   Kanban,
   LayoutDashboard,
-  Inbox,
   Crosshair,
   BarChart2,
   MapPin,
@@ -148,10 +147,6 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
 
               <NavLink to={`/admin/clients/${clientId}`} end className={navCls} onClick={closeDrawer}>
                 <span className="nav-ico"><LayoutDashboard size={15} /></span> <span className="nav-text">Overview</span>
-              </NavLink>
-
-              <NavLink to={`/admin/clients/${clientId}/manual-entry`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><Inbox size={15} /></span> <span className="nav-text">Data Ingestion</span>
               </NavLink>
               <NavLink to={`/clients/${clientId}/keywords`} className={navCls} onClick={closeDrawer}>
                 <span className="nav-ico"><Crosshair size={15} /></span> <span className="nav-text">Keyword Performance</span>

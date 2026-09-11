@@ -7,7 +7,7 @@ from typing import Any, Optional
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, File, UploadFile, Response
 from pydantic import BaseModel
-from sqlalchemy import select, text, func
+from sqlalchemy import or_, select, text, func
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -17,7 +17,7 @@ from app.models.ai_prompt import AiPrompt
 from app.models.activity import Activity
 from app.models.client import Client
 from app.models.connection import Connection
-from app.models.enums import ConnectionStatus, ProviderType, ReportStatus, MetricSource
+from app.models.enums import AiPlatform, ConnectionStatus, ProviderType, RankingSource, ReportStatus, MetricSource
 from app.models.link import Link
 from app.models.keyword import Keyword
 from app.models.metric import Metric
@@ -27,6 +27,8 @@ from app.models.screenshot import Screenshot
 from app.services.ga4_service import pull_ga4_data
 from app.services import report_composer as composer
 from app.services.openai_service import suggest_report_sections
+from app.services.openai_service import generate_section_summaries
+from app.services import report_period as periods_svc
 from app.services.gbp_service import pull_gbp_data
 from app.services.openai_service import generate_report_narrative
 from app.services.gsc_service import pull_gsc_data
@@ -68,68 +70,52 @@ class ReportHistoryResponse(BaseModel):
 
 
 @router.post("/generate")
-def generate_report(client_id: uuid.UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Generate the monthly SEO report asynchronously."""
-    
-    # Verify client exists
+def generate_report(
+    client_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    data: Optional[GenerateRequest] = None,
+    db: Session = Depends(get_db),
+):
+    """Generate the report for the current 30-day cycle, optionally combined
+    with the cycles before it that already have data stored.
+
+    Only the current cycle is pulled from Google. One report per cycle: the
+    next can be generated 30 days after the last one ended.
+    """
     client = db.get(Client, client_id)
     if not client:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found.")
-        
-    # Enforce 30-day gate
-    last_snapshot = db.execute(
-        select(ReportSnapshot).where(ReportSnapshot.client_id == client_id).order_by(ReportSnapshot.end_date.desc())
-    ).scalars().first()
-    
-    end_date = datetime.date.today() - datetime.timedelta(days=1)
-    start_date = end_date - datetime.timedelta(days=29)
-    
-    if last_snapshot:
-        days_since = (end_date - last_snapshot.end_date).days
-        if days_since < 30:
-            days_remaining = 30 - days_since
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Please wait {days_remaining} more days to generate the next report."
-            )
-    from app.models.connection import Connection
-    from app.models.enums import ConnectionStatus
-    from app.models.keyword import Keyword
-    from app.models.ai_prompt import AiPrompt
-    from app.models.ai_mention import AiMention
-    from app.models.link import Link
-    from app.models.activity import Activity
-    from app.models.screenshot import Screenshot
-    import calendar
 
-    # Verify that the client has at least SOME manual data in the rolling window
-    
-    has_conn = db.execute(select(Connection).where(Connection.client_id == client_id, Connection.status == ConnectionStatus.connected)).first() is not None
-    has_kw = db.execute(select(Keyword).where(Keyword.client_id == client_id)).first() is not None
-    has_ap = db.execute(select(AiPrompt).where(AiPrompt.client_id == client_id)).first() is not None
-    has_am = db.execute(select(AiMention).where(AiMention.client_id == client_id, AiMention.captured_on >= start_date, AiMention.captured_on <= end_date)).first() is not None
-    has_lnk = db.execute(select(Link).where(Link.client_id == client_id, Link.created_on >= start_date, Link.created_on <= end_date)).first() is not None
-    # Activities and Screenshots are stored per-month currently, so we check if they fall in the range
-    has_act = db.execute(select(Activity).where(Activity.client_id == client_id, Activity.month >= start_date, Activity.month <= end_date)).first() is not None
-    has_scr = db.execute(select(Screenshot).where(Screenshot.client_id == client_id, Screenshot.month >= start_date, Screenshot.month <= end_date)).first() is not None
-
-    has_manual_data = any([has_kw, has_ap, has_am, has_lnk, has_act, has_scr])
-
-    if not has_manual_data:
+    anchor = periods_svc.anchor_for(db, client_id)
+    if anchor["mode"] == "locked":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot generate report: Manual data is missing. Please upload your manual data first."
+            detail=f"Please wait {anchor['days_remaining']} more days to generate the next report.",
+        )
+    if anchor["mode"] == "draft":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This cycle already has a draft report — open it to change how many months it covers.",
+        )
+
+    months = data.months if data else 1
+    available = len(periods_svc.timeline(db, client_id, anchor["anchor_end"]))
+    if months < 1 or months > available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only {available} month{'s' if available != 1 else ''} of data can be combined for this client.",
         )
 
     # Dispatch to BackgroundTasks instead of Celery (since Railway doesn't run a Celery worker by default)
     from app.tasks.reports import generate_snapshot_report
-    
+
     task_id = str(uuid.uuid4())
-    background_tasks.add_task(generate_snapshot_report, str(client_id))
-    
+    background_tasks.add_task(generate_snapshot_report, str(client_id), months)
+
     return {
         "status": "processing",
         "task_id": task_id,
+        "months": months,
         "message": "Report generation has been queued."
     }
 
@@ -186,6 +172,8 @@ class SectionSelection(BaseModel):
 
 class ItemEdits(BaseModel):
     edits: dict[str, Any]
+    # Ids whose edit should also correct the saved data it came from.
+    writeBack: list[str] | None = None
 
 
 class SectionSuggestRequest(BaseModel):
@@ -196,6 +184,19 @@ class CopyUpdate(BaseModel):
     brand_line: str | None = None
     titles: dict[str, str] | None = None
     subtitles: dict[str, str] | None = None
+
+
+class GenerateRequest(BaseModel):
+    # How many 30-day cycles the report covers, ending with the current one.
+    months: int = 1
+
+
+class PeriodChange(BaseModel):
+    months: int
+
+
+class NarrationUpdate(BaseModel):
+    narration: dict[str, str]
 
 
 def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> ReportSnapshot:
@@ -252,6 +253,37 @@ def get_trends(
     return {"from": start.isoformat(), "to": end.isoformat(), "series": series}
 
 
+@router.get("/periods")
+def get_report_periods(client_id: uuid.UUID, snapshot_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
+    """What can be generated now: the current cycle, and the cycles before it
+    that have data stored and so can be combined into one report. With a
+    snapshot_id, the same for that report's own cycle."""
+    if snapshot_id:
+        report = _load_draft(client_id, snapshot_id, db)
+        anchor = {
+            "mode": "locked" if report.status == ReportStatus.published else "draft",
+            "anchor_end": report.end_date,
+            "report_id": str(report.id),
+            "months": ((report.snapshot or {}).get("period") or {}).get("months", 1),
+            "days_remaining": 0,
+        }
+    else:
+        anchor = periods_svc.anchor_for(db, client_id)
+    cycles = periods_svc.timeline(db, client_id, anchor["anchor_end"])
+    conns = db.execute(select(Connection).where(Connection.client_id == client_id)).scalars().all()
+    connected = {
+        p: any(c.provider == ProviderType(p) and c.status == ConnectionStatus.connected for c in conns)
+        for p in ("gsc", "ga4")
+    }
+    return {
+        **anchor,
+        "anchor_end": anchor["anchor_end"].isoformat(),
+        "cycles": cycles,
+        "maxMonths": len(cycles),
+        "connected": connected,
+    }
+
+
 @router.get("/{snapshot_id}/composer")
 def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
     """Everything the composer needs: sections, every datum, and current state."""
@@ -278,6 +310,9 @@ def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Dep
         "copyHeadings": composer.COPY_HEADINGS,
         "brandLineDefault": composer.DEFAULT_BRAND_LINE,
         "hasCover": report.cover_mime is not None,
+        "narration": snapshot.get("narration") or {},
+        "period": snapshot.get("period") or _legacy_period(report),
+        "periods": snapshot.get("periods") or [],
     }
 
 
@@ -365,12 +400,18 @@ def set_composer_values(
         else:
             rejected.append(item_id)
 
+    # Edits the person chose to carry back into the saved data.
+    wrote_back = []
+    for item_id in data.writeBack or []:
+        if item_id in applied and _write_back(db, client_id, report, snapshot, item_id, data.edits.get(item_id)):
+            wrote_back.append(item_id)
+
     snapshot["kpi_deltas"] = deltas
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
 
-    return {"applied": applied, "rejected": rejected, "items": composer.enumerate_items(snapshot)}
+    return {"applied": applied, "rejected": rejected, "wroteBack": wrote_back, "items": composer.enumerate_items(snapshot)}
 
 
 @router.post("/{snapshot_id}/composer/suggest")
@@ -490,19 +531,21 @@ def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str
     if not conn or conn.status != ConnectionStatus.connected:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{name} is not connected for this client.")
 
-    start, end = report.start_date, report.end_date
+    # Only the current cycle is pulled; older cycles stay as stored.
+    end = report.end_date
+    start = end - datetime.timedelta(days=periods_svc.CYCLE_DAYS - 1)
     try:
         if provider == "gsc":
-            live = pull_gsc_data(db, conn.id, start, end)
-            block = {**live["totals"], "top_pages": live["top_pages"]}
+            live_data = pull_gsc_data(db, conn.id, start, end)
+            block = {**live_data["totals"], "top_pages": live_data["top_pages"]}
         else:
-            live = pull_ga4_data(db, conn.id, start, end)
+            live_data = pull_ga4_data(db, conn.id, start, end)
             block = {
-                **live["totals"],
-                "traffic_sources": live["traffic_sources"],
-                "devices": live["devices"],
-                "top_pages": live["top_pages"],
-                "countries": live.get("countries", []),
+                **live_data["totals"],
+                "traffic_sources": live_data["traffic_sources"],
+                "devices": live_data["devices"],
+                "top_pages": live_data["top_pages"],
+                "countries": live_data.get("countries", []),
             }
     except Exception as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not fetch from {name}: {e}")
@@ -511,24 +554,230 @@ def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str
     # it before writing, or the write would be based on stale JSON.
     db.refresh(report)
     snapshot = dict(report.snapshot or {})
-    snapshot[provider] = block
-
-    # Same previous window the report generator compares against.
-    prev_end = start - datetime.timedelta(days=1)
-    prev_start = prev_end - datetime.timedelta(days=30)
-    previous = _resolve_metrics(db, client_id, prev_start, prev_end, provider)
-    deltas = dict(snapshot.get("kpi_deltas") or {})
-    deltas[provider] = {
-        k: v - previous.get(k, 0)
-        for k, v in block.items()
-        if isinstance(v, (int, float)) and isinstance(previous.get(k, 0), (int, float))
-    }
-    snapshot["kpi_deltas"] = deltas
+    live = dict(_live_of(snapshot))
+    live[provider] = block
+    months = (snapshot.get("period") or {}).get("months") or 1
+    fresh = periods_svc.build_report_data(db, client_id, report.end_date, months, live=live)
+    snapshot = periods_svc.merge_section(snapshot, fresh, provider)
+    snapshot["live"] = {**live, **(snapshot.get("live") or {})}
 
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
     return get_composer(client_id, snapshot_id, db)
+
+
+def _legacy_period(report: ReportSnapshot) -> dict:
+    """Period details for a report made before reports could span months."""
+    label = report.end_date.strftime("%B %Y")
+    return {
+        "months": 1,
+        "start": report.start_date.isoformat(),
+        "end": report.end_date.isoformat(),
+        "labels": [label],
+        "label": label,
+        "range": periods_svc.short_range(report.start_date, report.end_date),
+        "compare": {"hasData": bool((report.snapshot or {}).get("kpi_deltas"))},
+    }
+
+
+def _live_of(snapshot: dict) -> dict:
+    """The current cycle's figures as Google gave them. Drafts made before
+    combined reports kept those as the snapshot's own blocks."""
+    live = snapshot.get("live")
+    if isinstance(live, dict) and live:
+        return live
+    if ((snapshot.get("period") or {}).get("months") or 1) == 1:
+        return {p: snapshot[p] for p in ("gsc", "ga4") if periods_svc.has_numbers(p, snapshot.get(p))}
+    return {}
+
+
+def _write_narration(client_name: str, snapshot: dict, sections: Optional[list[str]] = None) -> dict:
+    """Section commentary for every section that has something to say.
+    Never blocks a report: if the AI is unavailable the sections stay empty."""
+    available = composer.section_availability(snapshot)
+    wanted = [s for s in (sections or composer.SECTION_KEYS) if available.get(s)]
+    if not wanted:
+        return {}
+    try:
+        return generate_section_summaries(
+            client_name, (snapshot.get("period") or {}).get("label", ""),
+            composer.apply_selection(snapshot), wanted, composer.current_items(snapshot),
+        )
+    except Exception:
+        logger.exception("Section commentary could not be written.")
+        return {}
+
+
+def _write_back(db: Session, client_id: uuid.UUID, report: ReportSnapshot, snapshot: dict, item_id: str, value: Any) -> bool:
+    """Carry one report edit back into the saved data it came from."""
+    start, end = report.start_date, report.end_date
+    month_start = start.replace(day=1)
+    try:
+        if item_id.startswith("rankings.kw."):
+            keyword_id = uuid.UUID(item_id.split(".", 2)[2])
+            keyword = db.get(Keyword, keyword_id)
+            if not keyword or keyword.client_id != client_id:
+                return False
+            row = db.execute(
+                select(Ranking).where(Ranking.keyword_id == keyword_id, Ranking.captured_on >= start, Ranking.captured_on <= end)
+                .order_by(Ranking.captured_on.desc())
+            ).scalars().first()
+            if row:
+                row.position = int(float(value))
+            else:
+                db.add(Ranking(keyword_id=keyword_id, captured_on=end, position=int(float(value)), source=RankingSource.manual))
+            return True
+
+        if item_id.startswith("gbp."):
+            key = item_id.split(".", 1)[1]
+            rows = db.execute(
+                select(Metric).where(
+                    Metric.client_id == client_id, Metric.provider == "gbp", Metric.metric_key == key,
+                    or_(Metric.dimension_key.is_(None), Metric.dimension_key == ""),
+                    Metric.captured_on >= month_start, Metric.captured_on <= end,
+                ).order_by(Metric.captured_on.desc())
+            ).scalars().all()
+            target = float(value)
+            if rows:
+                # Months before the latest keep their values; the latest takes the difference.
+                others = sum(float(r.value or 0) for r in rows[1:])
+                rows[0].value = max(target - others, 0)
+            else:
+                # Stored the way sheet uploads store it, so a later upload for
+                # the month updates this row instead of adding a second one.
+                db.add(Metric(client_id=client_id, provider="gbp", metric_key=key, dimension_key="",
+                              dimension_value="", captured_on=end.replace(day=1), value=target, source=MetricSource.manual))
+            return True
+
+        if item_id.startswith("links."):
+            row = db.get(Link, uuid.UUID(item_id.split(".", 1)[1]))
+            if not row or row.client_id != client_id:
+                return False
+            row.count = int(float(value))
+            return True
+
+        if item_id.startswith("work.act."):
+            idx = int(item_id.split(".")[2])
+            acts = snapshot.get("activities") or []
+            ident = acts[idx].get("id") if 0 <= idx < len(acts) else None
+            row = db.get(Activity, uuid.UUID(ident)) if ident else None
+            if not row or row.client_id != client_id:
+                return False
+            row.count = int(float(value))
+            return True
+
+        if item_id.startswith("ai_visibility."):
+            _, prompt_id, platform = item_id.split(".", 2)
+            rows = db.execute(
+                select(AiMention).where(
+                    AiMention.client_id == client_id, AiMention.prompt_id == uuid.UUID(prompt_id),
+                    AiMention.platform == AiPlatform(platform),
+                    AiMention.month >= month_start, AiMention.month <= end,
+                )
+            ).scalars().all()
+            for row in rows:
+                row.mentioned = bool(value)
+            return bool(rows)
+    except (ValueError, TypeError, IndexError):
+        return False
+    return False
+
+
+@router.post("/{snapshot_id}/period")
+def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: PeriodChange, db: Session = Depends(get_db)):
+    """Change how many months a draft covers.
+
+    Nothing is pulled: the current cycle was fetched when the draft was made,
+    and older cycles are read from stored data. Figures are recalculated;
+    headings and ticks are kept.
+    """
+    report = _load_editable(client_id, snapshot_id, db)
+    available = len(periods_svc.timeline(db, client_id, report.end_date))
+    if not 1 <= data.months <= available:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Only {available} month{'s' if available != 1 else ''} of data can be combined for this report.",
+        )
+
+    snapshot = dict(report.snapshot or {})
+    fresh = periods_svc.build_report_data(db, client_id, report.end_date, data.months, live=_live_of(snapshot))
+    for keep in ("included_sections", "included_items", "copy", "narration"):
+        if keep in snapshot:
+            fresh[keep] = snapshot[keep]
+
+    report.start_date = datetime.date.fromisoformat(fresh["period"]["start"])
+    report.snapshot = fresh
+    flag_modified(report, "snapshot")
+    db.commit()
+    return get_composer(client_id, snapshot_id, db)
+
+
+@router.post("/{snapshot_id}/refresh/{section}")
+def refresh_report_section(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, db: Session = Depends(get_db)):
+    """Re-read one section from saved data — straight after a sheet upload.
+
+    Every other section, with its edits, is left as it was.
+    """
+    if section not in composer.SECTION_KEYS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown section.")
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    months = (snapshot.get("period") or {}).get("months") or 1
+    fresh = periods_svc.build_report_data(db, client_id, report.end_date, months, live=_live_of(snapshot))
+    snapshot = periods_svc.merge_section(snapshot, fresh, section)
+
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return get_composer(client_id, snapshot_id, db)
+
+
+@router.put("/{snapshot_id}/narration")
+def set_report_narration(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: NarrationUpdate, db: Session = Depends(get_db)):
+    """Save hand-edited section commentary. An empty text removes it."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    narration = dict(snapshot.get("narration") or {})
+    for key, text_ in data.narration.items():
+        if key in composer.SECTION_KEYS:
+            narration[key] = str(text_ or "").strip()[:2000]
+    snapshot["narration"] = narration
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"narration": narration}
+
+
+@router.post("/{snapshot_id}/narration/{section}/regenerate")
+def regenerate_report_narration(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, db: Session = Depends(get_db)):
+    """Rewrite one section's commentary from its current — possibly edited — figures."""
+    if section not in composer.SECTION_KEYS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown section.")
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    client = db.get(Client, client_id)
+    try:
+        written = generate_section_summaries(
+            client.name if client else "", (snapshot.get("period") or _legacy_period(report)).get("label", ""),
+            composer.apply_selection(snapshot), [section], composer.current_items(snapshot),
+        )
+    except ValueError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e))
+    except Exception:
+        logger.exception("Section commentary could not be rewritten.")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The AI could not write this section just now. Try again.")
+    text_ = written.get(section)
+    if not text_:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "There is not enough data in this section to write about.")
+
+    narration = dict(snapshot.get("narration") or {})
+    narration[section] = text_
+    snapshot["narration"] = narration
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"section": section, "text": text_}
 
 
 @router.get("/history", response_model=list[ReportHistoryResponse])
@@ -929,7 +1178,7 @@ def _resolve_activities(db: Session, client_id: uuid.UUID, start_date: datetime.
     activities = db.execute(
         select(Activity).where(Activity.client_id == client_id, Activity.month >= month_start, Activity.month <= end_date)
     ).scalars().all()
-    return [{"month": str(a.month), "activity_type": a.activity_type, "count": a.count, "notes": a.notes} for a in activities]
+    return [{"id": str(a.id), "month": str(a.month), "activity_type": a.activity_type, "count": a.count, "notes": a.notes} for a in activities]
 
 
 def _resolve_screenshots(db: Session, client_id: uuid.UUID, start_date: datetime.date, end_date: datetime.date) -> list[dict]:
@@ -1036,6 +1285,12 @@ def _aggregate_metrics(snapshots, section):
             result[k] = sorted(merged_list.values(), key=lambda x: x.get(sort_key, 0), reverse=True)
         else:
             result[k] = list(merged_list.values())
+
+    if count == 1:
+        data = snapshots[0].snapshot.get(section, {}) if snapshots[0].snapshot else {}
+        for k, v in data.items():
+            if k not in result and isinstance(v, (int, float)) and not isinstance(v, bool):
+                result[k] = v
             
     return result
 
@@ -1070,6 +1325,11 @@ def _build_comparative_report(snapshots):
     months = []
     for s in snapshots:
         months.append(s.end_date.strftime("%B %Y"))
+    # A report spanning several cycles names them itself.
+    if len(snapshots) == 1:
+        labels = ((snapshots[0].snapshot or {}).get("period") or {}).get("labels")
+        if isinstance(labels, list) and labels:
+            months = [str(l) for l in labels]
         
     comparative_data = {
         "months": months,
@@ -1092,6 +1352,9 @@ def _build_comparative_report(snapshots):
         comparative_data["included_items"] = latest_snap["included_items"]
     if isinstance(latest_snap.get("copy"), dict):
         comparative_data["copy"] = latest_snap["copy"]
+    comparative_data["narration"] = latest_snap.get("narration") if isinstance(latest_snap.get("narration"), dict) else {}
+    comparative_data["periods"] = (latest_snap.get("periods") or []) if len(snapshots) == 1 else []
+    comparative_data["period"] = latest_snap.get("period") or {}
 
     # Daily clicks for the trend chart. Recorded values only — an empty list
     # means the chart is skipped rather than drawn from nothing.
@@ -1141,7 +1404,11 @@ def _build_comparative_report(snapshots):
                     "change": None,
                     "initial_rank": kw.get("initial_rank")
                 }
-            kw_map[kid]["positions"][month] = kw.get("position")
+            own = kw.get("positions") if isinstance(kw.get("positions"), dict) else None
+            if own and len(snapshots) == 1:
+                kw_map[kid]["positions"].update(own)
+            else:
+                kw_map[kid]["positions"][month] = kw.get("position")
             # Update search_volume if it was previously None
             if kw_map[kid]["search_volume"] is None and kw.get("search_volume"):
                 kw_map[kid]["search_volume"] = kw.get("search_volume")

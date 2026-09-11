@@ -192,6 +192,8 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
         cs=subheading,
         brand_line=composer.brand_line(copy),
         cover_screenshot=comparative_data.get("cover_screenshot"),
+        nar=lambda key: str((comparative_data.get("narration") or {}).get(key) or "").strip(),
+        period_rows=comparative_data.get("periods") or [],
         comparative_data=comparative_data,
         months=comparative_data.get("months", []),
         gsc=comparative_data.get("gsc", {}),

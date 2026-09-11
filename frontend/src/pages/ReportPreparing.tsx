@@ -1,0 +1,133 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
+import api from '../api/client';
+import { Loader2, CloudDownload, Database, Layers } from 'lucide-react';
+import type { PeriodsInfo } from '../components/PeriodPicker';
+import { periodLabel } from '../components/PeriodPicker';
+import '../builder.css';
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+/**
+ * Generating a report: starts it, says honestly what is happening, and opens
+ * the builder as soon as the draft exists.
+ */
+const ReportPreparing: React.FC = () => {
+  const { clientId } = useParams<{ clientId: string }>();
+  const [params] = useSearchParams();
+  const months = Math.max(1, Number(params.get('months')) || 1);
+  const navigate = useNavigate();
+
+  const [info, setInfo] = useState<PeriodsInfo | null>(null);
+  const [error, setError] = useState<{ text: string; draftId?: string | null } | null>(null);
+
+  // Development renders effects twice; the report must still start only once.
+  const started = useRef(false);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (started.current || !clientId) return;
+    started.current = true;
+
+    (async () => {
+      let before: string | null = null;
+      try {
+        const [periods, latest] = await Promise.all([
+          api.get(`/clients/${clientId}/reports/periods`),
+          api.get(`/clients/${clientId}/reports/latest`, { skipErrorToast: true } as any).catch(() => ({ data: null })),
+        ]);
+        setInfo(periods.data);
+        before = latest.data?.id ?? null;
+        if (periods.data.mode === 'draft') {
+          setError({ text: 'This cycle already has a draft report.', draftId: periods.data.report_id });
+          return;
+        }
+      } catch (e) {
+        // Handled by global interceptor
+      }
+
+      try {
+        await api.post(`/clients/${clientId}/reports/generate`, { months }, { skipErrorToast: true } as any);
+      } catch (e: any) {
+        setError({ text: e?.response?.data?.detail || 'The report could not be started.' });
+        return;
+      }
+
+      for (let i = 0; i < 60; i++) {
+        await sleep(3000);
+        if (!alive.current) return;
+        try {
+          const r = await api.get(`/clients/${clientId}/reports/latest`, { skipErrorToast: true } as any);
+          if (r.data?.id && r.data.id !== before) {
+            navigate(`/admin/clients/${clientId}/reports/${r.data.id}/build`, { replace: true });
+            return;
+          }
+        } catch (e) {
+          // Not there yet
+        }
+      }
+      if (alive.current) setError({ text: 'This is taking longer than usual. The report will appear under All reports when it is ready.' });
+    })();
+  }, [clientId]);
+
+  const cycles = info?.cycles || [];
+  const chosen = cycles.slice(Math.max(0, cycles.length - months));
+  const current = chosen[chosen.length - 1];
+  const earlier = chosen.slice(0, -1);
+  const google = [info?.connected?.gsc && 'Search Console', info?.connected?.ga4 && 'Analytics'].filter(Boolean).join(' and ');
+
+  return (
+    <div className="prep">
+      <h1>Preparing the report</h1>
+      <p className="prep-sub">
+        {cycles.length ? periodLabel(cycles, Math.min(months, cycles.length)) : 'This month'} · {months} month{months === 1 ? '' : 's'}.
+        The builder opens as soon as the figures are ready — you can check and change everything there.
+      </p>
+
+      <ul className="prep-steps">
+        <li>
+          {google ? <CloudDownload size={17} /> : <Database size={17} />}
+          <span>
+            {google ? `Fetching ${current?.label || 'this month'} from ${google}` : `${current?.label || 'This month'}: no Google connection`}
+            <small>{google ? 'Only the current cycle is pulled from Google.' : "You'll add this month's figures with a sheet in the builder."}</small>
+          </span>
+        </li>
+        {earlier.length > 0 && (
+          <li>
+            <Database size={17} />
+            <span>
+              Reading {earlier.length === 1 ? earlier[0].label : `${earlier[0].label} – ${earlier[earlier.length - 1].label}`} from saved data
+              <small>Nothing old is pulled again.</small>
+            </span>
+          </li>
+        )}
+        {months > 1 && (
+          <li>
+            <Layers size={17} />
+            <span>Combining {months} months into one report<small>Clicks and sessions add up; rates and positions are recalculated, not averaged.</small></span>
+          </li>
+        )}
+      </ul>
+
+      {error ? (
+        <div className="notice notice-warning prep-error">
+          <p className="notice-body">{error.text}</p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            {error.draftId && (
+              <Link className="btn btn-primary btn-sm" to={`/admin/clients/${clientId}/reports/${error.draftId}/build`}>Open the draft</Link>
+            )}
+            <Link className="btn btn-secondary btn-sm" to={`/admin/clients/${clientId}`}>Back to client</Link>
+          </div>
+        </div>
+      ) : (
+        <p className="prep-foot"><Loader2 size={13} className="spin" style={{ verticalAlign: '-2px', marginRight: 6 }} />Usually under a minute.</p>
+      )}
+    </div>
+  );
+};
+
+export default ReportPreparing;

@@ -94,17 +94,25 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
     labels = labels or {}
     items: list[dict] = []
 
+    months = ((snap.get("period") or {}).get("months") or 1)
+
     # ── Headline figures ──
     for section in ("gsc", "ga4", "gbp"):
         block = snap.get(section) or {}
         for meta in HEADLINE[section]:
+            label = meta["label"]
+            if section == "ga4" and meta["key"] == "users" and months > 1:
+                label = "Avg. monthly users"
             items.append({
                 "id": f"{section}.{meta['key']}",
                 "section": section,
-                "label": meta["label"],
+                "label": label,
                 "value": block.get(meta["key"], 0) or 0,
                 "format": meta["format"],
                 "editable": True,
+                # Google's own figures have no saved copy to correct;
+                # Business Profile figures are kept by hand, so they do.
+                "writable": section == "gbp",
                 "kind": "headline",
             })
 
@@ -119,6 +127,7 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
             "value": summary.get(meta["key"], 0) or 0,
             "format": "int",
             "editable": True,
+            "writable": False,
             "kind": "summary",
         })
 
@@ -131,6 +140,7 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
             "value": kw.get("position", 0) or 0,
             "format": "int",
             "editable": True,
+            "writable": bool(kw.get("keyword_id")),
             "kind": "row",
             "unit": "position",
         })
@@ -146,6 +156,7 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
             "value": bool(m.get("mentioned")),
             "format": "bool",
             "editable": True,
+            "writable": bool(m.get("prompt_id")),
             "kind": "row",
             "unit": "mentioned",
         })
@@ -160,6 +171,7 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
             "value": link.get("count", 1) or 1,
             "format": "int",
             "editable": True,
+            "writable": bool(link.get("id")),
             "kind": "row",
             "unit": "count",
         })
@@ -173,6 +185,7 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
             "value": act.get("count", 0) or 0,
             "format": "int",
             "editable": True,
+            "writable": bool(act.get("id")),
             "kind": "row",
             "unit": "count",
         })
@@ -186,6 +199,7 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
             "value": None,
             "format": "none",
             "editable": False,
+            "writable": False,
             "kind": "row",
         })
 

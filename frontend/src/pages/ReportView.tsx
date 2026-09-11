@@ -66,7 +66,8 @@ const ReportView: React.FC = () => {
   }, [htmlEndpoint]);
 
   const windowLabel = report
-    ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' })
+    ? (report.snapshot?.period?.label
+      || new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' }))
     : '';
 
   useEffect(() => {
@@ -134,7 +135,8 @@ const ReportView: React.FC = () => {
       toast.dismiss(toastId);
       if (reportData) {
         toast.success('Report snapshot generated!');
-        navigate(`/admin/clients/${clientId}/reports/${reportData.id}`);
+        // A new draft opens in the builder, which asks what goes in first.
+        navigate(`/admin/clients/${clientId}/reports/${reportData.id}/build`);
       } else {
         toast.error('Report generation is taking too long. Please refresh later.');
       }

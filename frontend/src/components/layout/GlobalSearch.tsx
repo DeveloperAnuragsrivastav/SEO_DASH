@@ -12,7 +12,6 @@ const CLIENT_PAGES = [
   { label: 'Search Console', path: (id: string) => `/clients/${id}/search-console` },
   { label: 'Google Analytics', path: (id: string) => `/clients/${id}/google-analytics` },
   { label: 'Backlinks', path: (id: string) => `/clients/${id}/links` },
-  { label: 'Add Data', path: (id: string) => `/admin/clients/${id}/manual-entry` },
 ];
 
 const GlobalSearch: React.FC = () => {
