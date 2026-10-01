@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Download, FileText, Loader2, Pencil, ExternalLink, Table2 } from 'lucide-react';
 import api from '../../api/client';
-import Page, { Empty } from '../../components/ui/Page';
+import Page, { Empty, LoadError } from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import '../../sheets.css';
+import { confirmDialog } from '../../components/ui/ConfirmDialog';
 
 type Row = {
   id: string; label: string; range: string; months: number; status: 'draft' | 'published';
@@ -20,8 +21,14 @@ export default function Reports() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  const load = () => api.get(`/clients/${clientId}/reports/history`).then(r => setRows(r.data || [])).catch(() => setRows([]));
+  const load = () => {
+    setFailed(false);
+    return api.get(`/clients/${clientId}/reports/history`)
+      .then(r => setRows(r.data || []))
+      .catch(() => { setFailed(true); setRows([]); });
+  };
   useEffect(() => { load(); }, [clientId]);
 
   const download = async (r: Row) => {
@@ -39,7 +46,7 @@ export default function Reports() {
   };
 
   const makeDraft = async (r: Row) => {
-    if (!window.confirm(`Make the ${r.label} report a draft again?\n\nYou can change anything in it. The sheets keep its published figures until you publish it again — then they are replaced with the new ones.`)) return;
+    if (!(await confirmDialog({ title: `Make the ${r.label} report a draft again?`, message: 'You can change anything in it. The sheets keep the published figures until you publish it again — then they are replaced with the new ones.', confirmText: 'Make draft' }))) return;
     try {
       await api.post(`/clients/${clientId}/reports/${r.id}/unpublish`);
       toast.success('The report is a draft again.');
@@ -54,7 +61,9 @@ export default function Reports() {
   return (
     <Page screen="reports">
       <section className="surface sh-surface">
-        {rows.length === 0 ? (
+        {failed ? (
+          <LoadError what="the reports" onRetry={() => { setRows(null); load(); }} />
+        ) : rows.length === 0 ? (
           <Empty icon={<FileText size={22} />} title="No reports yet"
             hint="Generate this month's report from the client overview; every report is kept here, month by month."
             action={<Link className="btn btn-secondary" to={`/admin/clients/${clientId}`}>Go to overview</Link>} />

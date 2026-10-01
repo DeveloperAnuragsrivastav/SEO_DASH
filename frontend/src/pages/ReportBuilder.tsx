@@ -13,6 +13,7 @@ import PeriodPicker from '../components/PeriodPicker';
 import ReportShots from '../components/report/ReportShots';
 import ListEditor, { type ListSpec } from '../components/report/ListEditor';
 import '../builder.css';
+import { confirmDialog } from '../components/ui/ConfirmDialog';
 
 type Format = 'int' | 'percent' | 'decimal' | 'bool' | 'none';
 
@@ -751,7 +752,11 @@ const ReportBuilder: React.FC = () => {
   /** Save, then publish: this month's figures become final on every sheet. */
   const publish = async () => {
     const month = period?.labels?.[period.labels.length - 1] || period?.label || 'this month';
-    if (!window.confirm(`Publish the ${month} report?\n\nIts figures become ${month}'s final column in every sheet (Search Console, Analytics, Keywords…) and the report is locked. To change it later, use Make draft and publish again.`)) return;
+    if (!(await confirmDialog({
+      title: `Publish the ${month} report?`,
+      message: `Its figures become ${month}'s final column in every sheet (Search Console, Analytics, Keywords…) and the report is locked. To change it later, use Make draft and publish again.`,
+      confirmText: 'Publish',
+    }))) return;
     setFinishing(true);
     dirty.current = true;
     try {
@@ -1542,9 +1547,9 @@ const ReportBuilder: React.FC = () => {
           <button
             className="btn btn-secondary btn-sm"
             disabled={planWriting}
-            onClick={() => {
+            onClick={async () => {
               if (planSource === 'edited' && (plan.now.length || plan.next.length)
-                && !window.confirm('Replace your edited plan with a new AI draft?')) return;
+                && !(await confirmDialog({ title: 'Replace your edited plan?', message: 'A new AI draft will replace the plan you edited.', confirmText: 'Replace', tone: 'danger' }))) return;
               writePlan(true);
             }}
           >

@@ -4,9 +4,10 @@ import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { Download, ExternalLink, Search, Table2, X, EyeOff, Lock, Pencil, Info } from 'lucide-react';
 import api from '../../api/client';
-import Page, { Empty } from '../ui/Page';
+import Page, { Empty, LoadError } from '../ui/Page';
 import PageSkeleton from '../ui/PageSkeleton';
 import '../../sheets.css';
+import { confirmDialog } from '../../components/ui/ConfirmDialog';
 
 type Cell = { value: number | null; text: string | null; edited: boolean };
 type Row = {
@@ -67,13 +68,16 @@ export default function SheetView({ sheet, screen, detailsLabel }: { sheet: stri
   const [saving, setSaving] = useState(false);
   const [details, setDetails] = useState<{ month: Month; rows: any[] } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await api.get(`/clients/${clientId}/sheets/${sheet}`);
       setData(res.data);
+      setFailed(false);
     } catch {
-      // Handled by global interceptor
+      // The reason is shown by the API client; the page offers a retry.
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -142,7 +146,11 @@ export default function SheetView({ sheet, screen, detailsLabel }: { sheet: stri
 
   const stopTracking = async (row: Row) => {
     const what = sheet === 'keywords' ? 'keyword' : 'prompt';
-    if (!window.confirm(`Stop tracking “${row.label}”? Its published months stay here; later reports leave it out.`)) return;
+    if (!(await confirmDialog({
+      title: `Stop tracking “${row.label}”?`,
+      message: 'Its published months stay here; later reports leave it out.',
+      confirmText: 'Stop tracking', tone: 'danger',
+    }))) return;
     try {
       await api.delete(`/clients/${clientId}/sheets/${sheet}/rows/${encodeURIComponent(row.key)}`);
       toast.success(`The ${what} is no longer tracked.`);
@@ -281,7 +289,11 @@ export default function SheetView({ sheet, screen, detailsLabel }: { sheet: stri
         </>
       }
     >
-      {empty && !trackedOnly ? (
+      {failed && !data ? (
+        <section className="surface">
+          <LoadError what="this sheet" onRetry={() => { setLoading(true); load(); }} />
+        </section>
+      ) : empty && !trackedOnly ? (
         <section className="surface">
           <Empty
             icon={<Table2 size={22} />}

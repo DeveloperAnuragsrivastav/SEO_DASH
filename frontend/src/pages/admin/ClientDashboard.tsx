@@ -15,6 +15,7 @@ import PageSkeleton from '../../components/ui/PageSkeleton';
 import Sparkline from '../../components/ui/Sparkline';
 import PeriodPicker from '../../components/PeriodPicker';
 import type { PeriodsInfo } from '../../components/PeriodPicker';
+import { confirmDialog } from '../../components/ui/ConfirmDialog';
 
 const ClientDashboard: React.FC = () => {
   const { clientId } = useParams();
@@ -23,7 +24,7 @@ const ClientDashboard: React.FC = () => {
   /** Reopen a published report for changes. Publishing it again rewrites
    *  its month on every sheet with the new figures. */
   const makeDraft = async (id: string) => {
-    if (!window.confirm('Make this report a draft again?\n\nYou can change anything in it. The sheets keep the published figures until you publish it again — then they are replaced with the new ones.')) return;
+    if (!(await confirmDialog({ title: 'Make this report a draft again?', message: 'You can change anything in it. The sheets keep the published figures until you publish it again — then they are replaced with the new ones.', confirmText: 'Make draft' }))) return;
     try {
       await api.post(`/clients/${clientId}/reports/${id}/unpublish`);
       toast.success('The report is a draft again.');

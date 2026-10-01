@@ -70,9 +70,43 @@ class _TooLarge(Exception):
     pass
 
 
+class CatchCrashes:
+    """Any unexpected error in a route becomes a logged 500 with a plain JSON
+    message the app can show — sitting inside CORS, so the browser can read it
+    instead of reporting a network failure."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        started = False
+
+        async def tracked(message):
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracked)
+        except Exception:
+            import json
+            import logging
+            logging.getLogger("app").exception("Unhandled error on %s %s", scope.get("method"), scope.get("path"))
+            if started:
+                raise
+            body = json.dumps({"detail": "Something went wrong on the server. Please try again — if it keeps happening, tell your admin."}).encode()
+            await send({"type": "http.response.start", "status": 500,
+                        "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+            await send({"type": "http.response.body", "body": body})
+
+
 
 # Added first so it sits inside CORS: a refusal still carries CORS headers
 # and the browser can show why.
+app.add_middleware(CatchCrashes)
 app.add_middleware(BodySizeLimit, limit=settings.MAX_REQUEST_MB * 1024 * 1024)
 
 app.add_middleware(

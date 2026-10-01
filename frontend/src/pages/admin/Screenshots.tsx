@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Image as ImageIcon, ExternalLink } from 'lucide-react';
 import api from '../../api/client';
-import Page, { Empty } from '../../components/ui/Page';
+import Page, { Empty, LoadError } from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import '../../sheets.css';
 
@@ -35,11 +35,14 @@ const Screenshots: React.FC = () => {
   const [months, setMonths] = useState<MonthShots[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [failed, setFailed] = useState(false);
+  const load = () => {
+    setFailed(false);
     api.get(`/clients/${clientId}/sheets/screenshots/months`)
       .then(res => setMonths(res.data || []))
-      .catch(() => setMonths([]));
-  }, [clientId]);
+      .catch(() => { setFailed(true); setMonths([]); });
+  };
+  useEffect(load, [clientId]);
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +57,9 @@ const Screenshots: React.FC = () => {
   return (
     <Page screen="screenshots">
       <section className="surface">
-        {withShots.length === 0 ? (
+        {failed ? (
+          <LoadError what="the screenshots" onRetry={() => { setMonths(null); load(); }} />
+        ) : withShots.length === 0 ? (
           <Empty
             icon={<ImageIcon size={22} />}
             title="No published screenshots yet"

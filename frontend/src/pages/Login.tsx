@@ -23,12 +23,19 @@ const Login: React.FC = () => {
       form.append('password', password);
 
       const res = await api.post('/auth/login', form, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        skipErrorToast: true,
+      } as any);
       login(res.data.access_token);
       navigate('/');
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Login failed.');
+      const status = err.response?.status;
+      toast.error(
+        status === 401 ? 'Wrong email or password'
+          : !err.response ? 'Can’t reach the server'
+          : 'Sign-in failed',
+        { id: 'login-error', description: status === 401 ? 'Check both and try again.' : (err.response?.data?.detail || 'Please try again in a moment.') },
+      );
     } finally {
       setLoading(false);
     }

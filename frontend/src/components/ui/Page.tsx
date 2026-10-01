@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle, RotateCw } from 'lucide-react';
 import { screen as lookupScreen } from '../../lib/nav';
 
 /** The one page shell.
@@ -101,6 +102,16 @@ export const Empty: React.FC<EmptyProps> = ({ icon, title, hint, action }) => (
     <p>{hint}</p>
     {action && <div className="empty-state-action">{action}</div>}
   </div>
+);
+
+/** A screen whose data failed to load — never shown as "nothing here". */
+export const LoadError: React.FC<{ what: string; onRetry: () => void }> = ({ what, onRetry }) => (
+  <Empty
+    icon={<AlertTriangle size={22} />}
+    title={`Couldn’t load ${what}`}
+    hint="The reason is shown at the top right. Check your connection or access, then try again."
+    action={<button className="btn btn-secondary" onClick={onRetry}><RotateCw size={14} /> Try again</button>}
+  />
 );
 
 export interface Figure {

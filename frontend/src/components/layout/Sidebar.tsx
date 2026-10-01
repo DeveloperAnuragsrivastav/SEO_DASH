@@ -77,8 +77,8 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
       toast.success('Password updated successfully');
       setShowPasswordModal(false);
       setPasswordForm({ current_password: '', new_password: '', confirm_password: '' });
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to update password');
+    } catch {
+      // The reason (e.g. a wrong current password) is shown by the API client.
     }
   };
 

@@ -21,61 +21,80 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Global error interceptor — shows real backend errors to the user
+/** The backend's own words for a failure, when it sent any. */
+async function readDetail(data: unknown): Promise<string | null> {
+  // Downloads (PDFs, images) ask for a Blob, so an error body arrives as one too.
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    try { data = JSON.parse(await data.text()); } catch { return null; }
+  }
+  if (!data || typeof data !== 'object') return null;
+  const d = data as any;
+  if (typeof d.detail === 'string') return d.detail;
+  if (Array.isArray(d.detail)) {
+    // FastAPI validation: name the field, not just "Field required".
+    return d.detail.map((e: any) => {
+      const field = Array.isArray(e.loc) ? e.loc.filter((x: unknown) => x !== 'body' && x !== 'query').join(' › ') : '';
+      const msg = String(e.msg || e.message || 'is not valid').replace(/^Value error, /, '');
+      return field ? `${field}: ${msg}` : msg;
+    }).join('\n');
+  }
+  if (typeof d.message === 'string') return d.message;
+  if (typeof d.error === 'string') return d.error;
+  return null;
+}
+
+/** A plain heading for each kind of failure; the detail goes underneath. */
+function headingFor(status: number | undefined, offline: boolean, timedOut: boolean): string {
+  if (timedOut) return 'That took too long';
+  if (offline) return 'Can’t reach the server';
+  switch (status) {
+    case 400: return 'That didn’t work';
+    case 403: return 'You don’t have access to this';
+    case 404: return 'Not found';
+    case 409: return 'Can’t do that right now';
+    case 413: return 'That file is too large';
+    case 422: return 'Please check what you entered';
+    case 429: return 'Too many requests';
+    default: return status && status >= 500 ? 'Something went wrong on our side' : 'Something went wrong';
+  }
+}
+
+// Global error handling: every failed request shows one toast in the app's
+// own style, unless the caller opted out with `{ skipErrorToast: true }`.
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Handle 401 — trigger global logout
-    if (error.response?.status === 401) {
+  async (error) => {
+    const status: number | undefined = error.response?.status;
+
+    // Signed out (expired or revoked token): say so once, then log out.
+    const isLogin = String(error.config?.url || '').includes('/auth/login');
+    if (status === 401 && !isLogin) {
+      if (localStorage.getItem('token')) {
+        toast.error('Your session has ended', { id: 'session-ended', description: 'Please sign in again.' });
+      }
       window.dispatchEvent(new Event('auth:unauthorized'));
       return Promise.reject(error);
     }
 
-    // Extract the real error message from the backend
-    const status = error.response?.status;
-    const data = error.response?.data;
-
-    let message = 'Something went wrong. Please try again.';
-
-    if (data) {
-      if (typeof data.detail === 'string') {
-        // FastAPI standard: { "detail": "Error message here" }
-        message = data.detail;
-      } else if (Array.isArray(data.detail)) {
-        // FastAPI validation errors: { "detail": [{ "msg": "...", "loc": [...] }] }
-        message = data.detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(', ');
-      } else if (typeof data.message === 'string') {
-        message = data.message;
-      } else if (typeof data.error === 'string') {
-        message = data.error;
-      }
-    } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      message = 'Request timed out. Please check your connection and try again.';
-    } else if (!error.response) {
-      message = 'Network error. Unable to reach the server.';
+    if (axios.isCancel(error) || (error.config as any)?.skipErrorToast === true) {
+      return Promise.reject(error);
     }
 
-    // Add status code context for non-obvious errors
-    const prefix = status === 403 ? '⛔ Access Denied: '
-                 : status === 404 ? '🔍 Not Found: '
-                 : status === 422 ? '⚠️ Validation Error: '
-                 : status === 500 ? '🔥 Server Error: '
-                 : status === 502 ? '🔧 Service Unavailable: '
-                 : status === 503 ? '🔧 Service Unavailable: '
-                 : '';
+    const timedOut = error.code === 'ECONNABORTED' || /timeout/i.test(error.message || '');
+    const offline = !error.response && !timedOut;
+    const detail = error.response ? await readDetail(error.response.data) : null;
+    const heading = headingFor(status, offline, timedOut);
+    const description = detail
+      || (offline ? 'Check your internet connection and try again.'
+        : timedOut ? 'The server is busy. Please try again in a moment.'
+        : status && status >= 500 ? 'Please try again in a moment. If it keeps happening, tell your admin.'
+        : undefined);
 
-    // Show the toast — but let individual page catch blocks override if they want.
-    // NOTE: `_toastHandled` set inside a caller's .catch() runs *after* this
-    // interceptor, so it cannot suppress anything. To opt out, pass
-    // `{ skipErrorToast: true }` in the request config — that is visible here.
-    const skip = (error.config as any)?.skipErrorToast === true;
+    // Same failure twice (a retry, a double click) updates one toast instead of stacking.
+    toast.error(heading, { id: `${heading}|${description || ''}`, description, duration: 6000 });
 
-    if (!skip && !(error as any)._toastHandled) {
-      toast.error(prefix + message, {
-        duration: 5000,
-      });
-    }
-
+    // Callers read the message the same way they always have.
+    if (detail && error.response) (error as any).userMessage = detail;
     return Promise.reject(error);
   }
 );

@@ -4,6 +4,7 @@ import api from '../api/client';
 import { toast } from 'sonner';
 import { SlidersHorizontal } from 'lucide-react';
 import '../report.css';
+import { confirmDialog } from '../components/ui/ConfirmDialog';
 
 /** Width of one slide in report_slides.html — 1280×720px, i.e. 960×540pt. */
 const SHEET_PX = 1280;
@@ -78,6 +79,8 @@ const ReportView: React.FC = () => {
       setClient(c.data);
       setReport(r.data);
       if (r.data) loadHtml();
+    }).catch(() => {
+      // The reason is shown by the API client; the page shows "not found".
     }).finally(() => setLoading(false));
   }, [clientId, snapshotId]);
 
@@ -145,7 +148,11 @@ const ReportView: React.FC = () => {
 
   const handlePublish = async () => {
     const month = report?.end_date ? new Date(`${report.end_date}T00:00:00`).toLocaleString('en', { month: 'long', year: 'numeric' }) : 'this month';
-    if (!window.confirm(`Publish the ${month} report?\n\nIts figures become ${month}'s column in every sheet (Search Console, Analytics, Keywords…). To change it later, use Make draft and publish again.`)) return;
+    if (!(await confirmDialog({
+      title: `Publish the ${month} report?`,
+      message: `Its figures become ${month}'s column in every sheet (Search Console, Analytics, Keywords…). To change it later, use Make draft and publish again.`,
+      confirmText: 'Publish',
+    }))) return;
     try {
       await api.post(`/clients/${clientId}/reports/${snapshotId}/publish`);
       const full = await api.get(`/clients/${clientId}/reports/${snapshotId}`);
@@ -218,7 +225,7 @@ const ReportView: React.FC = () => {
           )}
           {report?.status === 'published' && snapshotId !== 'multi' && (
             <button className="btn btn-secondary" onClick={async () => {
-              if (!window.confirm('Make this report a draft again?\n\nYou can change anything in it. The sheets keep the published figures until you publish it again — then they are replaced with the new ones.')) return;
+              if (!(await confirmDialog({ title: 'Make this report a draft again?', message: 'You can change anything in it. The sheets keep the published figures until you publish it again — then they are replaced with the new ones.', confirmText: 'Make draft' }))) return;
               try {
                 await api.post(`/clients/${clientId}/reports/${snapshotId}/unpublish`);
                 toast.success('The report is a draft again.');

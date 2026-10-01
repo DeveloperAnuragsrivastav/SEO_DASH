@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useParams, Link } from 'react-router-dom';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { Menu, Moon, Sun } from 'lucide-react';
 import GlobalSearch from './GlobalSearch';
 import { useAuth } from '../../context/AuthContext';
@@ -136,7 +137,9 @@ export function AdminLayout() {
 
         <main className="app-content">
           <div className="content-max-width">
-            <Outlet />
+            <ErrorBoundary variant="page" resetKey={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </main>
       </div>

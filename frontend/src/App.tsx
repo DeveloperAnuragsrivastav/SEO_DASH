@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RootRedirect } from './components/RootRedirect';
 import { Toaster } from 'sonner';
+import { ConfirmHost } from './components/ui/ConfirmDialog';
 
 import Login from './pages/Login';
 import Clients from './pages/admin/Clients';
@@ -37,7 +38,8 @@ const ToClientOverview: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-right" richColors closeButton />
+      <ConfirmHost />
       <AuthProvider>
         <BrowserRouter>
           <Routes>
