@@ -258,6 +258,15 @@ def delete_client(client_id: uuid.UUID, db: Session = Depends(get_db)):
         
     db.query(Keyword).filter(Keyword.client_id == client_id).delete(synchronize_session=False)
     
+    # Old background-sync tasks hang off the client's connections and sync runs.
+    from app.models.provider_task import ProviderTask
+    connection_ids = [c.id for c in db.query(Connection.id).filter(Connection.client_id == client_id).all()]
+    sync_ids = [r.id for r in db.query(SyncRun.id).filter(SyncRun.client_id == client_id).all()]
+    if connection_ids:
+        db.query(ProviderTask).filter(ProviderTask.connection_id.in_(connection_ids)).delete(synchronize_session=False)
+    if sync_ids:
+        db.query(ProviderTask).filter(ProviderTask.sync_run_id.in_(sync_ids)).delete(synchronize_session=False)
+
     # Delete everything else that has client_id
     for model in [ClientSection, Connection, AiMention, AiPrompt, Link, Activity, Screenshot, ReportSnapshot, SyncRun, UserProjectAssignment, Metric]:
         db.query(model).filter(model.client_id == client_id).delete(synchronize_session=False)
