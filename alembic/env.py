@@ -20,7 +20,10 @@ current_url = config.get_main_option("sqlalchemy.url")
 if not current_url or current_url.startswith("driver://"):
     database_url = os.environ.get("DATABASE_URL", "")
     if database_url:
-        config.set_main_option("sqlalchemy.url", database_url)
+        if database_url.startswith("postgres://"):
+            database_url = "postgresql://" + database_url[len("postgres://"):]
+        # "%" is special to the ini parser; a password may contain one.
+        config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 # Logging
 if config.config_file_name is not None:

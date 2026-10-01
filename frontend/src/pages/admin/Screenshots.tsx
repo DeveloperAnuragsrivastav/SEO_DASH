@@ -1,87 +1,80 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import api, { API_BASE_URL } from '../../api/client';
-
-
-import PageHeader from '../../components/ui/PageHeader';
+import { Link, useParams } from 'react-router-dom';
+import { Image as ImageIcon, ExternalLink } from 'lucide-react';
+import api from '../../api/client';
+import Page, { Empty } from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
-import PaginationBar from '../../components/ui/PaginationBar';
+import '../../sheets.css';
 
+type Shot = { section: string; slot: number; caption: string };
+type MonthShots = { month: string; label: string; report: string; images: Shot[] };
+
+const SECTION_NAME: Record<string, string> = { gbp: 'Business Profile', ai: 'AI answers', ai_summary: 'AI results (source)' };
+
+/** One screenshot, fetched with the session's token (an <img> can't send it). */
+function Thumb({ clientId, report, shot, onOpen }: { clientId: string; report: string; shot: Shot; onOpen: (src: string) => void }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    api.get(`/clients/${clientId}/reports/${report}/images/${shot.section}/${shot.slot}`, { responseType: 'blob', skipErrorToast: true } as any)
+      .then(res => { url = URL.createObjectURL(res.data); setSrc(url); })
+      .catch(() => {});
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [clientId, report, shot.section, shot.slot]);
+  return (
+    <figure className="shots-item" onClick={() => src && onOpen(src)}>
+      <div className="frame">{src ? <img src={src} alt={shot.caption || 'Screenshot'} /> : <ImageIcon size={18} />}</div>
+      <figcaption><span className="shots-tag">{SECTION_NAME[shot.section] || shot.section}</span>{shot.caption ? ` · ${shot.caption}` : ''}</figcaption>
+    </figure>
+  );
+}
+
+/** Every published report's screenshots, month by month — a record, not an inbox. */
 const Screenshots: React.FC = () => {
   const { clientId } = useParams();
-  const [screenshots, setScreenshots] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [total, setTotal] = useState(0);
+  const [months, setMonths] = useState<MonthShots[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!clientId) return;
-    setLoading(true);
-    api.get(`/clients/${clientId}/screenshots`, {
-      params: { page, page_size: pageSize }
-    })
-      .then(res => {
-        setScreenshots(res.data.items || []);
-        setTotal(res.data.total || 0);
-      })
-      .catch(() => {
-        // Handled by global interceptor
-      })
-      .finally(() => setLoading(false));
-  }, [clientId, page, pageSize]);
+    api.get(`/clients/${clientId}/sheets/screenshots/months`)
+      .then(res => setMonths(res.data || []))
+      .catch(() => setMonths([]));
+  }, [clientId]);
 
-  if (loading && !screenshots.length) return <PageSkeleton />;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  if (months === null) return <PageSkeleton />;
+  const withShots = months.filter(m => m.images.length);
 
   return (
-    <div>
-      <PageHeader 
-        title="Uploaded Screenshots"
-        subtitle="View screenshots uploaded via the Data Ingestion Hub."
-      />
-
-      <div className="page-card-flush data-panel">
-          <div className="data-panel-head">
-            <div>
-              <h2 className="h2">All Screenshots</h2>
-              <p className="section-sub">Evidence images attached to the report.</p>
+    <Page screen="screenshots">
+      <section className="surface">
+        {withShots.length === 0 ? (
+          <Empty
+            icon={<ImageIcon size={22} />}
+            title="No published screenshots yet"
+            hint="Screenshots added in the report builder appear here, under their month, once the report is published."
+          />
+        ) : withShots.map(m => (
+          <div key={m.month} className="shots-month">
+            <div className="shots-month-head">
+              <h3>{m.label}</h3>
+              <span className="sh-meta">{m.images.length} screenshot{m.images.length === 1 ? '' : 's'}</span>
+              <Link className="sh-report" to={`/admin/clients/${clientId}/reports/${m.report}`} title="Open the report"><ExternalLink size={12} /></Link>
+            </div>
+            <div className="shots-grid">
+              {m.images.map(s => <Thumb key={`${s.section}-${s.slot}`} clientId={clientId!} report={m.report} shot={s} onOpen={setOpen} />)}
             </div>
           </div>
-        <div className="card-header">
-          <h2 className="h2">All Screenshots</h2>
-        </div>
-        {screenshots.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--ink-3)' }}>
-            No screenshots uploaded yet. Use the Data Ingestion Hub to upload.
-          </div>
-        ) : (
-          <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '24px' }}>
-            {screenshots.map((s) => (
-              <div key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--border-subtle)', borderRadius: '8px', overflow: 'hidden' }}>
-                <a href={`${API_BASE_URL}${s.file_url}`} target="_blank" rel="noreferrer" style={{ display: 'block', height: '150px', background: 'var(--neutral-bg)' }}>
-                  <img src={`${API_BASE_URL}${s.file_url}`} alt={s.caption || 'screenshot'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </a>
-                <div style={{ padding: '12px', fontSize: '13px' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '4px' }}>{s.month}</div>
-                  <div style={{ color: 'var(--ink-2)' }}>{s.caption || 'No caption'}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      
-      {screenshots.length > 0 && (
-        <PaginationBar 
-          total={total}
-          page={page}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-        />
-      )}
-    </div>
+        ))}
+      </section>
+      {open && <div className="shots-light" onClick={() => setOpen(null)}><img src={open} alt="" /></div>}
+    </Page>
   );
 };
 

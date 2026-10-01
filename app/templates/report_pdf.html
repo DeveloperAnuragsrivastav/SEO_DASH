@@ -198,32 +198,23 @@
         /* Homepage screenshot in a browser frame, right of the headline */
         .cover.has-shot h1 { max-width: 420px; }
 
-        /* Section commentary */
+        /* Section commentary — the analyst's voice under a block's figures.
+           It appears beneath almost every block, so it stays quiet: a labelled
+           gold-barred panel repeated ten times reads as ten warnings. A thin
+           rule and the reading measure are enough to set it apart from data. */
         .section-story {
             margin: 2px 0 18px;
-            padding: 13px 16px 12px;
-            border: 1px solid var(--line);
-            border-left: 4px solid var(--yellow);
-            border-radius: 6px;
-            background: #FFFDF6;
+            padding: 11px 0 0;
+            border-top: 1px solid var(--line);
             break-inside: avoid;
         }
 
-        .section-story-label {
-            display: block;
-            margin-bottom: 6px;
-            color: #8A6508;
-            font-size: 8px;
-            font-weight: 700;
-            letter-spacing: .14em;
-            text-transform: uppercase;
-        }
-
         .section-story p {
+            max-width: 78ch;
             margin: 0 0 5px;
-            color: #2F3437;
+            color: #3A4043;
             font-size: 10.5px;
-            line-height: 1.6;
+            line-height: 1.65;
         }
 
         .section-story p:last-child { margin-bottom: 0; }
@@ -1450,6 +1441,16 @@
     {% set narrative = comparative_data.narrative %}
     {% set status = "Published" %}
     
+{# Commentary under a section: what the figures mean, what was done, what's next #}
+{% macro story(key) -%}
+  {%- set text = nar(key) -%}
+  {%- if text -%}
+  <div class="section-story">
+    {% for para in text.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+  </div>
+  {%- endif -%}
+{%- endmacro %}
+
     <!-- Page 1: Cover, Executive Summary, Key Metrics -->
     <section class="report-page page-one">
         <header class="cover{% if cover_screenshot %} has-shot{% endif %}">
@@ -1551,6 +1552,7 @@
                     </div>
                 </div>
             </div>
+            {{ story('key_metrics') }}
             <span class="number-source">{{ display_label }}</span>
         </div>
     </section>
@@ -1563,16 +1565,6 @@
       {{ '+' if pct > 0 else '' }}{{ pct | round(0) | int }}%
     </em>
     <small class="vs">vs {{ prev | round(0) | int | fmt }} prior period</small>
-  {%- endif -%}
-{%- endmacro %}
-{# Commentary under a section: what the figures mean, what was done, what's next #}
-{% macro story(key) -%}
-  {%- set text = nar(key) -%}
-  {%- if text -%}
-  <div class="section-story">
-    <span class="section-story-label">What this means</span>
-    {% for para in text.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
-  </div>
   {%- endif -%}
 {%- endmacro %}
 
@@ -1690,7 +1682,7 @@
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GSC · auto</span></span>
             </div>
             <div class="section-rule"></div>
-            {{ story('gsc') }}{{ month_table('gsc') }}
+            {{ month_table('gsc') }}
             <div class="performance-grid" style="margin-bottom: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
                 {% if mo('gsc.clicks') %}<div class="small-metric"><span>Search Clicks</span><strong>{{ gsc.get('clicks', 0) | fmt }}</strong>{{ change_line(gsc.get('clicks', 0), deltas.get('gsc', {}).get('clicks', 0)) }}</div>{% endif %}
                 {% if mo('gsc.impressions') %}<div class="small-metric"><span>Impressions</span><strong>{{ gsc.get('impressions', 0) | fmt }}</strong>{{ change_line(gsc.get('impressions', 0), deltas.get('gsc', {}).get('impressions', 0)) }}</div>{% endif %}
@@ -1705,6 +1697,7 @@
                 {{ trend_chart(gsc_daily, 'var(--forest)') }}
             </div>
             {% endif %}
+            {{ story('gsc') }}
 
 {% endif %}
 {% if sections.ga4 %}
@@ -1715,7 +1708,7 @@
                 </div><span class="head-right"><img class="head-logo" src="{{ brand_logo }}" alt="" /><span class="source">GA4 · auto</span></span>
             </div>
             <div class="section-rule"></div>
-            {{ story('ga4') }}{{ month_table('ga4') }}
+            {{ month_table('ga4') }}
             {% set show_conv = ga4.get('conversions', 0) > 0 %}
             {% set show_cart = ga4.get('add_to_carts', 0) > 0 %}
             {% set show_dur = ga4.get('avg_session_duration', 0) > 0 %}
@@ -1738,6 +1731,7 @@
                 </div>
                 {% endif %}
             </div>
+            {{ story('ga4') }}
 
 {% endif %}
             <!-- GBP Section -->
@@ -1817,6 +1811,7 @@
                     </tbody>
                 </table>
             </div>
+            {{ story('gsc_pages') }}
 
         </div>
     </section>
@@ -1858,6 +1853,7 @@
                     </tbody>
                 </table>
             </div>
+            {{ story('ga4_sources') }}
 
             {% endif %}
             {% if ga4_top_pages %}
@@ -1891,6 +1887,7 @@
                     </tbody>
                 </table>
             </div>
+            {{ story('ga4_pages') }}
 
             {% endif %}
             {% if ga4_devices %}
@@ -1918,6 +1915,7 @@
                     </div>
                 {% endif %}
             </div>
+                {{ story('ga4_devices') }}
 
             {% endif %}
             {% if ga4_countries %}
@@ -1950,6 +1948,7 @@
                         </tbody>
                     </table>
                 </div>
+                {{ story('ga4_countries') }}
             </div>
             {% endif %}
 
@@ -1968,7 +1967,6 @@
                 </div>
             </div>
             <div class="section-rule"></div>
-            {{ story('rankings') }}
             <div class="card">
                 <div class="card-title"><span>Positioning Summary</span></div>
                 
@@ -2044,6 +2042,7 @@
                     </tbody>
                 </table>
             </div>
+            {{ story('rankings') }}
         </div>
     </section>
 
@@ -2057,7 +2056,6 @@
                 <div><h2 class="section-heading">{{ ct('ai_visibility') }}</h2>{% if cs('ai_visibility') %}<p class="section-desc">{{ cs('ai_visibility') }}</p>{% endif %}</div>
             </div>
             <div class="section-rule"></div>
-            {{ story('ai_visibility') }}
             <div class="ai-grid">
                 <div class="ai-metric"><span>Brand Mentions</span><strong>{{ ai_mentioned }}</strong></div>
                 <div class="ai-metric"><span>Total Prompts</span><strong>{{ ai_total }}</strong></div>
@@ -2085,6 +2083,7 @@
                     </tbody>
                 </table>
             </div>
+            {{ story('ai_visibility') }}
         </div>
     </section>
 
@@ -2099,7 +2098,6 @@
                 </div>
             </div>
             <div class="section-rule"></div>
-            {{ story('links') }}
             <div class="links-summary">
                 <div class="metric"><span>Links Created</span><strong>{{ links | length }}</strong><small>In {{ display_label }}</small></div>
                 <div class="metric blue"><span>Unique Domains</span><strong>{{ unique_domains }}</strong></div>
@@ -2150,6 +2148,7 @@
                     {% endfor %}
                 </div>
             </div>
+            {{ story('links') }}
         </div>
     </section>
 
@@ -2164,7 +2163,6 @@
                 </div>
             </div>
             <div class="section-rule"></div>
-            {{ story('work') }}
             
             <div class="delivery-layout">
                 <div class="card">
@@ -2182,6 +2180,7 @@
                 </div>
 
             </div>
+            {{ story('work') }}
         </div>
     </div>
 

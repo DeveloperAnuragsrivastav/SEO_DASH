@@ -1,0 +1,342 @@
+/* ── Month-on-month sheets ──────────────────────────────────────────────
+   A spreadsheet, not a report: gridlines, frozen name column and header,
+   tabular figures, the latest month picked out in the brand gold. */
+
+.sh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-200);
+  color: var(--brand-700);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  vertical-align: middle;
+}
+
+.sh-range {
+  height: 34px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.sh-surface { display: flex; flex-direction: column; }
+
+.sh-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--card);
+}
+
+.sh-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 220px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  color: var(--ink-3);
+}
+.sh-search:focus-within { border-color: var(--brand-400); box-shadow: 0 0 0 3px var(--brand-50); }
+.sh-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.sh-search button { border: 0; background: none; color: var(--ink-3); cursor: pointer; padding: 2px; display: flex; }
+
+.sh-meta { font-size: 12.5px; color: var(--ink-3); }
+.sh-hint {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.sh-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 250px);
+  min-height: 160px;
+}
+
+.sh-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.sh-table th,
+.sh-table td {
+  padding: 0 12px;
+  height: 34px;
+  border-right: 1px solid var(--line-3);
+  border-bottom: 1px solid var(--line-3);
+  white-space: nowrap;
+  text-align: left;
+  font-weight: 400;
+}
+
+.sh-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 38px;
+  background: var(--canvas-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sh-num {
+  text-align: right !important;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  min-width: 92px;
+}
+.sh-table thead .sh-num { font-family: inherit; }
+
+/* The name column stays put while the months scroll under it. */
+.sh-table .sh-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 260px;
+  max-width: 380px;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  font-weight: 500;
+}
+.sh-table thead .sh-name { z-index: 3; background: var(--canvas-2); }
+.sh-table tbody th {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+  color: var(--ink);
+}
+.sh-name-in { display: flex; align-items: center; gap: 6px; max-width: 356px; }
+.sh-label { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+
+.sh-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--brand-50);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.sh-waiting svg { color: var(--brand-700); flex-shrink: 0; }
+
+.sh-table tbody tr:hover td,
+.sh-table tbody tr:hover th.sh-name { background: var(--brand-50); }
+
+.sh-extra { color: var(--ink-3); background: var(--canvas); }
+.sh-table thead .sh-extra { background: var(--canvas-2); }
+
+/* The newest month, where the eye starts. */
+.sh-table thead .sh-month.latest {
+  color: var(--ink);
+  box-shadow: inset 0 3px 0 var(--brand-500);
+}
+.sh-table tbody td.sh-num:nth-last-child(2) { font-weight: 600; }
+
+.sh-month-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--ink-4);
+}
+.sh-month.open .sh-month-btn { color: var(--brand-700); border-bottom-color: var(--brand-500); }
+
+.sh-report {
+  display: inline-flex;
+  margin-left: 6px;
+  color: var(--ink-4);
+  vertical-align: -1px;
+}
+.sh-report:hover { color: var(--link); }
+
+.sh-group th {
+  position: sticky;
+  left: 0;
+  height: 30px;
+  background: var(--canvas) !important;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-top: 1px solid var(--line-2);
+}
+
+.sh-blank::before { content: "·"; color: var(--ink-4); }
+
+.sh-chg-col { background: var(--canvas); min-width: 96px; }
+.sh-table thead .sh-chg-col { background: var(--canvas-2); }
+.sh-chg { font-size: 12px; font-weight: 600; }
+.sh-chg.up { color: var(--up); }
+.sh-chg.down { color: var(--danger-500); }
+.sh-chg.flat { color: var(--ink-4); }
+
+/* Correcting a published figure (super admin). */
+.sh-num.can-edit { cursor: cell; }
+.sh-num.can-edit:hover { box-shadow: inset 0 0 0 1px var(--brand-400); }
+.sh-num.can-edit:focus-visible { outline: 2px solid var(--brand-500); outline-offset: -2px; }
+.sh-num.edited { position: relative; }
+.sh-num.edited::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 7px 7px 0;
+  border-color: transparent var(--brand-500) transparent transparent;
+}
+.sh-editing { padding: 0 !important; box-shadow: inset 0 0 0 2px var(--brand-500); }
+.sh-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  outline: 0;
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  text-align: right;
+}
+
+.sh-note {
+  display: block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans, inherit);
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.1;
+  text-align: right;
+}
+
+.sh-untrack {
+  display: none;
+  border: 0;
+  background: none;
+  padding: 3px;
+  border-radius: var(--radius-xs);
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.sh-table tbody tr:hover .sh-untrack { display: inline-flex; }
+.sh-untrack:hover { color: var(--danger-500); background: var(--danger-50); }
+
+/* A prompt's month: one dot per assistant, filled when it named the brand. */
+.sh-checks-cell { text-align: right; min-width: 110px; }
+.sh-checks { display: inline-flex; align-items: center; gap: 3px; }
+.sh-checks i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--n-300);
+  display: inline-block;
+}
+.sh-checks i.yes { background: var(--up); border-color: var(--up); }
+.sh-checks b { margin-left: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; }
+
+.sh-none { padding: 28px !important; text-align: center !important; color: var(--ink-3); }
+
+.sh-details {
+  border-top: 1px solid var(--line);
+  padding: 12px 14px 16px;
+  background: var(--canvas);
+}
+.sh-details-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+.sh-mini { width: 100%; background: var(--card); border: 1px solid var(--line-2); border-radius: var(--radius-sm); }
+.sh-mini thead th { position: static; }
+.sh-url { max-width: 480px; overflow: hidden; text-overflow: ellipsis; }
+.sh-url a { color: var(--link); }
+
+/* Screenshots by month */
+.shots-month { padding: 16px; border-bottom: 1px solid var(--line-2); }
+.shots-month:last-child { border-bottom: 0; }
+.shots-month-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.shots-month-head h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.shots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.shots-item {
+  margin: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--card);
+  cursor: zoom-in;
+}
+.shots-item .frame { aspect-ratio: 4 / 3; background: var(--canvas-2); display: flex; align-items: center; justify-content: center; }
+.shots-item img { width: 100%; height: 100%; object-fit: contain; }
+.shots-item figcaption { padding: 6px 8px; font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--line-3); }
+.shots-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--brand-700); }
+.shots-light {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 10, 10, 0.82);
+  cursor: zoom-out;
+}
+.shots-light img { max-width: 100%; max-height: 100%; border-radius: var(--radius-sm); box-shadow: var(--shadow-md); }
+
+@media (max-width: 720px) {
+  .sh-table .sh-name { min-width: 170px; max-width: 200px; }
+  .sh-hint { margin-left: 0; }
+  .sh-scroll { max-height: none; }
+}
+
+/* Reports archive */
+.rp-table td, .rp-table th { height: 48px; }
+.rp-title { color: var(--ink); font-weight: 600; text-decoration: none; }
+.rp-title:hover { color: var(--link); }
+.rp-tag { margin-left: 8px; padding: 1px 7px; border-radius: var(--radius-pill); background: var(--canvas-2); color: var(--ink-3); font-size: 11px; font-weight: 600; }
+.rp-status { display: inline-block; padding: 2px 9px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; }
+.rp-status.published { background: var(--up-soft); color: var(--success-600); border: 1px solid var(--up-border); }
+.rp-status.draft { background: var(--brand-50); color: var(--brand-700); border: 1px solid var(--brand-200); }
+.rp-note { margin-left: 8px; font-size: 11px; color: var(--ink-3); }
+.rp-actions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.sh-chg-sub { font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-3); text-transform: none; }

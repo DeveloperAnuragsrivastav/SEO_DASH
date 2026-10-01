@@ -1,14 +1,16 @@
 import { NavLink, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import api from '../../api/client';
+import { GROUPS, GROUP_LABEL, groupScreens } from '../../lib/nav';
 import {
   Building2,
   Users,
   Kanban,
   LayoutDashboard,
+  FileText,
   Crosshair,
   BarChart2,
   MapPin,
@@ -25,19 +27,35 @@ import {
   X,
 } from 'lucide-react';
 
+/** One icon per screen, keyed the same way lib/nav keys the screen itself. */
+const SCREEN_ICON: Record<string, ReactNode> = {
+  'overview': <LayoutDashboard size={15} />,
+  'reports': <FileText size={15} />,
+  'search-console': <Search size={15} />,
+  'google-analytics': <TrendingUp size={15} />,
+  'business-profile': <MapPin size={15} />,
+  'keywords': <Crosshair size={15} />,
+  'ai-visibility': <BarChart2 size={15} />,
+  'backlinks': <LinkIcon size={15} />,
+  'on-site': <CheckSquare size={15} />,
+  'screenshots': <ImageIcon size={15} />,
+  'connections': <Plug size={15} />,
+};
+
 interface SidebarProps {
   /** Mobile drawer visibility — desktop ignores this. */
   open?: boolean;
   onClose?: () => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  /** Fetched once by AdminLayout and shared with the breadcrumb trail. */
+  clientName?: string | null;
 }
 
-export function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapsed }: SidebarProps) {
+export function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapsed, clientName = null }: SidebarProps) {
   const { user, logout } = useAuth();
   const { canViewAdminTools, isSuperAdmin, isManager } = usePermissions();
   const { clientId } = useParams();
-  const [clientName, setClientName] = useState<string | null>(null);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
@@ -63,16 +81,6 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
       toast.error(err.response?.data?.detail || 'Failed to update password');
     }
   };
-
-  useEffect(() => {
-    if (clientId) {
-      api.get(`/clients/${clientId}`).then((res) => {
-        setClientName(res.data.name);
-      }).catch(() => setClientName(null));
-    } else {
-      setClientName(null);
-    }
-  }, [clientId]);
 
   // Close the account menu on outside click / Escape
   useEffect(() => {
@@ -120,13 +128,12 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
         </div>
 
         <nav className="sidebar-nav">
-          {/* Global Navigation */}
+          {/* Agency level — every role reaches its own client list from here. */}
           <div className="nav-section-title">Agency</div>
-          {!isSuperAdmin && (
-            <NavLink to="/admin/clients" end className={navCls} onClick={closeDrawer}>
-              <span className="nav-ico"><Building2 size={15} /></span> <span className="nav-text">{isManager ? 'My Clients' : 'Assigned Clients'}</span>
-            </NavLink>
-          )}
+          <NavLink to="/admin/clients" end className={navCls} onClick={closeDrawer}>
+            <span className="nav-ico"><Building2 size={15} /></span>
+            <span className="nav-text">{isSuperAdmin ? 'All Clients' : isManager ? 'My Clients' : 'Assigned Clients'}</span>
+          </NavLink>
           {canViewAdminTools && (
             <NavLink to="/admin/users" className={navCls} onClick={closeDrawer}>
               <span className="nav-ico"><Users size={15} /></span> <span className="nav-text">Managers</span>
@@ -134,49 +141,39 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
           )}
           {isManager && (
             <NavLink to="/admin/manager-tools" className={navCls} onClick={closeDrawer}>
-              <span className="nav-ico"><Kanban size={15} /></span> <span className="nav-text">Team &amp; Assignments</span>
+              <span className="nav-ico"><Kanban size={15} /></span> <span className="nav-text">Team</span>
             </NavLink>
           )}
 
-          {/* Client Contextual Navigation */}
+          {/* Client level — grouped by the job being done, named from lib/nav. */}
           {clientId && (
             <>
-              <div className="nav-section-title" title={clientName || undefined}>
-                {clientName || 'Loading Client…'}
+              <div className="nav-client" title={clientName || undefined}>
+                <span className="nav-client-name">{clientName || 'Loading…'}</span>
               </div>
 
-              <NavLink to={`/admin/clients/${clientId}`} end className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><LayoutDashboard size={15} /></span> <span className="nav-text">Overview</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/keywords`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><Crosshair size={15} /></span> <span className="nav-text">Keyword Performance</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/ai-mentions-data`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><BarChart2 size={15} /></span> <span className="nav-text">Target AI Prompts Tracking &amp; Performance</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/gbp`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><MapPin size={15} /></span> <span className="nav-text">GBP Data</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/google-analytics`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><TrendingUp size={15} /></span> <span className="nav-text">Google Analytics</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/search-console`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><Search size={15} /></span> <span className="nav-text">Search Console</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/links`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><LinkIcon size={15} /></span> <span className="nav-text">Performed Backlinks Activities</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/work`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><CheckSquare size={15} /></span> <span className="nav-text">On-Site SEO Activities Performed</span>
-              </NavLink>
-              <NavLink to={`/clients/${clientId}/screenshots`} className={navCls} onClick={closeDrawer}>
-                <span className="nav-ico"><ImageIcon size={15} /></span> <span className="nav-text">Screenshots</span>
-              </NavLink>
-              {user?.role !== 'user' && (
-                <NavLink to={`/admin/clients/${clientId}/connections`} className={navCls} onClick={closeDrawer}>
-                  <span className="nav-ico"><Plug size={15} /></span> <span className="nav-text">Connections</span>
-                </NavLink>
-              )}
+              {GROUPS.map(group => {
+                const items = groupScreens(group, user?.role);
+                if (!items.length) return null;
+                return (
+                  <div className="nav-group" key={group}>
+                    <div className="nav-section-title">{GROUP_LABEL[group]}</div>
+                    {items.map(s => (
+                      <NavLink
+                        key={s.key}
+                        to={s.path(clientId)}
+                        end={s.key === 'overview'}
+                        className={navCls}
+                        onClick={closeDrawer}
+                        title={s.name}
+                      >
+                        <span className="nav-ico">{SCREEN_ICON[s.key]}</span>
+                        <span className="nav-text">{s.name}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                );
+              })}
             </>
           )}
         </nav>

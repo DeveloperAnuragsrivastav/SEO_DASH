@@ -14,8 +14,22 @@ export function deltaEl(cur: number, prev: number, suffix = '') {
   return <span className="d flat">0%</span>;
 }
 
-export function fmt(n: number | undefined) { 
-  return (n ?? 0).toLocaleString(); 
+/** A count as a reader expects it: whole, with thousand separators.
+ *
+ *  Everything this formats is a count — clicks, sessions, calls, links.
+ *  Summing or averaging daily rows leaves decimals that mean nothing to
+ *  anyone: nobody made 721.82 calls. Figures that genuinely carry decimals
+ *  (average position, CTR) are formatted explicitly where they are used. */
+export function fmt(n: number | undefined) {
+  return Math.round(n ?? 0).toLocaleString();
+}
+
+/** For the few figures where the decimal is the point, such as a rate. */
+export function fmtPrecise(n: number | undefined, places = 1) {
+  return (n ?? 0).toLocaleString(undefined, {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  });
 }
 
 export function rankClass(pos: number | undefined) {

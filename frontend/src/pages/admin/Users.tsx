@@ -5,7 +5,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ChevronDown, UserPlus, Users as UsersIcon, UserCheck, UserX, FolderOpen, ExternalLink } from 'lucide-react';
 
-import PageHeader from '../../components/ui/PageHeader';
+import Page from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 
 interface NestedUser {
@@ -142,17 +142,14 @@ export default function Users() {
   if (loading) return <PageSkeleton stats={3} />;
 
   return (
-    <>
-      <PageHeader 
-        title="Manager Directory" 
-        subtitle="Super Admins can create isolated Manager accounts here."
-        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Manager Directory' }]}
+      <Page
+        screen="managers"
         actions={
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
             <UserPlus size={15} /> Add Manager
           </button>
         }
-      />
+      >
 
       <div className="stat-grid">
         <div className="stat">
@@ -187,7 +184,7 @@ export default function Users() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: '16px' }}>
+      <div className="page-stack">
         {managers.length === 0 ? (
           <div className="page-card">
             <div className="empty-state">
@@ -241,7 +238,7 @@ export default function Users() {
                   <div>
                     <div className="overline" style={{ marginBottom: 12 }}>Assigned Users</div>
                     {manager.managed_users?.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div className="stack">
                         {manager.managed_users.map(u => (
                           <div key={u.id} className="list-row">
                             <span style={{ fontWeight: 500, fontSize: 13.5, overflowWrap: 'anywhere' }}>{u.email}</span>
@@ -258,7 +255,7 @@ export default function Users() {
                   <div>
                     <div className="overline" style={{ marginBottom: 12 }}>Assigned Projects</div>
                     {manager.managed_clients?.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div className="stack">
                         {manager.managed_clients.map(c => (
                           <div key={c.id} className="project-row">
                             <span className="stat-chip sm tone-amber"><FolderOpen size={14} /></span>
@@ -266,7 +263,7 @@ export default function Users() {
                               <strong>{c.name}</strong>
                               <small>{c.domain}</small>
                             </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div className="project-actions">
                               <Link to={`/admin/clients/${c.id}`} className="btn btn-secondary btn-sm">
                                 <ExternalLink size={13} /> Dashboard
                               </Link>
@@ -298,7 +295,7 @@ export default function Users() {
 
       {showAdd && (
         <div className="modal-backdrop">
-          <div className="modal" style={{ maxWidth: modalStep === 'project' ? '500px' : '400px' }}>
+          <div className={`modal ${modalStep === 'project' ? 'medium' : 'narrow'}`}>
             {modalStep === 'manager' ? (
               <>
                 <h2 className="modal-title">Create New Manager</h2>
@@ -341,12 +338,12 @@ export default function Users() {
                 <h2 className="modal-title">Create Project</h2>
                 <p className="modal-desc">Step 2 of 2 · assign an initial SEO project to this new manager.</p>
                 <div className="wizard-steps"><span className="wizard-step done" /><span className="wizard-step active" /></div>
-                <form onSubmit={handleAddProject} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <form onSubmit={handleAddProject} className="modal-form-grid">
+                  <div className="form-group field-span">
                     <label className="form-label">Client Name</label>
                     <input className="form-input" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} required placeholder="Acme Corp" autoFocus />
                   </div>
-                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <div className="form-group field-span">
                     <label className="form-label">Primary Domain</label>
                     <input className="form-input" value={newProject.domain} onChange={e => setNewProject({...newProject, domain: e.target.value})} required placeholder="acme.com" />
                   </div>
@@ -358,7 +355,7 @@ export default function Users() {
                     <label className="form-label">Tracked Keywords</label>
                     <input className="form-input" type="number" min="0" value={newProject.package_keywords} onChange={e => setNewProject({...newProject, package_keywords: e.target.value})} />
                   </div>
-                  <div className="modal-actions" style={{ gridColumn: '1 / -1' }}>
+                  <div className="modal-actions field-span">
                     <button type="button" onClick={closeModal} className="btn btn-secondary" disabled={creating}>Skip for now</button>
                     <button type="submit" className="btn btn-primary" disabled={creating}>
                       {creating ? 'Creating...' : 'Create & Assign'}
@@ -374,8 +371,8 @@ export default function Users() {
       {deletingClient && (
         <div className="modal-backdrop">
           <div className="modal">
-            <h2 className="modal-title" style={{ color: 'var(--down)' }}>Delete {deletingClient.name}?</h2>
-            <p className="modal-desc" style={{ marginBottom: 16 }}>
+            <h2 className="modal-title danger-title">Delete {deletingClient.name}?</h2>
+            <p className="modal-desc danger-copy">
               This action <strong>cannot be undone</strong>. This will permanently delete the <strong>{deletingClient.name}</strong> project, including all keyword rankings, metrics, backlink data, and user assignments.
             </p>
             <div className="form-group">
@@ -406,6 +403,6 @@ export default function Users() {
           </div>
         </div>
       )}
-    </>
+    </Page>
   );
 }

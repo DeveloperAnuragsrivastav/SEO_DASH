@@ -1,4 +1,5 @@
 import logging
+import os
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
@@ -26,24 +27,20 @@ def init_db():
             db.commit()
             db.refresh(account)
 
-        email = "rajiv@ezrankings.com"
-        admin = db.query(User).filter(User.email == email).first()
-        
-        if not admin:
-            logger.info(f"Creating super admin: {email}")
-            admin = User(
-                email=email,
-                password_hash=get_password_hash("password123"),
-                is_active=True,
-                role=UserRole.super_admin,
-                account_id=account.id
-            )
-            db.add(admin)
-            db.commit()
-            logger.info("Super admin created successfully.")
+        # The first super admin comes from the environment, once, on an empty
+        # database. Nothing is created without both values — never a default password.
+        email = (os.environ.get("ADMIN_EMAIL") or "").strip().lower()
+        password = os.environ.get("ADMIN_PASSWORD") or ""
+        if db.query(User).filter(User.role == UserRole.super_admin).first():
+            logger.info("A super admin already exists.")
+        elif not email or len(password) < 10:
+            logger.warning("No super admin yet: set ADMIN_EMAIL and ADMIN_PASSWORD (10+ characters) and redeploy.")
         else:
-            logger.info("Super admin already exists.")
-            
+            db.add(User(email=email, password_hash=get_password_hash(password), is_active=True,
+                        role=UserRole.super_admin, account_id=account.id))
+            db.commit()
+            logger.info("Super admin %s created.", email)
+
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         db.rollback()

@@ -213,3 +213,510 @@
 .prep-foot { margin-top: 22px; font-size: 12px; color: var(--ink-3); }
 .prep-error { margin-top: 18px; }
 @media (max-width: 620px) { .prep { margin: 16px auto; padding: 22px 18px; } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   REPORT BLOCKS — one card per titled block: its heading, its supporting
+   line, and the paragraph printed beneath it. Everything you can change
+   about a block lives in one place, so nothing about it is hunted for.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.rb-block {
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.rb-block + .rb-block { margin-top: 12px; }
+
+.rb-block-name {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  font-weight: 680;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+/* The commentary sits under the block's own fields, set apart by a rule
+   rather than another box — a card inside a card reads as clutter. */
+.rb-story {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px dashed var(--line);
+}
+.rb-block > .rb-story:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* The label row carries the provenance tag beside the field name. */
+.rb-story > .rb-copy-field > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Title and Subtitle are single-line fields at a fixed 34px; the summary is
+   a paragraph and must beat that rule to keep its own height. */
+.rb-story > .rb-copy-field > .rb-story-text {
+  height: auto;
+  min-height: 96px;
+}
+
+.rb-story-text {
+  width: 100%;
+  min-height: 96px;
+  padding: 11px 13px;
+  font-family: var(--body);
+  font-size: 13.5px;
+  line-height: 1.62;
+  color: var(--ink);
+  resize: vertical;
+}
+
+.rb-story-text::placeholder { color: var(--ink-4); }
+
+.rb-story-text:disabled {
+  background: var(--canvas-2);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+/* Where this paragraph came from — the same provenance rule every
+   figure in this product follows. */
+.rb-story-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+.rb-story-tag.ai {
+  background: var(--brand-50);
+  color: var(--brand-800);
+  box-shadow: inset 0 0 0 1px var(--brand-200);
+}
+.rb-story-tag.own {
+  background: var(--success-50);
+  color: var(--success-600);
+  box-shadow: inset 0 0 0 1px var(--success-100);
+}
+
+.rb-story-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+
+.rb-story-note {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .rb-block { padding: 12px 13px 14px; }
+  .rb-story-foot > .btn { width: 100%; justify-content: center; }
+  .rb-story-note { flex-basis: 100%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NOT-CONNECTED BLOCKER — the last thing between stored figures and a
+   client seeing them presented as freshly collected.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.rb-blocker { margin-top: 16px; }
+
+.rb-blocker-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rb-blocker-list li {
+  padding-left: 14px;
+  border-left: 1px solid var(--danger-100);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.rb-blocker-list strong { color: var(--ink); }
+
+/* The provider's own error text, kept apart from the sentence explaining it. */
+.rb-blocker-why {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.rb-blocker-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--danger-100);
+}
+
+.rb-blocker-ack {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+.rb-blocker-ack input { width: 16px; height: 16px; accent-color: var(--brand-600); cursor: pointer; }
+
+@media (max-width: 640px) {
+  .rb-blocker-actions { align-items: flex-start; flex-direction: column; gap: 12px; }
+}
+
+/* ── Next plan of action ────────────────────────────────────────────────────
+   Two lanes of up to three rows. The detail field appears only once a row has
+   a title, so an untouched lane reads as three empty slots rather than six. */
+.rb-plan-lane {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.rb-plan-lane:first-of-type { border-top: 0; padding-top: 0; }
+.rb-plan-lane-head { margin-bottom: 12px; }
+
+.rb-plan-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+}
+.rb-plan-num {
+  flex: 0 0 26px;
+  height: 26px;
+  margin-top: 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--canvas-2);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rb-plan-row.filled .rb-plan-num {
+  background: var(--brand-50);
+  color: var(--brand-800);
+}
+/* min-width:0 so a long value shrinks the field instead of the row. */
+.rb-plan-fields { flex: 1 1 auto; min-width: 0; display: grid; gap: 8px; }
+.rb-plan-detail { font-size: 13px; }
+.rb-plan-row > .btn { margin-top: 4px; flex: 0 0 auto; }
+
+/* ── Fixed wording, per block ───────────────────────────────────────────────
+   The long tail of strings a slide prints. Collapsed by default so the
+   frequent edits — title, subtitle, summary — stay at the top of the card. */
+.rb-wording {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.rb-wording > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.rb-wording > summary::-webkit-details-marker { display: none; }
+.rb-wording > summary::after {
+  content: '';
+  width: 7px; height: 7px;
+  border-right: 1.5px solid var(--ink-3);
+  border-bottom: 1.5px solid var(--ink-3);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 140ms var(--ease);
+}
+.rb-wording[open] > summary::after { transform: rotate(-135deg) translateY(-2px); }
+.rb-wording > summary:hover { color: var(--ink); }
+.rb-wording-count {
+  margin-left: auto;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* Two columns on a wide panel, one when the panel is narrow. minmax(0,1fr)
+   so a long default in the placeholder cannot widen a column past its share. */
+.rb-wording-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 12px 18px;
+}
+.rb-wording-grid .form-input { font-size: 13px; }
+
+/* ── Slide screenshots (e.g. the five Business Profile captures) ── */
+.rb-shots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.rb-shot { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card); }
+.rb-shot.filled { border-color: var(--brand-200); }
+.rb-shot-frame {
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 4 / 3; overflow: hidden;
+  border: 1px dashed var(--line); border-radius: var(--radius-sm); background: var(--canvas);
+  color: var(--ink-3);
+}
+.rb-shot.filled .rb-shot-frame { border-style: solid; }
+.rb-shot-frame img { width: 100%; height: 100%; object-fit: contain; }
+.rb-shot-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; }
+.rb-shot-actions { display: flex; gap: 6px; align-items: center; }
+.rb-shot-caption {
+  width: 100%; padding: 6px 8px; font: inherit; font-size: 12.5px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); color: var(--ink);
+}
+.rb-shot-caption:focus { outline: none; border-color: var(--brand-400); }
+
+/* ── Breakdown tables (top pages, countries, channels…) ── */
+.rb-list { margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card); }
+.rb-list-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px;
+  border: 0; background: none; font: inherit; text-align: left; cursor: pointer; color: var(--ink);
+}
+.rb-list-title { font-size: 13.5px; font-weight: 600; }
+.rb-list-count { font-size: 12px; color: var(--ink-3); }
+.rb-list-dirty { margin-left: auto; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--amber-soft); color: var(--brand-800); font-size: 11px; font-weight: 600; }
+.rb-list-body { padding: 0 12px 12px; }
+.rb-list-scroll { overflow-x: auto; border: 1px solid var(--line-2); border-radius: var(--radius-sm); }
+.rb-list-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rb-list-table th {
+  padding: 7px 8px; background: var(--canvas-2); color: var(--ink-3);
+  font-size: 11px; font-weight: 600; text-align: left; white-space: nowrap;
+}
+.rb-list-table th.num { text-align: right; }
+.rb-list-table td { padding: 3px 4px; border-top: 1px solid var(--line-2); }
+.rb-list-table td input {
+  width: 100%; min-width: 72px; padding: 5px 6px; font: inherit; font-size: 12.5px;
+  border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink);
+}
+.rb-list-table td.text input { min-width: 180px; }
+.rb-list-table td.num input { text-align: right; font-family: var(--mono); }
+.rb-list-table td input:hover:not(:disabled) { border-color: var(--line); }
+.rb-list-table td input:focus { outline: none; border-color: var(--brand-400); background: var(--card); }
+.rb-list-table td.act { width: 36px; text-align: center; }
+.rb-list-empty { padding: 14px !important; text-align: center; color: var(--ink-3); }
+.rb-list-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.rb-shot-frame[role="button"] { cursor: pointer; }
+.rb-shot.chosen { border-color: var(--brand-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-400) 30%, transparent); }
+.rb-shot.chosen .rb-shot-frame { border-color: var(--brand-400); color: var(--brand-700); }
+
+/* ── A figure beside last period's: Previous month | This month ── */
+.rb-pair-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.metric-card.rb-pair { display: flex; flex-direction: column; gap: 10px; }
+.rb-pair-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rb-pair-box { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rb-pair-box > span { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-3); }
+.rb-pair-box.now > span { color: var(--brand-700); }
+.rb-pair-box input { width: 100%; }
+.rb-pair-box.now input { border-color: var(--brand-300); }
+.rb-pair-change { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.rb-pair-change.up { color: var(--success, #17864A); }
+.rb-pair-change.down { color: var(--danger, #B4432E); }
+.rb-pair-change.none { font-weight: 400; font-style: italic; }
+
+/* ── Ranking summary, worked out from the keywords ── */
+.rb-rank-summary { display: flex; flex-direction: column; gap: 10px; }
+.rb-rank-moves { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.rb-rank-moves > div {
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card);
+}
+.rb-rank-moves b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.rb-rank-moves span { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-rank-moves .up b { color: var(--success, #17864A); }
+.rb-rank-moves .down b { color: var(--danger, #B4432E); }
+.rb-rank-summary td.up { color: var(--success, #17864A); font-weight: 700; }
+.rb-rank-summary td.down { color: var(--danger, #B4432E); font-weight: 700; }
+.rb-rank-summary td.flat { color: var(--ink-4); }
+
+.rb-rank-moves > label { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+.rb-rank-moves > label span { flex: 1; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
+.rb-rank-moves > label .rb-rank-input { width: 64px; }
+.rb-rank-input {
+  width: 72px; padding: 4px 6px; font: inherit; font-family: var(--mono); font-size: 13px; text-align: right;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--ink);
+}
+.rb-rank-input::placeholder { color: var(--ink-4); }
+.rb-rank-input.typed { border-color: var(--brand-400); background: var(--brand-50); font-weight: 700; }
+.rb-rank-input:focus { outline: none; border-color: var(--brand-500); }
+.rb-rank-moves .up .rb-rank-input.typed, .rb-rank-moves .up .rb-rank-input::placeholder { color: var(--success, #17864A); }
+.rb-rank-moves .down .rb-rank-input.typed, .rb-rank-moves .down .rb-rank-input::placeholder { color: var(--danger, #B4432E); }
+.rb-rank-summary .rb-month-table td { vertical-align: middle; }
+
+/* ── Next plan: AI draft bar ── */
+.rb-plan-ai { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--brand-200); border-radius: var(--radius-md); background: var(--brand-50); }
+.rb-plan-ai-note { flex: 1; min-width: 180px; font-size: 12.5px; color: var(--ink-2); }
+.rb-pair-boxes.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rb-pair-box.initial > span { color: var(--ink-4); }
+.rb-pair-box.initial input { background: var(--canvas); }
+
+/* ── Adding a keyword or a prompt ── */
+.rb-add { padding: 14px; border: 1px dashed var(--brand-300); border-radius: var(--radius-md); background: var(--brand-50); }
+.rb-add-row { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.rb-add-field { display: flex; flex-direction: column; gap: 4px; width: 110px; }
+.rb-add-field.wide { flex: 1 1 240px; width: auto; }
+.rb-add-field > span { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.rb-add-assistants { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.rb-add-assistant { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); font-size: 13px; }
+
+/* ── One-time AI fill on open ── */
+.rb-ai-sum { display: flex; gap: 12px; flex-wrap: wrap; }
+.rb-ai-sum .rb-add-field { width: 150px; }
+.rb-ai-sum .rb-rank-input { width: 100%; }
+
+/* ══ The builder, slide by slide ═══════════════════════════════════════════
+   Each step lists where its numbers come from, then one card per slide in
+   the order the report prints: a number, the slide's title, whether it will
+   print, a Show switch, then ① Numbers and ② Words. */
+
+.rb-sources { margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--canvas); }
+.rb-sources-title { margin-bottom: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.rb-source-block + .rb-source-block { margin-top: 10px; }
+.rb-sources .rb-source { margin-bottom: 0; }
+.rb-sources .rb-upload { margin-top: 8px; }
+
+.rb-slide { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--card); overflow: hidden; }
+.rb-slide.empty { border-style: dashed; }
+.rb-slide.hidden { background: var(--canvas); }
+.rb-slide-head { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line-2); background: linear-gradient(180deg, var(--canvas) 0%, var(--card) 100%); }
+.rb-slide.hidden .rb-slide-head { border-bottom: 0; }
+.rb-slide-num {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: var(--brand-300);
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.rb-slide.hidden .rb-slide-num { background: var(--line); color: var(--ink-3); }
+.rb-slide-title { flex: 1; min-width: 0; }
+.rb-slide-title h3 { margin: 0; font-size: 15.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+.rb-slide.hidden .rb-slide-title h3 { color: var(--ink-3); }
+.rb-slide-title p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.rb-slide-side { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.rb-slide-state { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.rb-slide-state.in { background: var(--up-soft); color: var(--success-700, #17864A); }
+.rb-slide-state.empty { background: var(--amber-soft); color: var(--brand-800); }
+.rb-slide-state.hidden { background: var(--canvas-2); color: var(--ink-3); }
+.rb-slide-why { display: flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 12px; color: var(--brand-800); background: var(--amber-soft); border-bottom: 1px solid var(--line-2); }
+
+/* The Show switch */
+.rb-switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; }
+.rb-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.rb-switch-track { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--line); transition: background 0.15s; }
+.rb-switch-dot { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.25); transition: transform 0.15s; }
+.rb-switch.on .rb-switch-track { background: var(--brand-500); }
+.rb-switch.on .rb-switch-dot { transform: translateX(14px); }
+.rb-switch input:focus-visible + .rb-switch-track { outline: 2px solid var(--brand-400); outline-offset: 2px; }
+.rb-switch-text { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+
+.rb-slide-body { padding: 4px 16px 16px; }
+.rb-slide-part { padding-top: 14px; }
+.rb-slide-part + .rb-slide-part { margin-top: 14px; border-top: 1px dashed var(--line); }
+.rb-slide-part-title { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+.rb-slide-part-title > span { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--brand-100); color: var(--brand-800); font-size: 11px; }
+.rb-part + .rb-part { margin-top: 14px; }
+.rb-part > .rb-group { margin-top: 0; }
+.rb-part-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 8px; }
+.rb-part-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.rb-part-hint { font-size: 12px; color: var(--ink-3); }
+.rb-part-actions { margin-left: auto; display: inline-flex; gap: 4px; }
+
+.rb-words-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.rb-words-grid .rb-copy-field.wide { grid-column: 1 / -1; }
+.rb-words-grid .rb-copy-field > span em { margin-left: 4px; font-style: normal; font-weight: 400; color: var(--ink-4); }
+.rb-words-summary { margin-top: 14px; }
+.rb-kpi-cards { display: flex; flex-direction: column; gap: 12px; }
+.rb-review-num { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; margin-right: 6px; border-radius: 6px; background: var(--canvas-2); font-size: 11px; font-weight: 700; color: var(--ink-2); }
+@media (max-width: 720px) {
+  .rb-slide-head { flex-wrap: wrap; }
+  .rb-slide-side { width: 100%; justify-content: space-between; }
+  .rb-words-grid { grid-template-columns: 1fr; }
+}
+/* Editors inside a slide card label themselves the same calm way as its parts. */
+.rb-part .rb-group-label { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.rb-part > .rb-group { margin: 0; padding: 0; border: 0; }
+.rb-copy-field > span em { margin-left: 4px; font-style: normal; font-weight: 400; color: var(--ink-4); }
+.rb-words-after { margin-top: 14px; }
+
+/* ── Rows as a compact table (keywords, countries, links, work, prompts) ── */
+.rb-rows-wrap { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-md); }
+.rb-rows { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rb-rows thead th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; background: var(--canvas-2); color: var(--ink-3); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; text-align: left; white-space: nowrap; }
+.rb-rows th.num, .rb-rows td.num { text-align: right; }
+.rb-rows th.show, .rb-rows td.show { width: 52px; text-align: center; }
+.rb-rows td { padding: 5px 10px; border-top: 1px solid var(--line-2); color: var(--ink); vertical-align: middle; }
+.rb-rows td.name { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.rb-rows tr.off td { color: var(--ink-4); background: var(--canvas); }
+.rb-rows td.num input { width: 84px; padding: 4px 6px; text-align: right; font-family: var(--mono); font-size: 12.5px; }
+.rb-rows td.change { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.rb-rows td.change.up { color: var(--success, #17864A); }
+.rb-rows td.change.down { color: var(--danger, #B4432E); }
+.rb-rows td.change.flat, .rb-rows td.change.none { color: var(--ink-4); }
+.rb-seen { min-width: 46px; padding: 3px 10px; border-radius: 999px; border: 1px solid transparent; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.rb-seen.yes { background: var(--up-soft); color: var(--success-700, #17864A); border-color: color-mix(in srgb, var(--success-500, #17864A) 30%, transparent); }
+.rb-seen.no { background: var(--canvas-2); color: var(--ink-3); border-color: var(--line); }
+.rb-seen:disabled { cursor: default; }
+
+/* The AI grid opened with last month's answers, waiting to be confirmed. */
+.rb-ai-pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-md);
+  background: var(--brand-50);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.rb-ai-pending > svg { flex-shrink: 0; color: var(--brand-700); }
+.rb-ai-pending > span { flex: 1; }
+.rb-ai-pending .btn { flex-shrink: 0; }
+
+/* Ranking summary: worked-out counts read as figures, not empty boxes. */
+.rb-rank-val {
+  display: inline-block;
+  min-width: 44px;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.rb-rank-val.typed { background: var(--brand-50); box-shadow: inset 0 0 0 1px var(--brand-300); color: var(--brand-800); }
+.rb-rank-moves .up .rb-rank-val { color: var(--success, #17864A); }
+.rb-rank-moves .down .rb-rank-val { color: var(--danger, #B4432E); }
+.rb-rank-moves > label .rb-rank-val { min-width: 0; }
+.rb-rank-summary .rb-month-table td:not(:first-child) { text-align: right; }
+.rb-rank-summary .rb-month-table th:not(:first-child) { text-align: right; }

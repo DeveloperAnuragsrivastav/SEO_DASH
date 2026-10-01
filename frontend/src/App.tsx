@@ -13,6 +13,7 @@ import Connections from './pages/admin/Connections';
 import Keywords from './pages/admin/Keywords';
 import AIPrompts from './pages/admin/AIPrompts';
 import Screenshots from './pages/admin/Screenshots';
+import Reports from './pages/admin/Reports';
 import AIMentionsData from './pages/admin/AIMentionsData';
 import GBPManagement from './pages/admin/GBPManagement';
 import LinksManagement from './pages/admin/LinksManagement';
@@ -53,6 +54,7 @@ const App: React.FC = () => {
                 <Route path="/clients/:clientId/keywords" element={<Keywords />} />
                 <Route path="/clients/:clientId/ai-prompts" element={<AIPrompts />} />
                 <Route path="/clients/:clientId/screenshots" element={<Screenshots />} />
+                <Route path="/clients/:clientId/reports" element={<Reports />} />
                 <Route path="/clients/:clientId/ai-mentions-data" element={<AIMentionsData />} />
                 <Route path="/clients/:clientId/manual-metrics" element={<ToClientOverview />} />
                 <Route path="/clients/:clientId/gbp" element={<GBPManagement />} />

@@ -4,34 +4,29 @@ import logging
 import uuid
 from typing import Any, Optional
 
-from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, File, UploadFile, Response
 from pydantic import BaseModel
-from sqlalchemy import or_, select, text, func
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.database import engine, get_db
-from app.models.ai_mention import AiMention
+from app.config import settings
+from app.database import get_db
 from app.models.ai_prompt import AiPrompt
-from app.models.activity import Activity
 from app.models.client import Client
 from app.models.connection import Connection
-from app.models.enums import AiPlatform, ConnectionStatus, ProviderType, RankingSource, ReportStatus, MetricSource
-from app.models.link import Link
+from app.models.enums import AiPlatform, ConnectionStatus, ProviderType, ReportStatus
 from app.models.keyword import Keyword
 from app.models.metric import Metric
-from app.models.ranking import Ranking
 from app.models.report_snapshot import ReportSnapshot
-from app.models.screenshot import Screenshot
-from app.services.ga4_service import pull_ga4_data
+from app.models.report_image import ReportImage
 from app.services import report_composer as composer
+from app.services import report_text
 from app.services.openai_service import suggest_report_sections
 from app.services.openai_service import generate_section_summaries
+from app.services.openai_service import generate_next_plan
+from app.services.openai_service import generate_slide_subtitles
 from app.services import report_period as periods_svc
-from app.services.gbp_service import pull_gbp_data
-from app.services.openai_service import generate_report_narrative
-from app.services.gsc_service import pull_gsc_data
 from calendar import monthrange
 
 def get_month_boundaries(year: int, month: int) -> tuple[datetime.date, datetime.date]:
@@ -142,27 +137,55 @@ def update_report_narrative(client_id: uuid.UUID, snapshot_id: uuid.UUID, payloa
 from app.models.user import User
 from app.dependencies import get_current_user
 
-@router.post("/{snapshot_id}/publish", dependencies=[Depends(RequireRole([UserRole.super_admin]))])
+# Anyone who can open the client's report may publish it (the router already
+# checks they are assigned to the client). Correcting a published month stays
+# with a super admin, on the sheets.
+@router.post("/{snapshot_id}/publish")
 def publish_report(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Publish the report."""
-    report = db.execute(
-        select(ReportSnapshot).where(ReportSnapshot.client_id == client_id, ReportSnapshot.id == snapshot_id)
-    ).scalar_one_or_none()
-    
-    if not report:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
-        
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
     if report.status == ReportStatus.published:
         raise HTTPException(status.HTTP_409_CONFLICT, "Report is already published.")
-        
+    months = ((report.snapshot or {}).get("period") or {}).get("months") or 1
+    from app.services import sheets
+    month = sheets.report_month(report)
+    # A month belongs to one report. Republishing the same report (after it
+    # was made a draft again) replaces its own column; another report's month
+    # is left alone.
+    from app.models.sheet_cell import SheetCell
+    owner = db.execute(select(SheetCell.report_id).where(
+        SheetCell.client_id == client_id, SheetCell.month == month)).scalars().first()
+    if owner is not None and owner != report.id:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"{month:%B %Y} is already published from another report — make that one a draft first.")
+
+    # This month becomes the client's record: its column is written into
+    # every sheet, and keywords or prompts added while building are tracked.
+    cells = sheets.publish(db, report, current_user.id)
+    flag_modified(report, "snapshot")
     report.status = ReportStatus.published
     report.published_at = datetime.datetime.now(datetime.timezone.utc)
     report.published_by = current_user.id
-    
     db.commit()
-    
-    return {"status": "success", "published_at": report.published_at}
 
+    return {"status": "success", "published_at": report.published_at, "month": month.isoformat(),
+            "cells": cells, "months": months}
+
+
+
+@router.post("/{snapshot_id}/unpublish")
+def unpublish_report(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Make a published report a draft again, to change it. Its month stays
+    on the sheets as it was until the report is published again, which then
+    replaces that month's column with the changed figures."""
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
+    if report.status != ReportStatus.published:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This report is already a draft.")
+    report.status = ReportStatus.draft
+    report.published_at = None
+    report.published_by = None
+    db.commit()
+    return {"status": "draft"}
 
 
 class SectionSelection(BaseModel):
@@ -172,8 +195,6 @@ class SectionSelection(BaseModel):
 
 class ItemEdits(BaseModel):
     edits: dict[str, Any]
-    # Ids whose edit should also correct the saved data it came from.
-    writeBack: list[str] | None = None
 
 
 class SectionSuggestRequest(BaseModel):
@@ -182,8 +203,11 @@ class SectionSuggestRequest(BaseModel):
 
 class CopyUpdate(BaseModel):
     brand_line: str | None = None
+    eyebrows: dict[str, str] | None = None
     titles: dict[str, str] | None = None
     subtitles: dict[str, str] | None = None
+    # Every other fixed string the report prints, by its registry id.
+    texts: dict[str, str] | None = None
 
 
 class GenerateRequest(BaseModel):
@@ -199,58 +223,51 @@ class NarrationUpdate(BaseModel):
     narration: dict[str, str]
 
 
-def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> ReportSnapshot:
-    report = db.execute(
-        select(ReportSnapshot).where(
-            ReportSnapshot.client_id == client_id, ReportSnapshot.id == snapshot_id
-        )
-    ).scalar_one_or_none()
+class PlanItem(BaseModel):
+    title: str = ""
+    detail: str = ""
+
+
+class PlanUpdate(BaseModel):
+    """What the agency will do next, in two lanes: this coming month, and after.
+
+    Kept on the snapshot rather than the report row so it travels with the
+    period the plan was written for, the way the headings and commentary do.
+    """
+    now: list[PlanItem] | None = None
+    next: list[PlanItem] | None = None
+    lede: str | None = None
+
+
+def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session, lock: bool = False) -> ReportSnapshot:
+    """The report; with `lock`, held until this request commits, so two people
+    saving at the same moment are applied one after the other instead of the
+    second overwriting the first."""
+    stmt = select(ReportSnapshot).where(ReportSnapshot.client_id == client_id, ReportSnapshot.id == snapshot_id)
+    if lock:
+        stmt = stmt.with_for_update()
+    report = db.execute(stmt).scalar_one_or_none()
     if not report:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
     return report
 
 
 @router.get("/trends")
-def get_trends(
-    client_id: uuid.UUID,
-    days: int = 30,
-    db: Session = Depends(get_db),
-):
-    """Daily series for the headline figures, for the overview sparklines.
-
-    Only real recorded values are returned — a metric with nothing stored
-    comes back as an empty list, so the caller can leave the chart out
-    rather than draw an invented trend.
-    """
-    days = max(7, min(days, 180))
-    end = datetime.date.today()
-    start = end - datetime.timedelta(days=days)
-
-    wanted = {
-        "gsc": ["clicks", "impressions"],
-        "ga4": ["sessions", "users"],
-        "gbp": ["calls", "website_clicks"],
-    }
-
-    rows = db.execute(
-        select(Metric.provider, Metric.metric_key, Metric.captured_on, func.sum(Metric.value))
-        .where(
-            Metric.client_id == client_id,
-            Metric.captured_on >= start,
-            Metric.captured_on <= end,
-            Metric.dimension_key.is_(None),
-        )
-        .group_by(Metric.provider, Metric.metric_key, Metric.captured_on)
-        .order_by(Metric.captured_on)
-    ).all()
-
+def get_trends(client_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Month by month headline figures, for the overview sparklines — only
+    published months, which are the client's final figures."""
+    from app.models.sheet_cell import SheetCell
+    wanted = {"gsc": ["clicks", "impressions"], "ga4": ["sessions", "users"], "gbp": ["calls", "website_clicks"]}
     series: dict[str, dict[str, list]] = {p: {k: [] for k in ks} for p, ks in wanted.items()}
-    for provider, key, day, total in rows:
-        name = provider.value if hasattr(provider, "value") else str(provider)
-        if name in series and key in series[name]:
-            series[name][key].append({"d": day.isoformat(), "v": float(total or 0)})
-
-    return {"from": start.isoformat(), "to": end.isoformat(), "series": series}
+    for sheet, key, month, value in db.execute(
+        select(SheetCell.sheet, SheetCell.row_key, SheetCell.month, SheetCell.value)
+        .where(SheetCell.client_id == client_id, SheetCell.sheet.in_(list(wanted)))
+        .order_by(SheetCell.month)
+    ).all():
+        if key in series[sheet]:
+            series[sheet][key].append({"d": month.isoformat(), "v": float(value or 0)})
+    months = sorted({p["d"] for s_ in series.values() for pts in s_.values() for p in pts})
+    return {"from": months[0] if months else None, "to": months[-1] if months else None, "series": series}
 
 
 @router.get("/periods")
@@ -308,12 +325,161 @@ def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Dep
         "editable": report.status != ReportStatus.published,
         "copy": composer.current_copy(snapshot),
         "copyHeadings": composer.COPY_HEADINGS,
+        # Every other fixed string, grouped by the block it prints under.
+        "textFields": report_text.TEXT_FIELDS,
         "brandLineDefault": composer.DEFAULT_BRAND_LINE,
         "hasCover": report.cover_mime is not None,
         "narration": snapshot.get("narration") or {},
+        "narrationSource": snapshot.get("narration_source") or {},
+        "narrationBlocks": composer.NARRATION_BLOCKS,
+        "narrationAvailable": composer.narration_availability(snapshot),
+        "plan": snapshot.get("next_month_plan") or {"now": [], "next": [], "lede": ""},
+        "planSource": snapshot.get("plan_source"),
+        "subtitleAi": snapshot.get("subtitle_ai") or [],
+        # The builder draws itself from these: steps in report order, and each
+        # slide with what feeds it, its words, and whether it will print.
+        "steps": composer.STEPS,
+        "slides": _slides_for(db, report, snapshot),
+        "kpiCards": _kpi_cards(snapshot),
+        "rankOverrides": composer.clean_rank_overrides((snapshot.get("rankings") or {}).get("summary_overrides")),
+        "aiSummary": snapshot.get("ai_summary") or {},
+        # Worked-out figures, listing every assistant a figure was typed or read in for too.
+        "aiSummaryAuto": __import__("app.services.slide_deck", fromlist=["ai_summary"]).ai_summary(
+            {**snapshot, "ai_summary": {"engines": {k: {} for k in ((snapshot.get("ai_summary") or {}).get("engines") or {})}}}),
         "period": snapshot.get("period") or _legacy_period(report),
+        # The breakdown tables, editable row by row.
+        "listSpecs": [
+            {**spec, "columns": [{"key": k, "label": l, "type": t} for k, l, t in spec["columns"]]}
+            for spec in composer.LIST_SPECS
+        ],
+        "lists": {spec["path"]: composer.list_rows(snapshot, spec["path"]) for spec in composer.LIST_SPECS},
         "periods": snapshot.get("periods") or [],
+        "dataHealth": _data_health(db, client_id, snapshot, report),
     }
+
+
+def _data_health(db: Session, client_id: uuid.UUID, snapshot: dict, report: ReportSnapshot) -> dict:
+    """Whether each connected source's figures can be trusted for this period.
+
+    A broken connection does not stop a report being built — it reads whatever
+    is stored, which is what makes manual entry work at all. The danger is the
+    quiet case: a connection that has been failing for weeks, a report that
+    prints the last figures it ever managed to collect, and nothing on the
+    page saying so. This is what the builder warns on before that goes out.
+    """
+    provenance = snapshot.get("provenance") or {}
+    period = snapshot.get("period") or {}
+    try:
+        window_start = datetime.date.fromisoformat(period.get("start") or report.start_date.isoformat())
+    except (TypeError, ValueError):
+        window_start = report.start_date
+
+    connections = {
+        c.provider.value: c
+        for c in db.execute(select(Connection).where(Connection.client_id == client_id)).scalars()
+    }
+
+    out: dict[str, dict] = {}
+    for provider in ("gsc", "ga4", "gbp"):
+        conn = connections.get(provider)
+        newest_raw = (provenance.get(provider) or {}).get("newest")
+        newest = None
+        if newest_raw:
+            try:
+                newest = datetime.date.fromisoformat(newest_raw)
+            except (TypeError, ValueError):
+                newest = None
+
+        out[provider] = {
+            "connected": bool(conn and conn.status == ConnectionStatus.connected),
+            "status": conn.status.value if conn else "not_connected",
+            "lastError": (conn.last_error or "") if conn else "",
+            "lastSync": conn.last_sync_at.date().isoformat() if conn and conn.last_sync_at else None,
+            "newest": newest.isoformat() if newest else None,
+            # Figures from before this report's window are not this period's
+            # figures, whatever the slide says.
+            "stale": bool(newest and newest < window_start),
+            "source": (provenance.get(provider) or {}).get("source"),
+        }
+    return out
+
+
+def _slides_for(db: Session, report: ReportSnapshot, snapshot: dict) -> list[dict]:
+    images = {
+        section: count for section, count in db.execute(
+            select(ReportImage.section, func.count()).where(ReportImage.report_id == report.id)
+            .group_by(ReportImage.section)
+        ).all()
+    }
+    status_ = composer.slide_status(snapshot, images)
+    return [
+        {**{k: v for k, v in slide.items() if k != "texts"},
+         "texts": composer.slide_texts(slide), **status_.get(slide["key"], {})}
+        for slide in composer.SLIDES
+    ]
+
+
+def _kpi_cards(snapshot: dict) -> list[dict]:
+    """The cards Performance Highlight can print for this report — its own
+    list, with the real values — and whether each is switched on."""
+    from app.services import slide_deck
+    sections = composer.current_sections(snapshot)
+    chosen = composer.current_items(snapshot)
+    t = report_text.resolver(snapshot.get("copy"))
+    cards = slide_deck.scorecard({**snapshot, "hidden_cards": []}, sections,
+                                 lambda i: chosen.get(i, True) is not False, False, t)
+    hidden = set(snapshot.get("hidden_cards") or [])
+    return [{"id": c["card"], "name": c["name"], "value": c["value"], "shown": c["card"] not in hidden} for c in cards]
+
+
+class CardToggle(BaseModel):
+    id: str
+    shown: bool
+
+
+@router.put("/{snapshot_id}/cards")
+def set_kpi_card(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: CardToggle, db: Session = Depends(get_db)):
+    """Show or hide one Performance Highlight card."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    hidden = set(snapshot.get("hidden_cards") or [])
+    (hidden.discard if data.shown else hidden.add)(data.id)
+    snapshot["hidden_cards"] = sorted(hidden)
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"kpiCards": _kpi_cards(snapshot)}
+
+
+class SlideToggle(BaseModel):
+    key: str
+    shown: bool
+
+
+@router.put("/{snapshot_id}/slides")
+def set_slide_shown(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: SlideToggle, db: Session = Depends(get_db)):
+    """Show or hide one slide. Showing a slide whose data section was switched
+    off switches that section back on, so the switch does what it says."""
+    slide = next((x for x in composer.SLIDES if x["key"] == data.key), None)
+    if not slide:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown slide.")
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    hidden = set(snapshot.get("hidden_slides") or [])
+    if data.shown:
+        hidden.discard(data.key)
+        section = slide.get("section")
+        if section and composer.section_availability(snapshot).get(section):
+            chosen = dict(composer.current_sections(snapshot))
+            chosen[section] = True
+            snapshot["included_sections"] = chosen
+    else:
+        hidden.add(data.key)
+    snapshot["hidden_slides"] = sorted(hidden)
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"slides": _slides_for(db, report, snapshot), "selectedSections": composer.current_sections(snapshot)}
 
 
 @router.put("/{snapshot_id}/composer")
@@ -324,19 +490,19 @@ def set_composer(
     db: Session = Depends(get_db),
 ):
     """Save which sections and which individual figures the report shows."""
-    report = _load_draft(client_id, snapshot_id, db)
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
     if report.status == ReportStatus.published:
         raise HTTPException(status.HTTP_409_CONFLICT, "Published reports cannot be edited.")
 
     snapshot = dict(report.snapshot or {})
-    available = composer.section_availability(snapshot)
 
     if data.sections is not None:
-        current = composer.current_sections(snapshot)
-        snapshot["included_sections"] = {
-            k: bool(data.sections.get(k, current[k])) and available[k]
-            for k in composer.SECTION_KEYS
-        }
+        # Sections print with or without data; a person's switch is the only choice.
+        stored = dict(snapshot.get("included_sections") or {})
+        for k in composer.SECTION_KEYS:
+            if k in data.sections:
+                stored[k] = bool(data.sections[k])
+        snapshot["included_sections"] = stored
 
     if data.items is not None:
         current_items = composer.current_items(snapshot)
@@ -367,51 +533,110 @@ def set_composer_values(
     previous period implied by the existing delta, so an edited number can never
     sit beside a percentage that contradicts it.
     """
-    report = _load_draft(client_id, snapshot_id, db)
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
     if report.status == ReportStatus.published:
         raise HTTPException(status.HTTP_409_CONFLICT, "Published reports cannot be edited.")
 
     snapshot = dict(report.snapshot or {})
-    deltas = dict(snapshot.get("kpi_deltas") or {})
+    deltas = {k: dict(v) for k, v in (snapshot.get("kpi_deltas") or {}).items() if isinstance(v, dict)}
+    previous_values = {k: dict(v) for k, v in (snapshot.get("previous_values") or {}).items() if isinstance(v, dict)}
+    comparable = composer.comparable_keys()
     applied, rejected = [], []
 
+    def number(item_id: str, raw) -> float:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item_id} must be a number.")
+        if value < 0:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item_id} cannot be negative.")
+        return value
+
+    def settle(provider: str, key: str, previous: Optional[float]) -> None:
+        """Keep the change equal to this period minus the previous one."""
+        if previous is None:
+            return
+        current = float((snapshot.get(provider) or {}).get(key) or 0)
+        previous_values.setdefault(provider, {})[key] = previous
+        deltas.setdefault(provider, {})[key] = current - previous
+
+    # Where each keyword started. Kept in the draft; publishing saves it on
+    # the keyword, so every later report starts from the same place.
     for item_id, raw in data.edits.items():
-        parts = item_id.split(".")
-        is_headline = len(parts) == 2 and parts[0] in composer.HEADLINE
-
-        if is_headline:
-            provider, key = parts
-            try:
-                new_value = float(raw)
-            except (TypeError, ValueError):
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item_id} must be a number.")
-            if new_value < 0:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item_id} cannot be negative.")
-
-            old_value = float((snapshot.get(provider) or {}).get(key) or 0)
-            provider_deltas = dict(deltas.get(provider) or {})
-            if key in provider_deltas:
-                previous = old_value - float(provider_deltas.get(key) or 0)
-                provider_deltas[key] = new_value - previous
-                deltas[provider] = provider_deltas
-
-        if composer.write_edit(snapshot, item_id, raw):
+        if not item_id.startswith("init:rankings.kw."):
+            continue
+        ident = item_id[len("init:rankings.kw."):]
+        if composer.write_initial_position(snapshot, ident, number(item_id, raw)):
             applied.append(item_id)
         else:
             rejected.append(item_id)
 
-    # Edits the person chose to carry back into the saved data.
-    wrote_back = []
-    for item_id in data.writeBack or []:
-        if item_id in applied and _write_back(db, client_id, report, snapshot, item_id, data.edits.get(item_id)):
-            wrote_back.append(item_id)
+    # Last period's figures first, so an edit to both lands on the new pair.
+    for item_id, raw in data.edits.items():
+        if not item_id.startswith("prev:"):
+            continue
+        if item_id.startswith("prev:ga4.lead."):
+            if composer.write_previous_lead(snapshot, item_id[len("prev:ga4.lead."):], number(item_id, raw)):
+                applied.append(item_id)
+            else:
+                rejected.append(item_id)
+            continue
+        if item_id.startswith("prev:rankings.kw."):
+            if composer.write_previous_position(snapshot, item_id[len("prev:rankings.kw."):], number(item_id, raw)):
+                applied.append(item_id)
+            else:
+                rejected.append(item_id)
+            continue
+        provider, _, key = item_id[5:].partition(".")
+        if key not in comparable.get(provider, []):
+            rejected.append(item_id)
+            continue
+        snapshot["previous_values"] = previous_values
+        settle(provider, key, number(item_id, raw))
+        applied.append(item_id)
+
+    for item_id, raw in data.edits.items():
+        if item_id.startswith(("prev:", "init:")):
+            continue
+        provider, _, key = item_id.partition(".")
+        pairs = key in comparable.get(provider, [])
+        if pairs:
+            number(item_id, raw)
+            snapshot["previous_values"] = previous_values
+            snapshot["kpi_deltas"] = deltas
+            before = composer.previous_value(snapshot, provider, key)
+
+        if composer.write_edit(snapshot, item_id, raw):
+            applied.append(item_id)
+            if pairs:
+                settle(provider, key, before)
+        else:
+            rejected.append(item_id)
+
+    snapshot["previous_values"] = previous_values
+    # Keyword positions changed: the ranking summary follows them.
+    if any(i.startswith(("rankings.kw.", "prev:rankings.kw.")) for i in applied):
+        rankings = dict(snapshot.get("rankings") or {})
+        rankings["summary"] = composer.ranking_summary(rankings.get("keywords") or [], rankings.get("summary_overrides"))
+        snapshot["rankings"] = rankings
+    # Once a previous figure is known, the report says what it compares with.
+    if any(v for block in previous_values.values() for v in block.values()):
+        period = dict(snapshot.get("period") or {})
+        compare = dict(period.get("compare") or {})
+        if not compare.get("hasData"):
+            compare["hasData"] = True
+            period["compare"] = compare
+            snapshot["period"] = period
 
     snapshot["kpi_deltas"] = deltas
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
 
-    return {"applied": applied, "rejected": rejected, "wroteBack": wrote_back, "items": composer.enumerate_items(snapshot)}
+    return {"applied": applied, "rejected": rejected, "items": composer.enumerate_items(snapshot),
+            "available": composer.section_availability(snapshot),
+            "selectedSections": composer.current_sections(snapshot),
+            "kpiCards": _kpi_cards(snapshot), "slides": _slides_for(db, report, snapshot)}
 
 
 @router.post("/{snapshot_id}/composer/suggest")
@@ -425,7 +650,7 @@ def suggest_composer(
 
     Nothing is saved here — the result is handed back for the user to confirm.
     """
-    report = _load_draft(client_id, snapshot_id, db)
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
     snapshot = report.snapshot or {}
 
     try:
@@ -440,11 +665,11 @@ def suggest_composer(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e))
 
 
-COVER_MAX_BYTES = 5 * 1024 * 1024
+COVER_MAX_BYTES = settings.MAX_IMAGE_MB * 1024 * 1024
 
 
 def _load_editable(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session) -> ReportSnapshot:
-    report = _load_draft(client_id, snapshot_id, db)
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
     if report.status == ReportStatus.published:
         raise HTTPException(status.HTTP_409_CONFLICT, "Published reports cannot be edited.")
     return report
@@ -461,21 +686,392 @@ def _sniff_image(data: bytes) -> Optional[str]:
     return None
 
 
+class RankSummaryEdit(BaseModel):
+    bands: dict[str, dict[str, Optional[float]]] = {}
+    moves: dict[str, Optional[float]] = {}
+
+
+@router.put("/{snapshot_id}/rank-summary")
+def set_rank_summary(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: RankSummaryEdit, db: Session = Depends(get_db)):
+    """Figures typed over the ranking summary. A band or count left blank goes
+    back to being worked out from the keywords."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    rankings = dict(snapshot.get("rankings") or {})
+    overrides = composer.clean_rank_overrides({"bands": data.bands, "moves": data.moves})
+    rankings["summary_overrides"] = overrides
+    rankings["summary"] = composer.ranking_summary(rankings.get("keywords") or [], overrides)
+    snapshot["rankings"] = rankings
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"overrides": overrides, "summary": rankings["summary"]}
+
+
+class NewKeyword(BaseModel):
+    term: str
+    position: Optional[int] = None
+    previous: Optional[int] = None
+    initial: Optional[int] = None
+    search_volume: Optional[int] = None
+
+
+@router.post("/{snapshot_id}/keywords")
+def add_report_keyword(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: NewKeyword, db: Session = Depends(get_db)):
+    """Add a keyword from the builder. It lives in this draft; publishing the
+    report makes it one of the client's tracked keywords."""
+    report = _load_editable(client_id, snapshot_id, db)
+    term = " ".join(data.term.split())[:200]
+    if not term:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Type the keyword.")
+    for n in (data.position, data.previous, data.initial, data.search_volume):
+        if n is not None and n < 0:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Positions cannot be negative.")
+
+    snapshot = dict(report.snapshot or {})
+    rankings = dict(snapshot.get("rankings") or {})
+    keywords = list(rankings.get("keywords") or [])
+    if any(str(k.get("term") or "").strip().lower() == term.lower() for k in keywords):
+        raise HTTPException(status.HTTP_409_CONFLICT, f"“{term}” is already in this report.")
+
+    # A keyword the client already tracks keeps its id; a new one is named
+    # until publishing gives it one.
+    known = db.execute(
+        select(Keyword).where(Keyword.client_id == client_id, func.lower(Keyword.term) == term.lower())
+    ).scalars().first()
+    initial = data.initial or (known.initial_rank if known else None)
+    keywords.append({
+        "keyword_id": str(known.id) if known else f"new-{uuid.uuid4().hex[:12]}",
+        "term": term,
+        "position": data.position or None,
+        "previous_position": data.previous or None,
+        "initial_rank": initial,
+        "search_volume": data.search_volume if data.search_volume is not None else (known.search_volume if known else None),
+        "change": (initial - data.position) if initial and data.position else None,
+        "history": {},
+    })
+    rankings["keywords"] = keywords
+    rankings["summary"] = composer.ranking_summary(keywords, rankings.get("summary_overrides"))
+    snapshot["rankings"] = rankings
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return get_composer(client_id, snapshot_id, db)
+
+
+class NewPrompt(BaseModel):
+    prompt: str
+    results: dict[str, Optional[bool]] = {}
+
+
+@router.post("/{snapshot_id}/ai-prompts")
+def add_report_prompt(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: NewPrompt, db: Session = Depends(get_db)):
+    """Add an AI visibility prompt from the builder, with whether each
+    assistant named the brand. It lives in this draft; publishing the report
+    makes it one of the client's tracked prompts."""
+    report = _load_editable(client_id, snapshot_id, db)
+    text_ = " ".join(data.prompt.split())[:300]
+    if not text_:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Type the prompt.")
+    results = {}
+    for name, seen in data.results.items():
+        try:
+            results[AiPlatform(name).value] = seen
+        except ValueError:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown assistant: {name}.")
+    if not results:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Mark at least one assistant.")
+
+    snapshot = dict(report.snapshot or {})
+    rows = list(snapshot.get("ai_visibility") or [])
+    if any((r.get("prompt") or "").strip().lower() == text_.lower() for r in rows):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That prompt is already in this report.")
+
+    known = db.execute(
+        select(AiPrompt).where(AiPrompt.client_id == client_id, func.lower(AiPrompt.prompt_text) == text_.lower())
+    ).scalars().first()
+    ident = str(known.id) if known else f"new-{uuid.uuid4().hex[:12]}"
+    # Answers given here are this month's, so the whole grid now stands.
+    rows = [{k: v for k, v in r.items() if k != "unchecked"} for r in rows]
+    for platform, seen in results.items():
+        rows.append({"prompt_id": ident, "platform": platform, "mentioned": bool(seen),
+                     "cited_pages": None, "prompt": text_})
+
+    snapshot["ai_visibility"] = rows
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return get_composer(client_id, snapshot_id, db)
+
+
+class AiSummaryEdit(BaseModel):
+    score: Optional[float] = None
+    mentions: Optional[float] = None
+    cited: Optional[float] = None
+    engines: dict[str, dict[str, Optional[float]]] = {}
+
+
+@router.post("/{snapshot_id}/ai-summary/read")
+async def read_ai_summary(client_id: uuid.UUID, snapshot_id: uuid.UUID, file: UploadFile = File(...),
+                          db: Session = Depends(get_db)):
+    """Read the AI results figures off a screenshot of an AI-visibility tool
+    and fill them in. Each one stays editable; the screenshot is kept with the
+    report so the figures can be checked against it."""
+    from app.services.openai_service import read_ai_summary_screenshot
+    from app.services.slide_deck import ai_summary
+    report = _load_editable(client_id, snapshot_id, db)
+    data = await file.read(COVER_MAX_BYTES + 1)
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The file is empty.")
+    if len(data) > COVER_MAX_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"The screenshot must be {settings.MAX_IMAGE_MB} MB or smaller.")
+    mime = _sniff_image(data)
+    if not mime:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Use a PNG, JPEG or WebP screenshot.")
+    try:
+        read = read_ai_summary_screenshot(data, mime)
+    except Exception as e:
+        logger.warning("AI summary screenshot could not be read: %s", e)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "The screenshot could not be read right now — try again, or type the figures.")
+    if not read:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No AI visibility figures were found in that screenshot.")
+
+    img = _find_image(db, report.id, "ai_summary", 0)
+    if img is None:
+        img = ReportImage(report_id=report.id, section="ai_summary", slot=0, mime=mime, data=data)
+        db.add(img)
+    else:
+        img.mime, img.data = mime, data
+    snapshot = dict(report.snapshot or {})
+    typed = dict(snapshot.get("ai_summary") or {})
+    for k in ("score", "mentions", "cited"):
+        if read.get(k) is not None:
+            typed[k] = read[k]
+    if read.get("engines"):
+        typed["engines"] = {**(typed.get("engines") or {}), **read["engines"]}
+    snapshot["ai_summary"] = typed
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"read": read, "typed": typed, "shown": ai_summary(snapshot)}
+
+
+@router.put("/{snapshot_id}/ai-summary")
+def set_ai_summary(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: AiSummaryEdit, db: Session = Depends(get_db)):
+    """AI Visibility score, total mentions, total cited pages and each
+    assistant's figures. A blank figure goes back to being worked out."""
+    from app.services.slide_deck import AI_SUMMARY_ENGINES, ai_summary
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+
+    def num(v):
+        if v is None:
+            return None
+        if v < 0:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Figures cannot be negative.")
+        return int(round(v))
+
+    from app.services.slide_deck import ENGINE_NAME
+    known = {k for k, _ in AI_SUMMARY_ENGINES} | set(ENGINE_NAME)
+    engines = {}
+    for key, cell in data.engines.items():
+        if key not in known:
+            continue
+        kept = {f: num(cell.get(f)) for f in ("mentions", "cited") if cell.get(f) is not None}
+        if kept:
+            engines[key] = kept
+    typed = {k: num(v) for k, v in (("score", data.score), ("mentions", data.mentions), ("cited", data.cited)) if v is not None}
+    if typed.get("score") is not None and typed["score"] > 100:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "AI Visibility is a score out of 100.")
+    if engines:
+        typed["engines"] = engines
+    snapshot["ai_summary"] = typed
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"typed": typed, "shown": ai_summary(snapshot)}
+
+
+class ListEdit(BaseModel):
+    path: str
+    rows: list[dict[str, Any]]
+
+
+@router.put("/{snapshot_id}/lists")
+def set_report_list(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: ListEdit, db: Session = Depends(get_db)):
+    """Replace one breakdown table (top pages, countries, channels…) on a draft."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    if not composer.write_list(snapshot, data.path, data.rows):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That table can't be edited.")
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"path": data.path, "rows": composer.list_rows(snapshot, data.path)}
+
+
 @router.put("/{snapshot_id}/copy")
 def set_report_copy(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: CopyUpdate, db: Session = Depends(get_db)):
     """Headings, subtitles and the cover's brand line. A blank value restores the default."""
     report = _load_editable(client_id, snapshot_id, db)
     snapshot = dict(report.snapshot or {})
-    snapshot["copy"] = composer.merge_copy(snapshot, data.brand_line, data.titles, data.subtitles)
+    before = dict(((snapshot.get("copy") or {}).get("subtitles")) or {})
+    snapshot["copy"] = composer.merge_copy(
+        snapshot, data.brand_line, data.titles, data.subtitles, data.eyebrows, data.texts
+    )
+    after = dict(((snapshot.get("copy") or {}).get("subtitles")) or {})
+    changed = {k for k in set(before) | set(after) if before.get(k) != after.get(k)}
+    if changed:
+        snapshot["subtitle_ai"] = sorted(set(snapshot.get("subtitle_ai") or []) - changed)
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
-    return {"copy": composer.current_copy(snapshot)}
+    return {"copy": composer.current_copy(snapshot), "subtitleAi": snapshot.get("subtitle_ai") or []}
+
+
+def draft_plan(client_name: str, snapshot: dict, force: bool = False) -> bool:
+    """Fill the Next Plan of Action with an AI draft, in place. A plan someone
+    has edited is never replaced unless `force` (the builder's Rewrite button).
+    Never blocks: if the AI is unavailable the plan stays as it was."""
+    stored = snapshot.get("next_month_plan") if isinstance(snapshot.get("next_month_plan"), dict) else {}
+    if (stored.get("now") or stored.get("next")) and not force:
+        return False
+    try:
+        plan = generate_next_plan(client_name, (snapshot.get("period") or {}).get("label", ""),
+                                  composer.apply_selection(snapshot))
+    except Exception:
+        logger.exception("Next plan of action could not be written.")
+        return False
+    if not plan:
+        return False
+    snapshot["next_month_plan"] = plan
+    snapshot["plan_source"] = "ai"
+    return True
+
+
+def autofill_text(client_name: str, snapshot: dict) -> dict[str, int]:
+    """Fill every empty text box the builder shows with an AI draft, in place:
+    each slide's summary, each slide's subtitle, and the next plan of action.
+    Nothing a person typed is replaced. A subtitle is drafted once — if it is
+    then cleared on purpose, it stays clear. Never blocks: if the AI is
+    unavailable the boxes simply stay empty."""
+    filled = {"summaries": 0, "subtitles": 0, "plan": 0}
+    available = composer.narration_availability(snapshot)
+
+    # Summaries: every block with figures and no text yet.
+    narration = dict(snapshot.get("narration") or {})
+    source = dict(snapshot.get("narration_source") or {})
+    empty = [k for k in composer.NARRATION_KEYS if available.get(k) and not str(narration.get(k) or "").strip()]
+    if empty:
+        written = _write_narration(client_name, snapshot, empty)
+        for key, text_ in written.items():
+            narration[key], source[key] = text_, composer.NARRATION_AI
+        snapshot["narration"], snapshot["narration_source"] = narration, source
+        filled["summaries"] = len(written)
+
+    # Subtitles: blocks with figures, no subtitle, never drafted before.
+    copy_ = dict(snapshot.get("copy") or {})
+    subtitles = dict(copy_.get("subtitles") or {})
+    drafted = set(snapshot.get("subtitles_drafted") or [])
+    todo = [k for k in composer.NARRATION_KEYS
+            if available.get(k) and not str(subtitles.get(k) or "").strip() and k not in drafted]
+    if todo:
+        try:
+            lines = generate_slide_subtitles(client_name, (snapshot.get("period") or {}).get("label", ""),
+                                             composer.apply_selection(snapshot), todo)
+        except Exception:
+            logger.exception("Slide subtitles could not be written.")
+            lines = {}
+        if lines:
+            subtitles.update(lines)
+            copy_["subtitles"] = subtitles
+            snapshot["copy"] = copy_
+            snapshot["subtitles_drafted"] = sorted(drafted | set(lines))
+            snapshot["subtitle_ai"] = sorted(set(snapshot.get("subtitle_ai") or []) | set(lines))
+            filled["subtitles"] = len(lines)
+
+    # The closing plan, when it is empty.
+    if draft_plan(client_name, snapshot):
+        filled["plan"] = 1
+    return filled
+
+
+@router.post("/{snapshot_id}/ai-text/refresh")
+def refresh_ai_text(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Rewrite everything the AI wrote — summaries, subtitles, the plan — from
+    the figures as they are now. Text a person typed or edited is left alone."""
+    report = _load_editable(client_id, snapshot_id, db)
+    client = db.get(Client, client_id)
+    name = client.name if client else ""
+    snapshot = dict(report.snapshot or {})
+    draft_narration(name, snapshot)
+    ai_subs = set(snapshot.get("subtitle_ai") or [])
+    if ai_subs:
+        copy_ = dict(snapshot.get("copy") or {})
+        copy_["subtitles"] = {k: v for k, v in (copy_.get("subtitles") or {}).items() if k not in ai_subs}
+        snapshot["copy"] = copy_
+        snapshot["subtitles_drafted"] = [k for k in (snapshot.get("subtitles_drafted") or []) if k not in ai_subs]
+        snapshot["subtitle_ai"] = []
+    autofill_text(name, snapshot)
+    if snapshot.get("plan_source") == "ai" or not (snapshot.get("next_month_plan") or {}).get("now"):
+        draft_plan(name, snapshot, force=True)
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return get_composer(client_id, snapshot_id, db)
+
+
+@router.post("/{snapshot_id}/plan/draft")
+def draft_report_plan(client_id: uuid.UUID, snapshot_id: uuid.UUID, force: bool = False, db: Session = Depends(get_db)):
+    """Write the Next Plan of Action with AI. Without `force`, only an empty
+    plan is filled — the builder calls this when the step is first opened."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    client = db.get(Client, client_id)
+    if not draft_plan(client.name if client else "", snapshot, force=force):
+        stored = snapshot.get("next_month_plan")
+        if force and not (isinstance(stored, dict) and (stored.get("now") or stored.get("next"))):
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "The plan could not be written right now — try again.")
+        return {"plan": stored or {"now": [], "next": [], "lede": ""}, "source": snapshot.get("plan_source"), "written": False}
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"plan": snapshot["next_month_plan"], "source": "ai", "written": True}
+
+
+@router.put("/{snapshot_id}/plan")
+def set_report_plan(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: PlanUpdate, db: Session = Depends(get_db)):
+    """The Next Plan of Action slide. Rows without a title are dropped."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    stored = snapshot.get("next_month_plan")
+    plan = dict(stored) if isinstance(stored, dict) else {}
+
+    def lane(rows: list[PlanItem]) -> list[dict]:
+        return [
+            {"title": r.title.strip()[:90], "detail": r.detail.strip()[:200]}
+            for r in rows if r.title.strip()
+        ][:3]
+
+    if data.now is not None:
+        plan["now"] = lane(data.now)
+    if data.next is not None:
+        plan["next"] = lane(data.next)
+    if data.lede is not None:
+        plan["lede"] = data.lede.strip()[:240]
+
+    if plan != stored:
+        snapshot["plan_source"] = "edited"
+    snapshot["next_month_plan"] = plan
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"plan": plan, "source": snapshot.get("plan_source")}
 
 
 @router.get("/{snapshot_id}/cover")
 def get_report_cover(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
-    report = _load_draft(client_id, snapshot_id, db)
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
     if not report.cover_mime or not report.cover_image:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No cover screenshot.")
     return Response(content=report.cover_image, media_type=report.cover_mime, headers={"Cache-Control": "no-store"})
@@ -513,53 +1109,152 @@ def delete_report_cover(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Sessio
     return {"hasCover": False}
 
 
+# Report slides that carry their own screenshots, and how many each holds.
+# ai_summary: the AI-visibility tool screenshot its figures were read from (not printed).
+IMAGE_SLOTS = {"gbp": 5, "ai": 6, "ai_summary": 1}
+
+
+class ImageCaption(BaseModel):
+    caption: str = ""
+
+
+def _image_slot(section: str, slot: int) -> None:
+    if section not in IMAGE_SLOTS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This slide has no screenshots.")
+    if not 0 <= slot < IMAGE_SLOTS[section]:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Slots run from 1 to {IMAGE_SLOTS[section]}.")
+
+
+def _find_image(db: Session, report_id: uuid.UUID, section: str, slot: int) -> Optional[ReportImage]:
+    return db.execute(select(ReportImage).where(
+        ReportImage.report_id == report_id, ReportImage.section == section, ReportImage.slot == slot,
+    )).scalar_one_or_none()
+
+
+@router.get("/{snapshot_id}/images/{section}")
+def list_report_images(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, db: Session = Depends(get_db)):
+    """Every slot of a slide's screenshots, filled or not."""
+    _image_slot(section, 0)
+    report = _load_draft(client_id, snapshot_id, db)
+    found = {
+        img.slot: img for img in db.execute(
+            select(ReportImage).where(ReportImage.report_id == report.id, ReportImage.section == section)
+        ).scalars()
+    }
+    return [
+        {"slot": i, "hasImage": i in found, "caption": (found[i].caption or "") if i in found else ""}
+        for i in range(IMAGE_SLOTS[section])
+    ]
+
+
+@router.get("/{snapshot_id}/images/{section}/{slot}")
+def get_report_image(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, slot: int,
+                     db: Session = Depends(get_db)):
+    _image_slot(section, slot)
+    report = _load_draft(client_id, snapshot_id, db)
+    img = _find_image(db, report.id, section, slot)
+    if not img:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No screenshot in this slot.")
+    return Response(content=img.data, media_type=img.mime, headers={"Cache-Control": "no-store"})
+
+
+@router.put("/{snapshot_id}/images/{section}/{slot}")
+async def set_report_image(
+    client_id: uuid.UUID,
+    snapshot_id: uuid.UUID,
+    section: str,
+    slot: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """A screenshot for one slot of a slide. PNG, JPEG or WebP, up to 5 MB.
+    Replacing an image keeps the slot's caption."""
+    _image_slot(section, slot)
+    report = _load_editable(client_id, snapshot_id, db)
+    data = await file.read(COVER_MAX_BYTES + 1)
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The file is empty.")
+    if len(data) > COVER_MAX_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Each screenshot must be 5 MB or smaller.")
+    mime = _sniff_image(data)
+    if not mime:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Screenshots must be PNG, JPEG or WebP images.")
+    img = _find_image(db, report.id, section, slot)
+    if img is None:
+        img = ReportImage(report_id=report.id, section=section, slot=slot)
+        db.add(img)
+    img.data = data
+    img.mime = mime
+    db.commit()
+    return {"slot": slot, "hasImage": True, "caption": img.caption or ""}
+
+
+@router.patch("/{snapshot_id}/images/{section}/{slot}")
+def set_report_image_caption(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, slot: int,
+                             body: ImageCaption, db: Session = Depends(get_db)):
+    _image_slot(section, slot)
+    report = _load_editable(client_id, snapshot_id, db)
+    img = _find_image(db, report.id, section, slot)
+    if not img:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Add a screenshot before its caption.")
+    img.caption = body.caption.strip()[:160] or None
+    db.commit()
+    return {"slot": slot, "hasImage": True, "caption": img.caption or ""}
+
+
+@router.delete("/{snapshot_id}/images/{section}/{slot}")
+def delete_report_image(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, slot: int,
+                        db: Session = Depends(get_db)):
+    _image_slot(section, slot)
+    report = _load_editable(client_id, snapshot_id, db)
+    img = _find_image(db, report.id, section, slot)
+    if img:
+        db.delete(img)
+        db.commit()
+    return {"slot": slot, "hasImage": False, "caption": ""}
+
+
 @router.post("/{snapshot_id}/fetch/{provider}")
 def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str, db: Session = Depends(get_db)):
-    """Pull fresh Search Console or Analytics figures into a draft, for its own window.
+    """Pull fresh Search Console, Analytics or Business Profile figures into a
+    draft, for its own window and the one it is compared with.
 
-    Only that provider's block and its period-on-period deltas change. The
-    selection, the other sections and hand edits elsewhere are left alone.
+    Only that provider's block and its comparison change. Nothing is stored
+    anywhere but this draft.
     """
-    if provider not in ("gsc", "ga4"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Only Search Console and Analytics can be fetched.")
+    from app.tasks.reports import pull_for_report
+    if provider not in ("gsc", "ga4", "gbp"):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Only Search Console, Analytics and Business Profile can be fetched.")
     report = _load_editable(client_id, snapshot_id, db)
 
-    name = "Search Console" if provider == "gsc" else "Google Analytics"
+    name = {"gsc": "Search Console", "ga4": "Google Analytics", "gbp": "Business Profile"}[provider]
     conn = db.execute(
         select(Connection).where(Connection.client_id == client_id, Connection.provider == ProviderType(provider))
     ).scalars().first()
     if not conn or conn.status != ConnectionStatus.connected:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{name} is not connected for this client.")
 
-    # Only the current cycle is pulled; older cycles stay as stored.
-    end = report.end_date
-    start = end - datetime.timedelta(days=periods_svc.CYCLE_DAYS - 1)
-    try:
-        if provider == "gsc":
-            live_data = pull_gsc_data(db, conn.id, start, end)
-            block = {**live_data["totals"], "top_pages": live_data["top_pages"]}
-        else:
-            live_data = pull_ga4_data(db, conn.id, start, end)
-            block = {
-                **live_data["totals"],
-                "traffic_sources": live_data["traffic_sources"],
-                "devices": live_data["devices"],
-                "top_pages": live_data["top_pages"],
-                "countries": live_data.get("countries", []),
-            }
-    except Exception as e:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not fetch from {name}: {e}")
+    months = ((report.snapshot or {}).get("period") or {}).get("months") or 1
+    rows, live = pull_for_report(db, client_id, report.end_date, months, providers=(provider,))
+    if not rows:
+        db.refresh(conn)
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not fetch from {name}: {conn.last_error or 'no data returned'}")
 
-    # The pull commits on the same session, which expires this row — reload
-    # it before writing, or the write would be based on stale JSON.
-    db.refresh(report)
+    # The pull committed (the connection's health), which released the row;
+    # take it again so an edit made meanwhile is built on, not overwritten.
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
     snapshot = dict(report.snapshot or {})
-    live = dict(_live_of(snapshot))
-    live[provider] = block
-    months = (snapshot.get("period") or {}).get("months") or 1
-    fresh = periods_svc.build_report_data(db, client_id, report.end_date, months, live=live)
+    current = dict(_live_of(snapshot))
+    current.pop(provider, None)
+    current.update(live)
+    with periods_svc.pulled(rows):
+        fresh = periods_svc.build_report_data(db, client_id, report.end_date, months, live=current,
+                                              with_page_images=provider == "gsc")
     snapshot = periods_svc.merge_section(snapshot, fresh, provider)
-    snapshot["live"] = {**live, **(snapshot.get("live") or {})}
+    snapshot["live"] = {**(snapshot.get("live") or {}), **{k: v for k, v in (fresh.get("live") or {}).items() if k == provider}}
+    provenance = dict(snapshot.get("provenance") or {})
+    provenance[provider] = (fresh.get("provenance") or {}).get(provider)
+    snapshot["provenance"] = provenance
 
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
@@ -582,21 +1277,20 @@ def _legacy_period(report: ReportSnapshot) -> dict:
 
 
 def _live_of(snapshot: dict) -> dict:
-    """The current cycle's figures as Google gave them. Drafts made before
-    combined reports kept those as the snapshot's own blocks."""
-    live = snapshot.get("live")
-    if isinstance(live, dict) and live:
-        return live
+    """The current month's blocks as the draft has them. A one-month draft's
+    own blocks are that month, with every edit made to them; a combined one
+    keeps the current month apart under `live`."""
     if ((snapshot.get("period") or {}).get("months") or 1) == 1:
-        return {p: snapshot[p] for p in ("gsc", "ga4") if periods_svc.has_numbers(p, snapshot.get(p))}
-    return {}
+        return {p: dict(snapshot[p]) for p in ("gsc", "ga4", "gbp") if isinstance(snapshot.get(p), dict) and snapshot.get(p)}
+    live = snapshot.get("live")
+    return dict(live) if isinstance(live, dict) else {}
 
 
 def _write_narration(client_name: str, snapshot: dict, sections: Optional[list[str]] = None) -> dict:
     """Section commentary for every section that has something to say.
     Never blocks a report: if the AI is unavailable the sections stay empty."""
-    available = composer.section_availability(snapshot)
-    wanted = [s for s in (sections or composer.SECTION_KEYS) if available.get(s)]
+    available = composer.narration_availability(snapshot)
+    wanted = [s for s in (sections or composer.NARRATION_KEYS) if available.get(s)]
     if not wanted:
         return {}
     try:
@@ -609,88 +1303,57 @@ def _write_narration(client_name: str, snapshot: dict, sections: Optional[list[s
         return {}
 
 
-def _write_back(db: Session, client_id: uuid.UUID, report: ReportSnapshot, snapshot: dict, item_id: str, value: Any) -> bool:
-    """Carry one report edit back into the saved data it came from."""
-    start, end = report.start_date, report.end_date
-    month_start = start.replace(day=1)
-    try:
-        if item_id.startswith("rankings.kw."):
-            keyword_id = uuid.UUID(item_id.split(".", 2)[2])
-            keyword = db.get(Keyword, keyword_id)
-            if not keyword or keyword.client_id != client_id:
-                return False
-            row = db.execute(
-                select(Ranking).where(Ranking.keyword_id == keyword_id, Ranking.captured_on >= start, Ranking.captured_on <= end)
-                .order_by(Ranking.captured_on.desc())
-            ).scalars().first()
-            if row:
-                row.position = int(float(value))
-            else:
-                db.add(Ranking(keyword_id=keyword_id, captured_on=end, position=int(float(value)), source=RankingSource.manual))
-            return True
+def clear_ai_text(snapshot: dict) -> None:
+    """Remove every summary, subtitle and plan the AI wrote, in place."""
+    narration = dict(snapshot.get("narration") or {})
+    source = dict(snapshot.get("narration_source") or {})
+    for key, by in list(source.items()):
+        if by == composer.NARRATION_AI:
+            narration.pop(key, None)
+            source.pop(key, None)
+    snapshot["narration"], snapshot["narration_source"] = narration, source
+    ai_subs = set(snapshot.get("subtitle_ai") or [])
+    if ai_subs:
+        copy_ = dict(snapshot.get("copy") or {})
+        copy_["subtitles"] = {k: v for k, v in (copy_.get("subtitles") or {}).items() if k not in ai_subs}
+        snapshot["copy"] = copy_
+        snapshot["subtitles_drafted"] = [k for k in (snapshot.get("subtitles_drafted") or []) if k not in ai_subs]
+        snapshot["subtitle_ai"] = []
+    if snapshot.get("plan_source") == "ai":
+        snapshot["next_month_plan"] = {"now": [], "next": [], "lede": ""}
+        snapshot["plan_source"] = None
 
-        if item_id.startswith("gbp."):
-            key = item_id.split(".", 1)[1]
-            rows = db.execute(
-                select(Metric).where(
-                    Metric.client_id == client_id, Metric.provider == "gbp", Metric.metric_key == key,
-                    or_(Metric.dimension_key.is_(None), Metric.dimension_key == ""),
-                    Metric.captured_on >= month_start, Metric.captured_on <= end,
-                ).order_by(Metric.captured_on.desc())
-            ).scalars().all()
-            target = float(value)
-            if rows:
-                # Months before the latest keep their values; the latest takes the difference.
-                others = sum(float(r.value or 0) for r in rows[1:])
-                rows[0].value = max(target - others, 0)
-            else:
-                # Stored the way sheet uploads store it, so a later upload for
-                # the month updates this row instead of adding a second one.
-                db.add(Metric(client_id=client_id, provider="gbp", metric_key=key, dimension_key="",
-                              dimension_value="", captured_on=end.replace(day=1), value=target, source=MetricSource.manual))
-            return True
 
-        if item_id.startswith("links."):
-            row = db.get(Link, uuid.UUID(item_id.split(".", 1)[1]))
-            if not row or row.client_id != client_id:
-                return False
-            row.count = int(float(value))
-            return True
+def draft_narration(client_name: str, snapshot: dict) -> None:
+    """Draft the commentary this report is missing, in place.
 
-        if item_id.startswith("work.act."):
-            idx = int(item_id.split(".")[2])
-            acts = snapshot.get("activities") or []
-            ident = acts[idx].get("id") if 0 <= idx < len(acts) else None
-            row = db.get(Activity, uuid.UUID(ident)) if ident else None
-            if not row or row.client_id != client_id:
-                return False
-            row.count = int(float(value))
-            return True
+    Only ever fills or refreshes AI-written text. A paragraph someone typed is
+    left exactly as they left it, however much the figures around it moved.
+    """
+    existing = dict(snapshot.get("narration") or {})
+    source = dict(snapshot.get("narration_source") or {})
+    keep_written = {k for k, v in source.items() if v == composer.NARRATION_EDITED and existing.get(k)}
 
-        if item_id.startswith("ai_visibility."):
-            _, prompt_id, platform = item_id.split(".", 2)
-            rows = db.execute(
-                select(AiMention).where(
-                    AiMention.client_id == client_id, AiMention.prompt_id == uuid.UUID(prompt_id),
-                    AiMention.platform == AiPlatform(platform),
-                    AiMention.month >= month_start, AiMention.month <= end,
-                )
-            ).scalars().all()
-            for row in rows:
-                row.mentioned = bool(value)
-            return bool(rows)
-    except (ValueError, TypeError, IndexError):
-        return False
-    return False
+    wanted = [k for k in composer.NARRATION_KEYS if k not in keep_written]
+    written = _write_narration(client_name, snapshot, wanted)
+    if not written:
+        snapshot["narration"], snapshot["narration_source"] = existing, source
+        return
+
+    for key, text_ in written.items():
+        existing[key] = text_
+        source[key] = composer.NARRATION_AI
+    snapshot["narration"] = existing
+    snapshot["narration_source"] = source
 
 
 @router.post("/{snapshot_id}/period")
 def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: PeriodChange, db: Session = Depends(get_db)):
     """Change how many months a draft covers.
 
-    Nothing is pulled: the current cycle was fetched when the draft was made,
-    and older cycles are read from stored data. Figures are recalculated;
-    headings and ticks are kept.
+    Nothing is pulled: the current month is the draft's own, and every other
+    month — in the span and in the span it is compared with — is read from
+    its saved (published) report. Headings and ticks are kept.
     """
     report = _load_editable(client_id, snapshot_id, db)
     available = len(periods_svc.timeline(db, client_id, report.end_date))
@@ -700,11 +1363,80 @@ def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: Per
             f"Only {available} month{'s' if available != 1 else ''} of data can be combined for this report.",
         )
 
+    # Nothing is pulled: this month is the draft's own, the others are saved.
     snapshot = dict(report.snapshot or {})
-    fresh = periods_svc.build_report_data(db, client_id, report.end_date, data.months, live=_live_of(snapshot))
-    for keep in ("included_sections", "included_items", "copy", "narration"):
+    fresh = periods_svc.build_report_data(db, client_id, report.end_date, data.months, live=_live_of(snapshot),
+                                          with_page_images=True)
+    # What the builder entered for this month is the report's own, whatever
+    # span it covers: keywords, prompt checks, links, work, words.
+    for keep in ("included_sections", "included_items", "copy", "narration", "narration_source",
+                 "rankings", "ai_visibility", "ai_summary", "links", "activities", "hidden_slides", "hidden_cards",
+                 "next_month_plan", "plan_source", "subtitle_ai", "subtitles_drafted"):
         if keep in snapshot:
             fresh[keep] = snapshot[keep]
+    # This month's own leads, typed or found — kept apart so the month can be
+    # published on its own whatever span the report covers.
+    was_span = ((snapshot.get("period") or {}).get("months") or 1) > 1
+    month_leads = snapshot.get("month_leads") if was_span else composer.lead_values(snapshot)
+    month_typed = snapshot.get("month_lead_overrides") if was_span \
+        else ((snapshot.get("ga4") or {}).get("lead_overrides") or {})
+    fresh["month_leads"] = month_leads or {}
+    fresh["month_lead_overrides"] = month_typed or {}
+    fresh.pop("span_links", None)
+    fresh.pop("span_activities", None)
+    ga4_block = dict(fresh.get("ga4") or {})
+    if data.months > 1:
+        from app.services import sheets as _sheets
+        cycles = periods_svc.report_cycles(report.end_date, data.months)[:-1]
+        wanted = {_sheets.month_of(end) for _, end in cycles}
+        earlier = sorted((r for m, r in _sheets.month_reports(db, client_id).items()
+                          if m in wanted and r.id != report.id), key=lambda r: r.end_date)
+        fresh["span_links"] = [{**l, "id": f"m{i}-{l.get('id') or j}"} for i, r in enumerate(earlier)
+                               for j, l in enumerate((r.snapshot or {}).get("links") or [])]
+        fresh["span_activities"] = [a for r in earlier for a in (r.snapshot or {}).get("activities") or []]
+        # Leads over the span: each month's own figures — typed or found in its
+        # events — added up, so a phone count typed in any month is kept.
+        totals = dict(month_leads or {})
+        per_month = [composer.lead_values(r.snapshot or {}) for r in earlier]
+        for vals in per_month:
+            for k, v in vals.items():
+                totals[k] = totals.get(k, 0) + v
+        ga4_block["lead_overrides"] = {k: round(v) for k, v in totals.items()}
+        # Each lead's change: this month against the earlier months' average,
+        # kept the way the slides read it (change ÷ (total − change)).
+        prev_leads = {}
+        for k, total in totals.items():
+            earlier_vals = [m.get(k, 0) for m in per_month]
+            now = (month_leads or {}).get(k)
+            avg = sum(earlier_vals) / len(earlier_vals) if earlier_vals else 0
+            if avg and now:
+                prev_leads[k] = total * avg / now
+        # The total on its own terms, not the sum of the per-type baselines.
+        now_all = sum((month_leads or {}).values())
+        avg_all = sum(sum(m.values()) for m in per_month) / len(per_month) if per_month else 0
+        if avg_all and now_all:
+            prev_leads["total"] = sum(totals.values()) * avg_all / now_all
+        pv = dict(fresh.get("previous_values") or {})
+        pv["leads"] = prev_leads
+        fresh["previous_values"] = pv
+    else:
+        ga4_block["lead_overrides"] = dict(month_typed or {})
+    fresh["ga4"] = ga4_block
+    if data.months > 1 and isinstance(fresh.get("rankings"), dict):
+        cycles = periods_svc.report_cycles(report.end_date, data.months)
+        periods_svc._add_cycle_positions(db, client_id, fresh["rankings"], cycles, periods_svc.cycle_labels(cycles))
+    # A one-month report keeps its own pages, queries and days; a longer one
+    # shows the combined months instead of one month's lists.
+    for key in ("trending_pages", "top_queries", "daily"):
+        cur = (snapshot.get("gsc") or {}).get(key) if data.months == 1 and (snapshot.get("period") or {}).get("months", 1) == 1 else None
+        if cur and isinstance(fresh.get("gsc"), dict) and not fresh["gsc"].get(key):
+            fresh["gsc"][key] = cur
+
+    # Every figure just changed, so text the AI wrote against the old ones
+    # would contradict the numbers beside it. It is cleared — not rewritten:
+    # the AI runs only when someone presses "Write with AI". Anything a
+    # person typed is theirs and is left exactly as they left it.
+    clear_ai_text(fresh)
 
     report.start_date = datetime.date.fromisoformat(fresh["period"]["start"])
     report.snapshot = fresh
@@ -713,24 +1445,62 @@ def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: Per
     return get_composer(client_id, snapshot_id, db)
 
 
-@router.post("/{snapshot_id}/refresh/{section}")
-def refresh_report_section(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, db: Session = Depends(get_db)):
-    """Re-read one section from saved data — straight after a sheet upload.
+UPLOAD_KINDS = ("gsc", "ga4", "gbp", "rankings", "ai_visibility", "links", "work")
 
-    Every other section, with its edits, is left as it was.
-    """
-    if section not in composer.SECTION_KEYS:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown section.")
+
+@router.post("/{snapshot_id}/upload/{kind}")
+async def upload_to_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, kind: str,
+                          file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Read a sheet into this draft only. Nothing is recorded for the client
+    until the report is published."""
+    from app.services import draft_uploads as up
+    from app.services import sheets
+    if kind not in UPLOAD_KINDS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown sheet.")
     report = _load_editable(client_id, snapshot_id, db)
+    content = await file.read(up.MAX_SHEET_BYTES + 1)
     snapshot = dict(report.snapshot or {})
     months = (snapshot.get("period") or {}).get("months") or 1
-    fresh = periods_svc.build_report_data(db, client_id, report.end_date, months, live=_live_of(snapshot))
-    snapshot = periods_svc.merge_section(snapshot, fresh, section)
+    month = sheets.report_month(report)
+    prev_month = (month - datetime.timedelta(days=1)).replace(day=1)
+    try:
+        table = up.read_table(file.filename or "", content)
+        if kind in up.METRIC_SHEETS:
+            start = periods_svc.cycle_bounds(report.end_date, 0)[0]
+            windows = [(start, report.end_date), periods_svc.previous_window(report.end_date, months)]
+            if kind == "gbp":
+                # Business Profile sheets are kept by month, dated the 1st.
+                windows = [(month, report.end_date), (prev_month, start - datetime.timedelta(days=1))]
+            rows = up.metric_rows(kind, table, windows)
+            if not rows:
+                raise up.SheetError(f"No rows fall in {periods_svc.short_range(*windows[1])} or "
+                                    f"{periods_svc.short_range(start, report.end_date)}.")
+            current = {k: v for k, v in _live_of(snapshot).items() if k != kind}
+            with periods_svc.pulled(rows):
+                fresh = periods_svc.build_report_data(db, client_id, report.end_date, months, live=current,
+                                                      with_page_images=False)
+            snapshot = periods_svc.merge_section(snapshot, fresh, kind)
+            done = len({r[1] for r in rows})
+            what = f"{done} day{'s' if done != 1 else ''}" if kind != "gbp" else f"{done} month{'s' if done != 1 else ''}"
+        elif kind == "rankings":
+            done = up.apply_rankings(snapshot, table, month, prev_month)
+            what = f"{done} keyword{'s' if done != 1 else ''}"
+        elif kind == "ai_visibility":
+            done = up.apply_ai(snapshot, table, month)
+            what = f"{done} prompt{'s' if done != 1 else ''}"
+        elif kind == "links":
+            done = up.apply_links(snapshot, table, month)
+            what = f"{done} link{'s' if done != 1 else ''}"
+        else:
+            done = up.apply_work(snapshot, table)
+            what = f"{done} task{'s' if done != 1 else ''}"
+    except up.SheetError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
 
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
-    return get_composer(client_id, snapshot_id, db)
+    return {**get_composer(client_id, snapshot_id, db), "uploaded": what}
 
 
 @router.put("/{snapshot_id}/narration")
@@ -739,20 +1509,31 @@ def set_report_narration(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: Nar
     report = _load_editable(client_id, snapshot_id, db)
     snapshot = dict(report.snapshot or {})
     narration = dict(snapshot.get("narration") or {})
+    source = dict(snapshot.get("narration_source") or {})
     for key, text_ in data.narration.items():
-        if key in composer.SECTION_KEYS:
-            narration[key] = str(text_ or "").strip()[:2000]
+        if key not in composer.NARRATION_KEYS:
+            continue
+        cleaned = str(text_ or "").strip()[:2000]
+        if cleaned == (narration.get(key) or ""):
+            continue
+        narration[key] = cleaned
+        # Clearing a section hands it back to the AI to draft again.
+        if cleaned:
+            source[key] = composer.NARRATION_EDITED
+        else:
+            source.pop(key, None)
     snapshot["narration"] = narration
+    snapshot["narration_source"] = source
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
-    return {"narration": narration}
+    return {"narration": narration, "narrationSource": source}
 
 
 @router.post("/{snapshot_id}/narration/{section}/regenerate")
 def regenerate_report_narration(client_id: uuid.UUID, snapshot_id: uuid.UUID, section: str, db: Session = Depends(get_db)):
     """Rewrite one section's commentary from its current — possibly edited — figures."""
-    if section not in composer.SECTION_KEYS:
+    if section not in composer.NARRATION_KEYS:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown section.")
     report = _load_editable(client_id, snapshot_id, db)
     snapshot = dict(report.snapshot or {})
@@ -769,27 +1550,55 @@ def regenerate_report_narration(client_id: uuid.UUID, snapshot_id: uuid.UUID, se
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The AI could not write this section just now. Try again.")
     text_ = written.get(section)
     if not text_:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "There is not enough data in this section to write about.")
+        # Two different failures, and telling them apart is the difference
+        # between "add some data" and "press the button again".
+        if not composer.narration_availability(snapshot).get(section):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "There are no figures in this block yet, so there is nothing to write about.",
+            )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "The AI did not return a usable paragraph for this block. Try again.",
+        )
 
     narration = dict(snapshot.get("narration") or {})
+    source = dict(snapshot.get("narration_source") or {})
     narration[section] = text_
+    source[section] = composer.NARRATION_AI
     snapshot["narration"] = narration
+    snapshot["narration_source"] = source
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
-    return {"section": section, "text": text_}
+    return {"section": section, "text": text_, "source": composer.NARRATION_AI}
 
 
-@router.get("/history", response_model=list[ReportHistoryResponse])
+@router.get("/history")
 def get_report_history(client_id: uuid.UUID, db: Session = Depends(get_db)):
-    """Fetch a lightweight history of all generated report snapshots."""
-    snapshots = db.execute(
-        select(ReportSnapshot)
-        .where(ReportSnapshot.client_id == client_id)
-        .order_by(ReportSnapshot.end_date.desc())
-    ).scalars().all()
-    
-    return snapshots
+    """Every report of this client, newest first: its period, whether it is
+    published, and whether its month is on the sheets."""
+    from sqlalchemy.orm import load_only
+    from app.models.sheet_cell import SheetCell
+    owners = set(db.execute(select(SheetCell.report_id).where(
+        SheetCell.client_id == client_id, SheetCell.report_id.is_not(None)).distinct()).scalars())
+    out = []
+    for r in db.execute(
+        select(ReportSnapshot).options(load_only(
+            ReportSnapshot.id, ReportSnapshot.start_date, ReportSnapshot.end_date, ReportSnapshot.status,
+            ReportSnapshot.generated_at, ReportSnapshot.published_at, ReportSnapshot.snapshot))
+        .where(ReportSnapshot.client_id == client_id).order_by(ReportSnapshot.end_date.desc())
+    ).scalars():
+        period = (r.snapshot or {}).get("period") or {}
+        out.append({
+            "id": str(r.id), "start_date": r.start_date, "end_date": r.end_date, "status": r.status.value,
+            "generated_at": r.generated_at, "published_at": r.published_at,
+            "label": period.get("label") or r.end_date.strftime("%B %Y"),
+            "range": period.get("range") or periods_svc.short_range(r.start_date, r.end_date),
+            "months": period.get("months") or 1,
+            "on_sheets": r.id in owners,
+        })
+    return out
 
 
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -873,18 +1682,31 @@ def _report_inputs(request: Request, db: Session, client_id: uuid.UUID, snapshot
         "theme_color": client.theme_color,
     }
 
-    # Inline screenshots so neither Playwright nor the in-app frame has to
-    # fetch them over an authenticated route.
-    for img in comparative_data.get("screenshots", []):
-        file_url = img.get("file_url")
-        if file_url:
-            parts = file_url.split("/")
-            if len(parts) >= 5 and parts[-1] == "image":
-                sid = parts[-2]
-                s_obj = db.execute(select(Screenshot).where(Screenshot.id == sid)).scalar_one_or_none()
-                if s_obj and s_obj.file_data:
-                    b64 = base64.b64encode(s_obj.file_data).decode("utf-8")
-                    img["base64_data"] = f"data:{s_obj.mime_type or 'image/png'};base64,{b64}"
+    # The snapshot stores prompt ids; a report has to print the question that
+    # was actually asked, so resolve the text here where the session exists.
+    prompt_text = {
+        str(pid): text_
+        for pid, text_ in db.execute(
+            select(AiPrompt.id, AiPrompt.prompt_text).where(AiPrompt.client_id == client_id)
+        ).all()
+    }
+    for row in comparative_data.get("ai_visibility") or []:
+        if isinstance(row, dict) and not row.get("prompt"):
+            row["prompt"] = prompt_text.get(str(row.get("prompt_id")), "")
+
+    # The report's own slide screenshots (e.g. the Business Profile captures),
+    # inlined in slot order so the PDF and the in-app view need no fetches.
+    last_id = getattr(snapshots[-1], "id", None)
+    if last_id:
+        from sqlalchemy.orm import undefer
+        for img in db.execute(
+            select(ReportImage).options(undefer(ReportImage.data))
+            .where(ReportImage.report_id == last_id).order_by(ReportImage.slot)
+        ).scalars():
+            encoded = base64.b64encode(img.data).decode("ascii")
+            comparative_data.setdefault(f"{img.section}_shots", []).append(
+                {"src": f"data:{img.mime};base64,{encoded}", "caption": img.caption or ""}
+            )
 
     # The most recent snapshot's cover screenshot, inlined like the rest.
     last = snapshots[-1]
@@ -1007,188 +1829,6 @@ def get_report(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depen
 
 # --- Helpers ---
 
-def _resolve_metrics(db: Session, client_id: uuid.UUID, start_date: datetime.date, end_date: datetime.date, provider: str) -> dict:
-    if provider == "gbp":
-        query_start = start_date.replace(day=1)
-    else:
-        query_start = start_date
-        
-    metrics = db.execute(
-        select(Metric).where(
-            Metric.client_id == client_id,
-            Metric.provider == provider,
-            Metric.captured_on >= query_start,
-            Metric.captured_on <= end_date
-        )
-    ).scalars().all()
-    
-    from collections import defaultdict
-    sums = defaultdict(lambda: defaultdict(float))
-    counts = defaultdict(lambda: defaultdict(int))
-    
-    for m in metrics:
-        # Ignore dimension-level rows for the top-level summary to avoid double counting
-        if m.dimension_key:
-            continue
-            
-        sums[m.metric_key][m.source] += float(m.value)
-        counts[m.metric_key][m.source] += 1
-        
-    resolved = {}
-    for key in sums:
-        # Priority: API over Manual
-        src = MetricSource.api if MetricSource.api in sums[key] else MetricSource.manual
-        
-        # Average for rates/positions, otherwise Sum
-        if key in ["ctr", "position", "avg_session_duration"]:
-            val = sums[key][src] / counts[key][src]
-            resolved[key] = round(val, 4) if key == "ctr" else round(val, 2)
-        else:
-            resolved[key] = round(sums[key][src], 2)
-                
-    return resolved
-
-
-def _resolve_rankings(db: Session, client_id: uuid.UUID, start_date: datetime.date, end_date: datetime.date, prev_start: datetime.date, prev_end: datetime.date) -> dict:
-    from app.models.enums import RankingSource
-    
-    # Fetch all active keywords
-    active_keywords = db.execute(
-        select(Keyword).where(Keyword.client_id == client_id, Keyword.is_active == True)
-    ).scalars().all()
-    
-    kw_map = {k.id: k for k in active_keywords}
-    if not kw_map:
-        return {"summary": {}, "keywords": [], "months": []}
-        
-    rankings = db.execute(
-        select(Ranking).where(
-            Ranking.keyword_id.in_(kw_map.keys()),
-            Ranking.captured_on <= end_date
-        ).order_by(Ranking.keyword_id, Ranking.captured_on.asc())
-    ).scalars().all()
-    
-    history_map = {}
-    for r in rankings:
-        if r.keyword_id not in history_map:
-            history_map[r.keyword_id] = []
-        history_map[r.keyword_id].append(r)
-        
-    keywords_list = []
-    
-    summary = {
-        "improved": 0,
-        "declined": 0,
-        "top_10": 0,
-        "11_20": 0,
-        "21_50": 0,
-        "51_plus": 0
-    }
-    
-    for kw_id, kw in kw_map.items():
-        kw_history = history_map.get(kw_id, [])
-        initial = kw.initial_rank
-        if initial is None and kw_history:
-            initial = kw_history[0].position
-            
-        pos = None
-        prev_pos = None
-        
-        if len(kw_history) >= 1:
-            pos = kw_history[-1].position
-        if len(kw_history) >= 2:
-            prev_pos = kw_history[-2].position
-            
-        hist_dict = {}
-        for r in kw_history[-4:]:
-            hist_dict[r.captured_on.strftime("%Y-%m-%d")] = r.position
-            
-        if pos and prev_pos:
-            if pos < prev_pos:
-                summary["improved"] += 1
-            elif pos > prev_pos:
-                summary["declined"] += 1
-                
-        if pos:
-            if pos <= 10:
-                summary["top_10"] += 1
-            elif pos <= 20:
-                summary["11_20"] += 1
-            elif pos <= 50:
-                summary["21_50"] += 1
-            else:
-                summary["51_plus"] += 1
-                
-        change = None
-        if initial and pos:
-            change = initial - pos
-            
-        keywords_list.append({
-            "keyword_id": str(kw_id),
-            "term": kw.term,
-            "search_volume": kw.search_volume,
-            "initial_rank": initial,
-            "history": hist_dict,
-            "change": change,
-            "position": pos,
-            "previous_position": prev_pos
-        })
-        
-    # Sort keyword list so position 1 is at the top
-    keywords_list.sort(key=lambda x: x["position"] if x["position"] is not None else 999)
-
-    return {
-        "summary": summary,
-        "keywords": keywords_list,
-        "months": []
-    }
-
-
-def _resolve_ai_visibility(db: Session, client_id: uuid.UUID, start_date: datetime.date, end_date: datetime.date) -> list[dict]:
-    month_start = start_date.replace(day=1)
-    mentions = db.execute(
-        select(AiMention).where(
-            AiMention.client_id == client_id,
-            AiMention.month >= month_start,
-            AiMention.month <= end_date
-        )
-    ).scalars().all()
-    
-    return [
-        {
-            "prompt_id": str(m.prompt_id) if m.prompt_id else None,
-            "platform": m.platform.value,
-            "mentioned": m.mentioned,
-            "cited_pages": m.cited_pages
-        }
-        for m in mentions
-    ]
-
-
-def _resolve_links(db: Session, client_id: uuid.UUID, start_date: datetime.date, end_date: datetime.date) -> list[dict]:
-    month_start = start_date.replace(day=1)
-    links = db.execute(
-        select(Link).where(Link.client_id == client_id, Link.month >= month_start, Link.month <= end_date, Link.status == "active")
-    ).scalars().all()
-    return [{"id": str(l.id), "url": l.url, "domain": l.domain, "activity_type": l.activity_type, "count": l.count} for l in links]
-
-
-def _resolve_activities(db: Session, client_id: uuid.UUID, start_date: datetime.date, end_date: datetime.date) -> list[dict]:
-    month_start = start_date.replace(day=1)
-    activities = db.execute(
-        select(Activity).where(Activity.client_id == client_id, Activity.month >= month_start, Activity.month <= end_date)
-    ).scalars().all()
-    return [{"id": str(a.id), "month": str(a.month), "activity_type": a.activity_type, "count": a.count, "notes": a.notes} for a in activities]
-
-
-def _resolve_screenshots(db: Session, client_id: uuid.UUID, start_date: datetime.date, end_date: datetime.date) -> list[dict]:
-    month_start = start_date.replace(day=1)
-    screenshots = db.execute(
-        select(Screenshot).where(Screenshot.client_id == client_id, Screenshot.month >= month_start, Screenshot.month <= end_date)
-    ).scalars().all()
-    return [{"month": str(s.month), "file_url": s.file_url, "caption": s.caption} for s in screenshots]
-
-
 def _compute_kpi_deltas(snapshot: dict, prev_snapshot: dict) -> dict:
     deltas = {}
     for provider in ["gsc", "ga4", "gbp"]:
@@ -1209,8 +1849,9 @@ def _aggregate_metrics(snapshots, section):
     
     sum_keys = {
         "gsc": ["clicks", "impressions"],
-        "ga4": ["sessions", "users", "organic_sessions", "conversions", "ecommerce_events", "revenue"],
-        "gbp": ["views", "searches", "interactions", "calls", "direction_requests", "website_clicks", "bookings", "impressions_desktop_maps", "impressions_desktop_search", "impressions_mobile_maps", "impressions_mobile_search"]
+        "ga4": ["sessions", "users", "organic_sessions", "conversions", "ecommerce_events", "revenue",
+                "engaged_sessions", "add_to_carts"],
+        "gbp": ["views", "searches", "interactions", "calls", "chat_clicks", "direction_requests", "website_clicks", "bookings", "impressions_desktop_maps", "impressions_desktop_search", "impressions_mobile_maps", "impressions_mobile_search"]
     }.get(section, [])
     
     avg_keys = {
@@ -1225,6 +1866,10 @@ def _aggregate_metrics(snapshots, section):
         "gbp": []
     }.get(section, [])
     
+    # Name-keyed counts rather than a list of rows: GA4 event names are chosen
+    # per property, so there is no fixed set to enumerate above.
+    dict_keys = {"ga4": ["events"]}.get(section, [])
+
     list_merge_key = {
         "top_pages": "page",
         "traffic_sources": "source",
@@ -1259,6 +1904,15 @@ def _aggregate_metrics(snapshots, section):
         for k in avg_keys:
             result[k] = result[k] / count
             
+    for k in dict_keys:
+        merged: dict[str, float] = {}
+        for s_ in snapshots:
+            data = s_.snapshot.get(section, {}) if s_.snapshot else {}
+            for name, count_ in (data.get(k) or {}).items():
+                merged[name] = merged.get(name, 0) + (count_ or 0)
+        if merged:
+            result[k] = {n: round(v) for n, v in sorted(merged.items(), key=lambda nv: -nv[1])}
+
     for k in list_keys:
         merged_list = {}
         for s in snapshots:
@@ -1291,7 +1945,29 @@ def _aggregate_metrics(snapshots, section):
         for k, v in data.items():
             if k not in result and isinstance(v, (int, float)) and not isinstance(v, bool):
                 result[k] = v
-            
+
+    # Trending pages carry their own comparison too.
+    if section == "gsc":
+        latest = snapshots[-1].snapshot.get(section, {}) if snapshots[-1].snapshot else {}
+        for key in ("trending_pages", "daily", "top_queries"):
+            if latest.get(key):
+                result[key] = latest[key]
+
+    # The GA4 comparison tables (channels, countries) already carry their own
+    # previous period, so they are taken from the latest report as it is.
+    if section == "ga4":
+        from app.services.ga4_service import BREAKDOWNS
+        latest = snapshots[-1].snapshot.get(section, {}) if snapshots[-1].snapshot else {}
+        for k in BREAKDOWNS:
+            for key in (k, f"{k}_previous"):
+                if latest.get(key):
+                    result[key] = latest[key]
+        # Lead figures typed in the builder.
+        # (and whether its tables compare against a several-month average.)
+        for typed in ("lead_overrides", "lead_overrides_previous", "ai_referral_overrides", "_span_compare"):
+            if latest.get(typed):
+                result[typed] = latest[typed]
+
     return result
 
 def _build_comparative_report(snapshots):
@@ -1343,6 +2019,10 @@ def _build_comparative_report(snapshots):
     
     latest_snap = snapshots[-1].snapshot if snapshots[-1].snapshot else {}
     comparative_data["kpi_deltas"] = latest_snap.get("kpi_deltas", {})
+    comparative_data["previous_values"] = latest_snap.get("previous_values") or {}
+    comparative_data["ai_summary"] = latest_snap.get("ai_summary") or {}
+    comparative_data["hidden_slides"] = latest_snap.get("hidden_slides") or []
+    comparative_data["hidden_cards"] = latest_snap.get("hidden_cards") or []
 
     # Carry the composer's choices into the PDF. For a multi-month export the
     # most recent snapshot's selection wins, since that is the one just edited.
@@ -1353,8 +2033,19 @@ def _build_comparative_report(snapshots):
     if isinstance(latest_snap.get("copy"), dict):
         comparative_data["copy"] = latest_snap["copy"]
     comparative_data["narration"] = latest_snap.get("narration") if isinstance(latest_snap.get("narration"), dict) else {}
+    comparative_data["provenance"] = latest_snap.get("provenance") if isinstance(latest_snap.get("provenance"), dict) else {}
     comparative_data["periods"] = (latest_snap.get("periods") or []) if len(snapshots) == 1 else []
     comparative_data["period"] = latest_snap.get("period") or {}
+    # The closing commitment, entered in the builder. Carried through here with
+    # the other editorial keys — the report data itself never derives it.
+    # The earlier period's AI visibility rate, which the change on that figure
+    # is measured against.
+    comparative_data["ai_compare"] = (
+        latest_snap.get("ai_compare") if isinstance(latest_snap.get("ai_compare"), dict) else {}
+    )
+    comparative_data["next_month_plan"] = (
+        latest_snap.get("next_month_plan") if isinstance(latest_snap.get("next_month_plan"), dict) else {}
+    )
 
     # Daily clicks for the trend chart. Recorded values only — an empty list
     # means the chart is skipped rather than drawn from nothing.
@@ -1382,6 +2073,7 @@ def _build_comparative_report(snapshots):
     comparative_data["narrative"] = snapshots[-1].narrative if getattr(snapshots[-1], 'narrative', None) else ""
     if "rankings" in latest_snap:
         comparative_data["rankings"]["summary"] = latest_snap["rankings"].get("summary", {})
+        comparative_data["rankings"]["summary_overrides"] = latest_snap["rankings"].get("summary_overrides") or {}
         
     comparative_data["gsc"] = _aggregate_metrics(snapshots, "gsc")
     comparative_data["ga4"] = _aggregate_metrics(snapshots, "ga4")
@@ -1402,7 +2094,8 @@ def _build_comparative_report(snapshots):
                     "search_volume": kw.get("search_volume"),
                     "positions": {},
                     "change": None,
-                    "initial_rank": kw.get("initial_rank")
+                    "initial_rank": kw.get("initial_rank"),
+                    "previous_position": kw.get("previous_position"),
                 }
             own = kw.get("positions") if isinstance(kw.get("positions"), dict) else None
             if own and len(snapshots) == 1:
@@ -1423,6 +2116,22 @@ def _build_comparative_report(snapshots):
             
     kw_list = list(kw_map.values())
     kw_list.sort(key=lambda x: x.get("_sort_pos", 9999))
+
+    # A one-month report has one position column, so every keyword read as
+    # "New". Last month's position is known — typed in the builder or saved
+    # with the report — so it gets its own column, named for its month.
+    if len(months) == 1 and any(k.get("previous_position") for k in kw_list):
+        compare = ((latest_snap.get("period") or {}).get("compare") or {})
+        try:
+            prev_label = datetime.date.fromisoformat(compare.get("end")).strftime("%B %Y")
+        except (TypeError, ValueError):
+            prev_label = "Last month"
+        if prev_label == months[0]:
+            prev_label = compare.get("range") or "Last month"
+        for k in kw_list:
+            if k.get("previous_position") and prev_label not in k["positions"]:
+                k["positions"] = {prev_label: k["previous_position"], **k["positions"]}
+        comparative_data["rank_months"] = [prev_label, months[0]]
     comparative_data["rankings"]["keywords"] = kw_list
     
     for idx, s in enumerate(snapshots):
@@ -1466,7 +2175,7 @@ def _build_comparative_report(snapshots):
     link_types = {}
     for l in links:
         t = l.get("activity_type", "Other")
-        link_types[t] = link_types.get(t, 0) + 1
+        link_types[t] = link_types.get(t, 0) + int(l.get("count") or 1)
     comparative_data["link_types"] = link_types
     
     return comparative_data

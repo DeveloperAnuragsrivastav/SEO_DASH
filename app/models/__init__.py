@@ -16,7 +16,9 @@ from app.models.metric import Metric
 from app.models.provider_task import ProviderTask
 from app.models.ranking import Ranking
 from app.models.report_snapshot import ReportSnapshot
+from app.models.report_image import ReportImage
 from app.models.screenshot import Screenshot
+from app.models.sheet_cell import SheetCell
 from app.models.sync_run import SyncRun
 from app.models.user import User
 from app.models.user_project import UserProjectAssignment
@@ -36,7 +38,9 @@ __all__ = [
     "ProviderTask",
     "Ranking",
     "ReportSnapshot",
+    "ReportImage",
     "Screenshot",
+    "SheetCell",
     "SyncRun",
     "User",
     "UserProjectAssignment",

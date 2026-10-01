@@ -10,7 +10,9 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+# A handful of people use this at once, so a small pool is plenty; connections
+# are recycled before a hosted Postgres would drop them for idling.
+engine = create_engine(settings.database_url, pool_pre_ping=True, pool_size=5, max_overflow=5, pool_recycle=1800)
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

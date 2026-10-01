@@ -1,0 +1,2153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>{{ client_name }} — SEO Performance Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   EZ RANKINGS — SLIDE REPORT
+   A 16:9 deck, not an A4 document. Every slide is 1280×720px, which is
+   exactly 960×540pt (13.333in × 7.5in) — the standard widescreen size, so
+   the PDF opens full-bleed with no scaling.
+
+   Palette and type are measured from the approved reference report, not
+   approximated: Poppins, ink #141414, gold #F4D13C, cream #FDF6DC.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --ink:        #141414;
+  --ink-2:      #4A5057;
+  --ink-3:      #707070;
+  --ink-4:      #ACACAC;
+
+  --gold:       #F4D13C;
+  --gold-deep:  #A8801A;   /* gold that still reads as text on white */
+  --gold-dim:   #F9E9A8;
+
+  --cream:      #FDF6DC;
+  --cream-line: #F4E9BF;
+
+  --surface:    #F7F8F9;
+  --line:       #E4E7EA;
+
+  --up:         #17864A;
+  --down:       #B4432E;
+
+  --slide-pad:  72px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #5A5D61;
+  font-family: "Poppins", "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── The slide ─────────────────────────────────────────────────────── */
+
+.slide {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  padding: 56px var(--slide-pad) 64px;
+  margin: 0 auto 28px;
+  background: #FFFFFF;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.slide.dark {
+  background: var(--ink);
+  color: #FFFFFF;
+}
+.slide.cover {
+  display: flex;
+  flex-direction: column;
+}
+.slide.cover .cover-body { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+.slide.cover .cover-foot { margin-top: auto; padding-top: 30px; }
+
+/* ── Slide header ──────────────────────────────────────────────────── */
+
+.eyebrow {
+  display: block;
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+}
+.dark .eyebrow { color: var(--gold); }
+
+.title {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.021em;
+  color: var(--ink);
+}
+.dark .title { color: #FFFFFF; }
+
+.lede {
+  max-width: 1000px;
+  margin: 14px 0 0;
+  font-size: 15.5px;
+  font-weight: 400;
+  line-height: 1.52;
+  color: var(--ink-2);
+}
+.dark .lede { color: rgba(255, 255, 255, 0.82); }
+
+/* The agency mark sits top-right of every content slide. */
+.slide-logo {
+  position: absolute;
+  top: 46px;
+  right: var(--slide-pad);
+  height: 42px;
+  width: auto;
+}
+
+/* ── Slide body ────────────────────────────────────────────────────── */
+
+.body {
+  flex: 1;
+  min-height: 0;
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+/* A grid item's default min-height is its content, which stops a flexing row
+   from ever shrinking — the overflow then has to go somewhere, and it went
+   over the slide. Letting items shrink is what keeps a slide a fixed page. */
+.row      { display: grid; gap: 20px; min-height: 0; }
+.row > *  { min-height: 0; }
+.row.c2   { grid-template-columns: 1fr 1fr; }
+.row.c3   { grid-template-columns: repeat(3, 1fr); }
+/* Eight cards wrap into two rows of four. minmax(0,1fr) rather than the
+   default auto: without it the taller row sets its own height from content and
+   the grid grows past the space the row was given, printing over the verdict
+   panel below. */
+.row.c4   { grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(0, 1fr); }
+.row.c5   { grid-template-columns: repeat(5, 1fr); grid-auto-rows: auto; margin-bottom: auto; }
+.row.c5 .stat-figure.sm { font-size: 30px; }
+.row.c5 .card { padding: 16px 16px; }
+.row.c5 .stat-name { margin-top: 8px; font-size: 13px; }
+/* Nothing recorded yet: the slide still prints, and says so plainly. */
+.empty-row { padding: 22px 12px !important; text-align: center !important; color: #8a8a82; font-style: italic; }
+.empty-card { display: flex; align-items: center; justify-content: center; color: #8a8a82; font-size: 18px; font-style: italic; min-height: 220px; }
+/* A quarter-width card cannot carry the full figure size. */
+.row.c4 .stat-figure.sm { font-size: 33px; }
+.row.c4 .stat-name      { margin-top: 10px; font-size: 13.5px; }
+/* A note under the name is 6px more than the cell holds at the standard card
+   padding, and the grid clips rather than grows — so the four-up card buys
+   that space back from its own padding. */
+.row.c4 .card           { padding: 18px 20px; }
+.row.c4 .stat-note      { margin-top: 4px; line-height: 1.35; }
+.row.c2-1 { grid-template-columns: 1.06fr 1fr; }
+.row.c1-2 { grid-template-columns: 1fr 1.72fr; }
+.row.tight { gap: 16px; }
+.grow     { flex: 1; min-height: 0; }
+
+/* ── Cards ─────────────────────────────────────────────────────────── */
+
+/* A card never paints outside its own box. Without this, a list taller than
+   its flex-shrunken card spilled straight over the commentary panel below
+   it — the bars stayed visible through the dark panel. */
+.card {
+  position: relative;
+  min-height: 0;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #FFFFFF;
+  overflow: hidden;
+}
+.card.fill   { background: var(--surface); }
+.card.viz    { display: flex; flex-direction: column; }
+/* A flex basis of `auto` measures the item's own content, and an SVG with no
+   height attribute has none — the chart collapsed to nothing. A basis of 0
+   makes flex-grow hand it the space that is actually left in the card. */
+.card.viz > svg,
+.card.viz > .ring-row { flex: 1 1 0%; min-height: 96px; }
+.card.viz > svg { width: 100%; height: 100%; }
+.card.cream  { background: var(--cream); border-color: var(--cream-line); }
+.card.pad-lg { padding: 26px 28px; }
+/* Three of these stack beside a taller neighbour, so they share the column's
+   height between them — the figure is sized to fit that share, not the other
+   way round. */
+.card.compact { padding: 12px 18px; }
+.card.compact .stat-figure { font-size: 33px; }
+.card.compact .stat-name { margin-top: 7px; font-size: 13.5px; }
+
+.card-name {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+}
+.card-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* ── The statistic — the deck's loudest element ────────────────────── */
+
+.stat-figure {
+  display: block;
+  font-size: 58px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.stat-figure.sm { font-size: 42px; }
+/* "62 / 108" is one value, not two lines. Broken across a line break it reads
+   as two separate figures and pushes the card past its cell. */
+.stat-figure.ratio { white-space: nowrap; font-size: 34px; }
+.row.c4 .stat-figure.ratio { font-size: 27px; }
+.stat-figure.lg { font-size: 66px; }
+
+.stat-name {
+  display: block;
+  margin-top: 14px;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.stat-note {
+  display: block;
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+/* The change sits top-right of its card, away from the figure. */
+/* Floated, not absolutely positioned: the figure's line box then shortens to
+   make room instead of being printed over, and a chip too wide to share the
+   line drops below it rather than across it. Costs no extra card height,
+   which stacking it on its own line did. The card's own `overflow: hidden`
+   contains the float. */
+.delta {
+  float: right;
+  max-width: 52%;
+  margin: 0 0 4px 14px;
+  text-align: right;
+  line-height: 1.35;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.delta.up   { color: var(--up); }
+.delta.down { color: var(--down); }
+.delta.flat { color: var(--ink-4); }
+.delta.tag  { color: var(--gold-deep); letter-spacing: 0.1em; text-transform: uppercase; font-size: 11.5px; }
+
+/* ── Dark commentary panel ─────────────────────────────────────────── */
+
+.verdict {
+  flex-shrink: 0;
+  padding: 19px 24px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #FFFFFF;
+}
+.verdict-label {
+  display: block;
+  margin-bottom: 11px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.verdict p {
+  margin: 0;
+  max-width: 116ch;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.58;
+  color: rgba(255, 255, 255, 0.93);
+}
+
+/* A one-line variant, used as a slide's closing note. */
+.verdict.strip { padding: 16px 24px; }
+.verdict.strip p { display: inline; font-size: 14px; }
+.verdict.strip .verdict-label {
+  display: inline;
+  margin: 0 8px 0 0;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 14px;
+}
+
+/* ── Tables ────────────────────────────────────────────────────────── */
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+table.data th {
+  padding: 11px 14px;
+  background: var(--ink);
+  color: #FFFFFF;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: left;
+}
+table.data th.num, table.data td.num { text-align: center; }
+table.data td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+}
+table.data tbody tr:nth-child(even) { background: #FAFBFB; }
+table.data td.term { font-weight: 600; color: var(--ink); }
+table.data td.rank { font-weight: 700; color: var(--ink); }
+table.data .idx { color: var(--ink-4); font-size: 12px; }
+
+/* Traffic acquisition: the headline figures as small boxes beside GA4's
+   channel table. Each cell is this period's figure with its change, and the
+   previous period's figure under it. */
+.row.c-traffic { grid-template-columns: 1fr 2.75fr; }
+.mini-grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(0, 1fr); gap: 10px; min-height: 0; }
+.mini-grid .card { padding: 12px 14px; }
+.mini-grid .stat-figure { font-size: 25px; }
+.mini-grid .stat-name { margin-top: 6px; font-size: 12px; }
+.mini-grid .delta { float: none; display: block; max-width: none; margin: 0 0 4px; text-align: left; font-size: 11px; }
+/* The donut beside a comparison table has a third of the width: ring above,
+   one line per slice below it. */
+.c-traffic .ring-row { flex-direction: column; align-items: stretch; gap: 12px; margin-top: 8px !important; }
+/* The ring gives up height before the legend does: a longer commentary
+   below leaves less room, and the country list must never be cut. */
+.c-traffic .ring-row { min-height: 0; }
+.c-traffic .ring-row svg { flex: 1 1 auto; width: auto; height: auto; min-height: 56px; max-height: 112px; aspect-ratio: 1 / 1; align-self: center; }
+.c-traffic .ring-key { flex-shrink: 0; }
+.c-traffic .ring-key { gap: 5px; }
+.c-traffic .ring-item { grid-template-columns: 12px 42px 36px 1fr; gap: 6px; align-items: center; }
+.c-traffic .ring-swatch { width: 10px; height: 10px; margin-top: 0; }
+.c-traffic .ring-figure { font-size: 13px; }
+.c-traffic .ring-pct { font-size: 11.5px; }
+.c-traffic .ring-label { grid-column: auto; margin-top: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card.chan { padding: 12px 14px; display: flex; flex-direction: column; }
+.card.chan .card-name small { margin-left: 8px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
+table.chan { margin-top: 8px; font-size: 12.5px; line-height: 1.25; }
+table.chan th { padding: 6px 6px; font-size: 9.5px; letter-spacing: 0.04em; line-height: 1.2; vertical-align: bottom; }
+table.chan td { padding: 4px 6px; vertical-align: middle; }
+table.chan td.term { font-size: 12px; white-space: nowrap; }
+table.chan .cv { display: block; font-weight: 700; color: var(--ink); white-space: nowrap; }
+table.chan .cv small { margin-left: 4px; font-size: 10px; font-weight: 600; }
+table.chan .cp { display: block; margin-top: 1px; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+table.chan tr.total td { background: var(--cream); border-bottom: 0; }
+table.chan .up { color: var(--up); } table.chan .down { color: var(--down); }
+
+/* The column being reported on is the one the reader came for. */
+table.data th.now { background: var(--gold); color: var(--ink); }
+table.data td.now { background: var(--cream); font-weight: 700; color: var(--ink); }
+
+.seen {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+/* Red for absent, as the approved reference marks it — and both tones are
+   darkened against their own tint to clear 4.5:1. */
+.seen.yes  { background: #E6F4EC; color: #14703F; }
+.seen.no   { background: #FBEDEA; color: #9E3A26; }
+.seen.none { background: var(--surface); color: var(--ink-3); }
+.ai-grid td, .ai-grid th { padding-top: 8px; padding-bottom: 8px; }
+/* A table fills its slide at any length: roomy when short, tighter as it grows. */
+table.data.fit.d1 td { padding-top: 6px; padding-bottom: 6px; font-size: 12.5px; }
+table.data.fit.d1 th { padding-top: 9px; padding-bottom: 9px; }
+table.data.fit.d2 td { padding-top: 3px; padding-bottom: 3px; font-size: 11.5px; line-height: 1.3; }
+table.data.fit.d2 th { padding-top: 7px; padding-bottom: 7px; font-size: 10.5px; }
+table.data.fit.d2 .seen { padding: 1px 8px; font-size: 10.5px; }
+table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
+/* Trending pages: smaller thumbnails and type as the list lengthens. */
+.trend-list.d1 .trend-thumb { height: 34px; width: 72px; }
+.trend-list.d1 { gap: 2px; }
+.trend-list.d1 .trend-page, .trend-list.d2 .trend-page { gap: 0; line-height: 1.2; }
+.trend-list.d1 .trend-figs, .trend-list.d2 .trend-figs { gap: 0; line-height: 1.2; }
+.trend-list.d1 .trend-row, .trend-list.d2 .trend-row { overflow: hidden; }
+.trend-list.d1 .trend-row { grid-template-columns: 72px 1fr auto; gap: 12px; }
+.trend-list.d1 .trend-path { font-size: 13.5px; }
+.trend-list.d1 .trend-now { font-size: 15px; }
+.trend-list.d2 { gap: 0; padding: 4px 16px; justify-content: flex-start; }
+/* Eight to ten pages: each on one line — picture, path and address, figures. */
+.trend-list.d2 .trend-row { grid-template-columns: 48px 1fr auto; gap: 12px; height: 31px; padding-top: 0 !important; }
+.trend-list.d2 .trend-thumb { height: 24px; width: 48px; border-radius: 4px; }
+.trend-list.d2 .trend-thumb-none { font-size: 12px; }
+.trend-list.d2 .trend-page { flex-direction: row; align-items: baseline; gap: 10px; }
+.trend-list.d2 .trend-path { font-size: 13px; flex-shrink: 0; max-width: 55%; }
+.trend-list.d2 .trend-url { font-size: 10.5px; min-width: 0; }
+.trend-list.d2 .trend-figs { flex-direction: row; align-items: baseline; gap: 12px; }
+.trend-list.d2 .trend-now { font-size: 13.5px; }
+.trend-list.d2 .trend-gain { font-size: 11px; }
+/* Work: cards shrink as tasks are added. */
+.work-grid.d1 .work, .work-grid.d2 .work { padding: 12px 16px; gap: 12px; grid-template-columns: 40px 1fr; }
+.work-grid.d1 .work-no, .work-grid.d2 .work-no { width: 40px; height: 40px; font-size: 15px; }
+.work-grid.d1 .work-name { font-size: 15.5px; }
+.work-grid.d2 .work-name { font-size: 14px; }
+.work-grid.d1 .work-desc, .work-grid.d2 .work-desc { margin-top: 5px; font-size: 12px; line-height: 1.4; }
+.work-grid.d2 .work-pill { padding: 3px 10px; font-size: 11px; }
+.work-grid.d2 .work-top { flex-wrap: wrap; gap: 6px; }
+
+/* The band table sits beside the chart, so its rows are compact. */
+/* Seven bands and a header must fit above the takeaway panel. */
+.band-table td, .band-table th { padding-top: 4px; padding-bottom: 4px; line-height: 1.3; }
+.band-table th { white-space: nowrap; }
+.band-table { font-size: 13px; }
+
+.move-up   { color: var(--up);   font-weight: 600; }
+.move-down { color: var(--down); font-weight: 600; }
+.move-flat { color: var(--ink-3); font-weight: 600; }
+.move-new  { color: var(--gold-deep); font-weight: 600; }
+/* Movement in the newest month's cell: an arrow against the month before. */
+.rank-now { position: relative; display: inline-block; }
+.rank-now .rank-arrow, .rank-now .rank-new { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); white-space: nowrap; }
+.rank-arrow { display: inline-block; margin-left: 6px; font-size: 10px; }
+.rank-arrow.up { color: var(--up); }
+.rank-arrow.down { color: var(--down); }
+.rank-new { margin-left: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--gold-deep); text-transform: uppercase; }
+
+/* ── Bars, rings and lines ─────────────────────────────────────────── */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  justify-content: center;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.legend span { white-space: nowrap; }
+.legend i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.qbar { margin-bottom: 8px; }
+.qbar:last-child { margin-bottom: 0; }
+.qbar-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.qbar-name { font-size: 13.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qbar-val  { font-size: 14px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* Sits inline after the count, so a long URL and its movement stay on one
+   line rather than the movement wrapping onto the bar below. */
+.page-move { margin-left: 8px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.01em; }
+.page-move.up   { color: var(--up); }
+.page-move.down { color: var(--down); }
+.page-move.new  { color: var(--ink-3); }
+.page-move.flat { color: var(--ink-3); }
+.qbar-track { height: 8px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.qbar-fill  { height: 100%; border-radius: 3px; background: var(--gold); }
+
+.ring-row { display: flex; align-items: center; gap: 26px; }
+.ring-key { display: flex; flex-direction: column; gap: 13px; }
+.ring-item { display: grid; grid-template-columns: 16px auto 1fr; gap: 10px; align-items: baseline; }
+.ring-swatch { width: 13px; height: 13px; border-radius: 3px; margin-top: 3px; }
+.ring-figure { font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ring-pct { font-size: 14px; font-weight: 600; color: var(--gold-deep); font-variant-numeric: tabular-nums; }
+.ring-label { grid-column: 2 / -1; margin-top: -6px; font-size: 12.5px; color: var(--ink-3); }
+
+/* ── Numbered work cards ───────────────────────────────────────────── */
+
+.work {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.work-no {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.work-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.work-name { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.012em; }
+.work-pill {
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: #E6F4EC;
+  /* Darker than --up: the brand green clears 4.5:1 on white but only
+     reaches 4.1:1 on this tinted chip. */
+  color: #14703F;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.work-desc { margin: 11px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+
+/* ── Roadmap ───────────────────────────────────────────────────────── */
+
+.lane-head {
+  padding: 13px 22px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.lane-head.now  { background: var(--gold); color: var(--ink); }
+.lane-head.next { background: var(--ink);  color: #FFFFFF; }
+
+.lane-item {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  padding: 17px 20px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.lane-no { font-size: 15px; font-weight: 700; color: var(--gold-deep); font-variant-numeric: tabular-nums; }
+.lane-name { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.lane-desc { margin: 8px 0 0; font-size: 13px; line-height: 1.52; color: var(--ink-2); }
+
+/* ── Cover and closing ─────────────────────────────────────────────── */
+
+.cover-logo { align-self: flex-start; height: 58px; width: auto; }
+
+.cover-title {
+  margin: 0;
+  max-width: 900px;
+  font-size: 58px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.028em;
+  color: #FFFFFF;
+}
+
+.cover-lede {
+  max-width: 740px;
+  margin: 22px 0 0;
+  font-size: 16.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.period-pill {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 26px;
+  padding: 15px 24px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: var(--ink);
+  font-size: 15px;
+}
+.period-pill b { font-weight: 700; }
+
+.cover-foot {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.contact-bar {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-top: 30px;
+  padding: 18px 26px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: var(--ink);
+  font-size: 15.5px;
+}
+.contact-bar b { font-weight: 700; }
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+
+.foot {
+  position: absolute;
+  left: var(--slide-pad);
+  right: var(--slide-pad);
+  bottom: 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.foot .mark { width: 11px; height: 11px; border-radius: 2px; background: var(--gold); }
+.foot .pg { margin-left: 20px; font-variant-numeric: tabular-nums; }
+.dark .foot { color: rgba(255, 255, 255, 0.5); }
+
+/* Where a slide's figures came from — small, last, and on every slide that
+   prints figures. §15: a reader must always be able to tell a number Google
+   reported from one somebody typed in. */
+/* A first report states its own nature rather than looking like one whose
+   comparisons failed to load. */
+.baseline-note {
+  max-width: 720px;
+  margin: 20px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* Conversion events under their own names: two columns of name-and-count, so
+   a property with six of them still fits without shrinking the type. */
+.lead-events {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 4px 28px; align-content: start; margin-top: 10px;
+}
+.lead-event {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid var(--rule);
+}
+.lead-event-name {
+  flex: 1 1 auto; min-width: 0; font-size: 11.5pt; color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lead-event-val {
+  font-size: 12.5pt; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+
+.baseline-strip {
+  flex-shrink: 0;
+  padding: 13px 18px;
+  border: 1px solid var(--cream-line);
+  border-radius: 8px;
+  background: var(--cream);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.baseline-figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+.baseline-figure {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.baseline-label {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+.foot-source {
+  margin-left: auto;
+  font-style: italic;
+  color: var(--ink-4);
+}
+
+.fine {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+/* Google Business Profile captures: up to five, shown whole (never cropped)
+   — three over two, the second row centred. */
+.shot-grid { flex: 1 1 0%; min-height: 0; display: grid; gap: 14px; grid-template-columns: repeat(6, 1fr); grid-auto-rows: minmax(0, 1fr); }
+.shot-grid .proof { grid-column: span 2; }
+.shot-grid.n1 .proof { grid-column: 2 / span 4; }
+.shot-grid.n2 .proof, .shot-grid.n4 .proof { grid-column: span 3; }
+.shot-grid.n5 .proof:nth-child(4) { grid-column: 2 / span 2; }
+.shot-grid.n3 .proof { grid-column: span 2; }
+.shot-grid.n1, .shot-grid.n2, .shot-grid.n3 { grid-template-rows: 1fr; }
+.shot-grid.n4, .shot-grid.n5, .shot-grid.n6 { grid-template-rows: 1fr 1fr; }
+.shot-grid .proof-shot { display: flex; align-items: center; justify-content: center; padding: 6px; }
+.shot-grid .proof-shot img { width: 100%; height: 100%; object-fit: contain; object-position: center; border-radius: 3px; }
+.shot-grid .proof-shot { background: var(--surface); }
+
+/* Pages trending up: each page's own picture, its address, and the gain. */
+.trend-list { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; padding: 9px 18px; }
+.trend-row { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 16px; min-height: 0; }
+.trend-row + .trend-row { padding-top: 5px; border-top: 1px solid var(--line); }
+.trend-thumb { width: 92px; height: 44px; border-radius: 6px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+.trend-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.trend-thumb-none { font-size: 20px; font-weight: 700; color: var(--ink-4); }
+.trend-page { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.trend-path { font-size: 15px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trend-url { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trend-figs { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-variant-numeric: tabular-nums; }
+.trend-now { font-size: 18px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
+.trend-now small, .trend-gain small { font-size: 11.5px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+.trend-gain { font-size: 12.5px; font-weight: 600; color: var(--up); }
+.trend-gain small { margin-left: 4px; }
+.trend-gain.down { color: #B4432E; }
+
+/* Search Console Performance, drawn the way Google draws it: blue clicks,
+   purple impressions, plain tiles for the two averages. */
+.gsc-console { gap: 10px; font-family: Roboto, "Google Sans", Arial, sans-serif; }
+.gc-tiles { display: flex; flex-shrink: 0; }
+.gc-tile { width: 150px; height: 66px; padding: 9px 12px; border: 1px solid #E0E0E0; border-left-width: 0; background: #FFF; color: #5F6368; display: flex; flex-direction: column; justify-content: space-between; }
+.gc-tile:first-child { border-left-width: 1px; border-radius: 6px 0 0 0; }
+.gc-tile:last-child { border-radius: 0 6px 0 0; }
+.gc-tile.clicks { background: #4285F4; border-color: #4285F4; color: #FFF; }
+.gc-tile.impressions { background: #5E35B1; border-color: #5E35B1; color: #FFF; }
+.gc-tile-name { display: flex; align-items: center; gap: 6px; font-size: 10.5px; }
+.gc-tile-name i { width: 10px; height: 10px; border: 1.5px solid currentColor; border-radius: 2px; flex-shrink: 0; }
+.gc-tile-name i { display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 8px; font-weight: 700; line-height: 1; }
+.gc-tile b { font-size: 24px; font-weight: 400; line-height: 1; }
+.gc-chart { flex-shrink: 0; display: flex; flex-direction: column; }
+.gc-axis-names { display: flex; justify-content: space-between; font-size: 9.5px; color: #5F6368; padding: 0 2px; }
+.gc-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.gc-grid { stroke: #EEEEEE; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.gc-grid.base { stroke: #BDBDBD; }
+.gc-tick { font-size: 9px; fill: #757575; }
+.gc-line { fill: none; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.gc-line.clicks { stroke: #4285F4; }
+.gc-line.impressions { stroke: #5E35B1; }
+.gc-table { flex-shrink: 0; border: 1px solid #E0E0E0; border-radius: 6px; overflow: hidden; }
+.gc-tabs { display: flex; border-bottom: 1px solid #E0E0E0; }
+.gc-tabs span { flex: 1; padding: 7px 0 6px; text-align: center; font-size: 9.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: #5F6368; }
+.gc-tabs span.on { color: #202124; box-shadow: inset 0 -2px 0 #202124; }
+.gc-table table { width: 100%; border-collapse: collapse; font-size: 10.5px; color: #202124; }
+.gc-table th { padding: 4px 14px; font-weight: 500; font-size: 9.5px; color: #5F6368; text-align: left; border-bottom: 1px solid #E0E0E0; }
+.gc-table td { padding: 2px 14px; line-height: 1.35; border-bottom: 1px solid #F1F3F4; }
+.gc-table tr:last-child td { border-bottom: 0; }
+.gc-table .num { text-align: right; width: 110px; font-variant-numeric: tabular-nums; }
+.gc-table td.clicks { color: #1A73E8; }
+.gc-table td.impressions { color: #5E35B1; }
+
+/* Leads: the total beside an even grid of what it is made of. */
+.leads-row { min-height: 0; }
+/* Laid out by count so no cell is left empty: 5 is three over two. */
+.leads-grid { display: grid; gap: 14px; min-height: 0; grid-auto-rows: minmax(0, 1fr); grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.leads-grid > .card { grid-column: span 2; }
+.leads-grid.n1 > .card { grid-column: span 6; }
+.leads-grid.n2 > .card, .leads-grid.n4 > .card { grid-column: span 3; }
+.leads-grid.n5 > .card:nth-child(n+4) { grid-column: span 3; }
+
+/* ── Cover ──────────────────────────────────────────────────────────
+   Black with a gold glow, the client's name large with its last word in
+   gold, and a rising gold chart on the right. */
+.slide.cover-v2 {
+  padding: 0; color: #FFFFFF;
+  background:
+    radial-gradient(ellipse 620px 520px at 78% 38%, rgba(244, 209, 60, 0.20), transparent 70%),
+    radial-gradient(ellipse 500px 300px at 10% 110%, rgba(244, 209, 60, 0.08), transparent 70%),
+    linear-gradient(135deg, #111111 0%, #0A0A0A 100%);
+}
+.cv-art { position: absolute; right: 30px; bottom: 96px; width: 640px; height: 560px; display: flex; align-items: flex-end; justify-content: center; }
+.cv-art svg { display: block; overflow: visible; }
+
+/* The words keep clear of the art on the right, however long the tagline. */
+.cv-body { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; padding: 118px 0 0 72px; width: 640px; box-sizing: border-box; }
+.cv-lede { max-width: 560px; }
+.cv-eyebrow { font-size: 15px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--gold); }
+.cv-title { margin: 18px 0 0; font-size: 76px; font-weight: 800; line-height: 1.02; letter-spacing: -0.02em; text-transform: uppercase; color: #FFFFFF; }
+.cv-title.long { font-size: 56px; }
+.cv-title span { color: var(--gold); }
+.cv-lede { margin: 16px 0 0; font-size: 25px; font-weight: 500; line-height: 1.35; color: rgba(255, 255, 255, 0.86); }
+.cv-rule { display: block; width: 66px; height: 5px; margin-top: 24px; border-radius: 3px; background: var(--gold); box-shadow: 0 0 14px rgba(244, 209, 60, 0.55); }
+.cv-period {
+  display: inline-flex; align-items: center; gap: 14px; margin-top: 38px; padding: 12px 22px 12px 12px;
+  border: 1.5px solid rgba(244, 209, 60, 0.75); border-radius: 12px; background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 24px rgba(244, 209, 60, 0.12);
+}
+.cv-period-icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 9px; background: var(--gold); }
+.cv-period-label { font-size: 15px; color: rgba(255, 255, 255, 0.82); }
+.cv-period-sep { width: 1px; height: 22px; background: rgba(244, 209, 60, 0.45); }
+.cv-period b { font-size: 17px; font-weight: 700; color: var(--gold); }
+.cv-baseline { margin: 16px 0 0; max-width: 560px; font-size: 13px; line-height: 1.5; color: rgba(255, 255, 255, 0.6); }
+
+.cv-foot {
+  position: absolute; left: 72px; right: 72px; bottom: 0; height: 74px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.10); font-size: 15px; color: rgba(255, 255, 255, 0.8);
+}
+.cv-foot b { color: var(--gold); font-weight: 700; }
+.cv-tags { display: flex; align-items: center; gap: 16px; font-size: 13px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 255, 255, 0.82); }
+.cv-tags i { width: 1px; height: 14px; background: rgba(244, 209, 60, 0.6); }
+
+/* The closing slide shares the cover's look; its heading is a sentence, so
+   it is set smaller and not in capitals. */
+.closing-v2 .cv-close-title { font-size: 54px; line-height: 1.1; text-transform: none; letter-spacing: -0.025em; }
+.closing-v2 .cv-close-note { font-size: 18px; line-height: 1.55; color: rgba(255, 255, 255, 0.78); }
+.closing-v2 .cv-period b { font-size: 16px; }
+.closing-v2 .cv-period { white-space: nowrap; }
+.closing-v2 .cv-period-label { font-size: 14px; }
+.closing-v2 .cv-art { transform: scale(0.86); transform-origin: right bottom; }
+
+/* AI results: score gauge, total mentions, total cited pages; then each
+   assistant's mentions and cited pages. */
+.ai-sum-left { display: grid; grid-template-columns: 1.25fr 1fr 1fr; align-items: center; align-content: center; }
+.ai-sum-stat { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 0 18px; }
+.ai-sum-stat:first-child { padding-left: 0; }
+.ai-sum-stat + .ai-sum-stat { border-left: 1px solid var(--cream-line); }
+.ai-sum-name { font-size: 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.ai-sum-stat b { font-size: 54px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ai-sum-score { display: flex; align-items: flex-end; gap: 10px; }
+.ai-sum-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.ai-sum-table th { padding: 0 0 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); text-align: left; border-bottom: 1px solid var(--line); }
+.ai-sum-table th.num, .ai-sum-table td.num { text-align: right; }
+.ai-sum-table td { padding: 11px 0; border-bottom: 1px solid var(--line); color: var(--ink); font-weight: 500; }
+.ai-sum-table tr:last-child td { border-bottom: 0; }
+.ai-sum-table td.num { font-weight: 700; font-size: 17px; color: var(--gold-deep); font-variant-numeric: tabular-nums; }
+/* Past four assistants the rows tighten, so the table never runs into the summary below. */
+.ai-sum.many .ai-sum-table td { padding: 6px 0; font-size: 14px; }
+.ai-sum.many .ai-sum-table td.num { font-size: 15px; }
+.ai-sum.many .card.pad-lg { padding-top: 18px; padding-bottom: 18px; }
+.ai-sum.many .ai-sum-right { padding-top: 14px; padding-bottom: 12px; }
+.ai-eng { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 10px; border-radius: 50%; font-size: 12px; font-weight: 700; background: var(--ink); color: var(--gold); vertical-align: middle; }
+.ai-eng-google_ai_overview, .ai-eng-ai_mode { background: var(--gold); color: var(--ink); }
+
+/* ── Screenshot evidence ───────────────────────────────────────────── */
+
+.proof-grid {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.proof {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #FFFFFF;
+  overflow: hidden;
+}
+
+.proof-shot {
+  flex: 1 1 0%;
+  min-height: 0;
+  background: var(--surface);
+  overflow: hidden;
+}
+.proof-shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+
+.proof-cap {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border-top: 1px solid var(--line-3);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shot-frame {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #FFFFFF;
+  padding: 14px;
+  overflow: hidden;
+}
+.shot-frame img { display: block; width: 100%; height: auto; object-fit: contain; }
+
+/* ── Print ─────────────────────────────────────────────────────────── */
+
+@page { size: 1280px 720px; margin: 0; }
+
+@media print {
+  html, body { background: #FFFFFF; }
+  .slide {
+    margin: 0;
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+  }
+  .slide:last-child { break-after: auto; page-break-after: auto; }
+}
+</style>
+</head>
+<body>
+
+{# ══════════════════════════════════════════════════════════════════════
+   Helpers
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% set ns = namespace(page=1) %}
+
+{%- macro foot(section) -%}
+  {%- set line = source_lines.get(section) if section else none -%}
+  <div class="foot">
+    <span class="mark"></span>
+    <span>{{ agency_name }} &middot; {{ brand_line }} &mdash; {{ client_name }} &middot; {{ display_label }}</span>
+    {% if line %}<span class="foot-source">{{ line }}</span>{% endif %}
+    <span class="pg">{% set ns.page = ns.page + 1 %}{{ ns.page }}</span>
+  </div>
+{%- endmacro -%}
+
+{%- macro head(eyebrow, title, lede) -%}
+  <span class="eyebrow">{{ eyebrow }}</span>
+  <h2 class="title">{{ title }}</h2>
+  {% if lede %}<p class="lede">{{ lede }}</p>{% endif %}
+  {% if agency_logo_b64 %}<img class="slide-logo" src="{{ agency_logo_b64 }}" alt="{{ agency_name }}" />{% endif %}
+{%- endmacro -%}
+
+{# A signed change, shown only when an earlier period exists to compare with. #}
+{#- The chip carries the percentage only. Which period it is measured against
+    is stated once in the slide's own line, so repeating the full date range
+    on every card both said the same thing six times and ran the text out of
+    the card and across the figure beside it. -#}
+{#- A page's movement, printed beside its click count. A page that earned
+    nothing last period has no percentage to give — "New" says what happened
+    instead of dividing by zero. -#}
+{%- macro page_move(current, change) -%}
+  {%- set now = current | float -%}
+  {%- set diff = change | float -%}
+  {%- set prev = now - diff -%}
+  {%- if prev > 0 and diff != 0 -%}
+    {%- set pct = diff / prev * 100 -%}
+    <span class="page-move {{ 'up' if pct > 0 else 'down' }}">{{ '+' if pct > 0 else '' }}{{ pct | round(0) | int }}%</span>
+  {%- elif prev <= 0 and now > 0 -%}
+    <span class="page-move new">{{ t('pages.new') }}</span>
+  {%- elif diff == 0 -%}
+    <span class="page-move flat">{{ t('pages.held') }}</span>
+  {%- endif -%}
+{%- endmacro -%}
+
+{#- A GA4 comparison table (channels, countries): each cell is this period's
+    figure with its change, and last period's figure under it. -#}
+{%- macro comparison(tbl, title, name_col) -%}
+      <div class="card chan">
+        <p class="card-name">{{ title }}
+          {%- if tbl.has_previous %}<small>{{ compare_vs if compare_label else 'vs ' }}{{ compare_label or 'previous period' }}</small>{% endif %}</p>
+        <table class="data chan">
+          <thead>
+            <tr>
+              <th>{{ name_col }}</th>
+              {% for c in tbl.columns %}<th class="num">{{ c }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in tbl.rows + [tbl.total] %}
+            <tr{% if loop.last %} class="total"{% endif %}>
+              <td class="term">{{ r.name }}</td>
+              {% for c in r.cells %}
+              <td class="num">
+                <span class="cv">{{ c.value }}
+                  {%- if c.change is not none %}<small class="{{ 'up' if c.change > 0 else ('down' if c.change < 0 else '') }}">{{ '+' if c.change > 0 else '' }}{{ c.change }}%</small>{% endif -%}
+                </span>
+                {% if c.prev is not none %}<span class="cp">vs {{ c.prev }}</span>{% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+{%- endmacro -%}
+
+{#- The rising gold chart on the cover and the closing slide. Drawn, not an
+    image, so it stays sharp in the PDF. -#}
+{%- macro cover_chart() -%}
+  <div class="cv-art" aria-hidden="true">
+    <svg viewBox="0 0 640 560" width="640" height="560">
+      <defs>
+        <linearGradient id="cvFront" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2a2718"/><stop offset="1" stop-color="#0e0d0a"/>
+        </linearGradient>
+        <linearGradient id="cvSide" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#4a4326"/><stop offset="1" stop-color="#141209"/>
+        </linearGradient>
+        <linearGradient id="cvGold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#FFE36A"/><stop offset="1" stop-color="#B8860B"/>
+        </linearGradient>
+        <linearGradient id="cvGoldSide" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#C99A12"/><stop offset="1" stop-color="#6B4E06"/>
+        </linearGradient>
+        <linearGradient id="cvFloor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#F4D13C" stop-opacity="0.22"/><stop offset="1" stop-color="#F4D13C" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="cvGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="6" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <marker id="cvHead" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4.2" markerHeight="4.2" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#FFE36A"/>
+        </marker>
+      </defs>
+      {# floor #}
+      <ellipse cx="330" cy="500" rx="300" ry="42" fill="url(#cvFloor)"/>
+      {% for gx in range(0, 7) %}
+      <line x1="{{ 40 + gx * 95 }}" y1="470" x2="{{ -80 + gx * 135 }}" y2="560" stroke="#F4D13C" stroke-opacity="0.07"/>
+      {% endfor %}
+      <line x1="20" y1="496" x2="640" y2="496" stroke="#F4D13C" stroke-opacity="0.12"/>
+      {# bars: x, width, height, gold? #}
+      {% for x, h, gold in [(70, 120, false), (170, 185, false), (270, 250, true), (370, 300, false), (470, 380, true)] %}
+      {% set w = 70 %}{% set d = 34 %}{% set y = 490 %}
+      <polygon points="{{ x + w }},{{ y - h }} {{ x + w + d }},{{ y - h - d * 0.5 }} {{ x + w + d }},{{ y - d * 0.5 }} {{ x + w }},{{ y }}"
+               fill="url(#{{ 'cvGoldSide' if gold else 'cvSide' }})"/>
+      <rect x="{{ x }}" y="{{ y - h }}" width="{{ w }}" height="{{ h }}" fill="url(#{{ 'cvGold' if gold else 'cvFront' }})"
+            stroke="{{ '#FFE36A' if gold else '#F4D13C' }}" stroke-opacity="{{ 0.9 if gold else 0.35 }}" stroke-width="1"/>
+      <polygon points="{{ x }},{{ y - h }} {{ x + d }},{{ y - h - d * 0.5 }} {{ x + w + d }},{{ y - h - d * 0.5 }} {{ x + w }},{{ y - h }}"
+               fill="{{ '#FFF1A8' if gold else '#3b3620' }}" stroke="#F4D13C" stroke-opacity="{{ 0.8 if gold else 0.4 }}" stroke-width="1"/>
+      {% endfor %}
+      {# the rising arrow #}
+      <path d="M20,470 C170,440 250,380 330,300 S470,150 590,52" fill="none" stroke="#F4D13C" stroke-width="12"
+            stroke-linecap="round" filter="url(#cvGlow)" marker-end="url(#cvHead)"/>
+      <path d="M20,470 C170,440 250,380 330,300 S470,150 590,52" fill="none" stroke="#FFF3B0" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    </svg>
+  </div>
+{%- endmacro -%}
+
+{%- macro delta(current, change) -%}
+  {%- if change and (current | float) - (change | float) > 0 -%}
+    {%- set prev = (current | float) - (change | float) -%}
+    {%- set pct = (change | float) / prev * 100 -%}
+    <span class="delta {{ 'up' if pct > 0 else ('down' if pct < 0 else 'flat') }}">
+      {{ '+' if pct > 0 else '' }}{{ pct | round(1) }}%
+    </span>
+  {%- endif -%}
+{%- endmacro -%}
+
+{#- Average position is the one figure where a smaller number is the better
+    one, so it is reported in places moved and coloured the other way round.
+    It carries the same guard as `delta`: with nothing stored for the earlier
+    period the change equals the whole figure, which would have claimed the
+    site moved 12.6 places when it had simply never been measured before. -#}
+{%- macro delta_position(current, change) -%}
+  {%- if change and (current | float) - (change | float) > 0 -%}
+    {%- set moved = (change | float) | round(1) -%}
+    {%- if moved -%}
+      <span class="delta {{ 'down' if moved > 0 else 'up' }}">
+        {{ moved | abs }} {{ 'place' if moved | abs == 1 else 'places' }} {{ 'lower' if moved > 0 else 'better' }}
+      </span>
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro stat(value, name, note, change) -%}
+  {{ delta(value, change) }}
+  <span class="stat-figure">{{ value | fmt }}</span>
+  <span class="stat-name">{{ name }}</span>
+  {% if note %}<span class="stat-note">{{ note }}</span>{% endif %}
+{%- endmacro -%}
+
+{# The written commentary, as the dark panel the reference uses. #}
+{%- macro verdict(key, label) -%}
+  {%- set text = nar(key) -%}
+  {%- if text -%}
+    <div class="verdict">
+      <span class="verdict-label">{{ label or 'The read' }}</span>
+      {% for para in text.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+    </div>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# ── Charts. Inline SVG only: the PDF renderer and the in-app frame both
+      run without scripts, so anything drawn has to be drawn server-side. ── #}
+
+{# Average position over time. The scale is inverted because position 1 is
+   the best result, so "up" on the chart has to mean "better". #}
+{%- macro position_chart() -%}
+  {%- if rank_journey | length >= 2 -%}
+  {%- set W = 500 -%}{%- set H = 220 -%}{%- set L = 44 -%}{%- set T = 26 -%}{%- set B = 34 -%}
+  {%- set vals = rank_journey | map(attribute='avg') | list -%}
+  {%- set top = (vals | max) * 1.18 -%}
+  <svg viewBox="0 0 {{ W }} {{ H }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Average ranking position over time">
+    {% for g in range(4) %}
+      {% set y = T + (H - T - B) * g / 3 %}
+      <line x1="{{ L }}" y1="{{ y }}" x2="{{ W - 12 }}" y2="{{ y }}" stroke="#EDEFF1" stroke-width="1" />
+      <text x="{{ L - 10 }}" y="{{ y + 4 }}" text-anchor="end" font-size="11" fill="#ACACAC">{{ (top * g / 3) | round(0) | int }}</text>
+    {% endfor %}
+    {%- set step = (W - L - 26) / (rank_journey | length - 1) -%}
+    {%- set pts = [] -%}
+    {%- for r in rank_journey -%}
+      {%- set x = L + 14 + step * loop.index0 -%}
+      {%- set y = T + (H - T - B) * (r.avg / top) -%}
+      {%- set _ = pts.append(x ~ ',' ~ y) -%}
+    {%- endfor -%}
+    <polyline points="{{ pts | join(' ') }}" fill="none" stroke="#C79A12" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round" />
+    {% for r in rank_journey %}
+      {% set x = L + 14 + step * loop.index0 %}
+      {% set y = T + (H - T - B) * (r.avg / top) %}
+      <circle cx="{{ x }}" cy="{{ y }}" r="5.5" fill="#F4D13C" stroke="#C79A12" stroke-width="2.5" />
+      <text x="{{ x }}" y="{{ y - 14 }}" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">{{ r.avg | round(1) }}</text>
+      <text x="{{ x }}" y="{{ H - 10 }}" text-anchor="middle" font-size="11.5" fill="#707070">{{ r.label }}</text>
+    {% endfor %}
+  </svg>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Keywords reaching each band, month by month. #}
+{%- macro band_chart() -%}
+  {%- if rank_bands -%}
+  {%- set W = 500 -%}{%- set H = 220 -%}{%- set L = 34 -%}{%- set T = 22 -%}{%- set B = 34 -%}
+  {#- Keyword counts are whole numbers, so the axis must be too. Splitting a
+      peak of 3 into four even steps produced "3 2 2 1 0" — a duplicated
+      label, and gridlines landing between countable values. Pick a whole
+      step instead and let the axis top out on a multiple of it. -#}
+  {%- set top10max = [rank_bands | map(attribute='top10') | max, 1] | max -%}
+  {%- set ticks = [top10max, 4] | min -%}
+  {%- set step = ((top10max + ticks - 1) // ticks) | int -%}
+  {%- set peak = step * ticks -%}
+  <svg viewBox="0 0 {{ W }} {{ H }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Keywords by ranking band">
+    {% for g in range(ticks + 1) %}
+      {% set y = T + (H - T - B) * g / ticks %}
+      <line x1="{{ L }}" y1="{{ y }}" x2="{{ W - 10 }}" y2="{{ y }}" stroke="#EDEFF1" stroke-width="1" />
+      <text x="{{ L - 8 }}" y="{{ y + 4 }}" text-anchor="end" font-size="11" fill="#ACACAC">{{ (step * (ticks - g)) | int }}</text>
+    {% endfor %}
+    {%- set slot = (W - L - 22) / (rank_bands | length) -%}
+    {%- set bw = [slot * 0.3, 26] | min -%}
+    {% for r in rank_bands %}
+      {% set cx = L + 12 + slot * loop.index0 + slot / 2 %}
+      {% set h10 = (H - T - B) * (r.top10 / peak) %}
+      {% set h3  = (H - T - B) * (r.top3 / peak) %}
+      <rect x="{{ cx - bw - 3 }}" y="{{ T + (H - T - B) - h10 }}" width="{{ bw }}" height="{{ h10 }}" fill="#141414" rx="2" />
+      <text x="{{ cx - bw / 2 - 3 }}" y="{{ T + (H - T - B) - h10 - 7 }}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#141414">{{ r.top10 }}</text>
+      <rect x="{{ cx + 3 }}" y="{{ T + (H - T - B) - h3 }}" width="{{ bw }}" height="{{ h3 }}" fill="#F4D13C" rx="2" />
+      <text x="{{ cx + bw / 2 + 3 }}" y="{{ T + (H - T - B) - h3 - 7 }}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#141414">{{ r.top3 }}</text>
+      <text x="{{ cx }}" y="{{ H - 10 }}" text-anchor="middle" font-size="11.5" fill="#707070">{{ r.label }}</text>
+    {% endfor %}
+  </svg>
+  <div class="legend">
+    <span><i style="background:#141414"></i>In top 10</span>
+    <span><i style="background:#F4D13C"></i>In top 3</span>
+  </div>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Ranking distribution: a cluster per band, a bar per column. Initial is
+   grey because it is the past, the newest month gold because it is the point. #}
+{%- macro distribution_chart() -%}
+  {%- set cols = position_bands.chart_columns -%}
+  {%- set rows = position_bands.chart_rows -%}
+  {%- if cols | length and rows | length -%}
+  {%- set W = 620 -%}{%- set H = 250 -%}{%- set L = 34 -%}{%- set T = 20 -%}{%- set B = 46 -%}
+  {%- set peak = [rows | map(attribute='counts') | map('max') | max, 1] | max -%}
+  {%- set ticks = [peak, 4] | min -%}
+  {%- set step = ((peak + ticks - 1) // ticks) | int -%}
+  {%- set top = step * ticks -%}
+  {#- Initial grey, the older months dark to light, the latest two in gold —
+      the newest always the deep gold, however many months there are. -#}
+  {%- set darks = ['#141414', '#6B6B6B', '#3A3A3A', '#9A9A9A', '#262626'][: [cols | length - 3, 0] | max] -%}
+  {%- set tones = ['#B9BDC2'] + darks + ['#F4D13C', '#C79A12'] if cols | length > 3 else ['#B9BDC2', '#141414', '#C79A12'][: cols | length] -%}
+  <svg viewBox="0 0 {{ W }} {{ H }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Ranking distribution over time">
+    {% for g in range(ticks + 1) %}
+      {% set y = T + (H - T - B) * g / ticks %}
+      <line x1="{{ L }}" y1="{{ y }}" x2="{{ W - 8 }}" y2="{{ y }}" stroke="#EDEFF1" stroke-width="1" />
+      <text x="{{ L - 8 }}" y="{{ y + 4 }}" text-anchor="end" font-size="10.5" fill="#ACACAC">{{ (step * (ticks - g)) | int }}</text>
+    {% endfor %}
+    {%- set slot = (W - L - 16) / (rows | length) -%}
+    {%- set bw = [(slot - 10) / (cols | length), 15] | min -%}
+    {% for r in rows %}
+      {% set gx = L + 8 + slot * loop.index0 %}
+      {% for c in r.counts %}
+        {% set h = (H - T - B) * (c / top) %}
+        {% set x = gx + (slot - bw * (cols | length)) / 2 + bw * loop.index0 %}
+        <rect x="{{ x }}" y="{{ T + (H - T - B) - h }}" width="{{ bw - 1.5 }}" height="{{ h }}"
+              fill="{{ tones[loop.index0 % tones | length] }}" rx="1.5" />
+        {% if c %}<text x="{{ x + bw / 2 }}" y="{{ T + (H - T - B) - h - 5 }}" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">{{ c }}</text>{% endif %}
+      {% endfor %}
+      <text x="{{ gx + slot / 2 }}" y="{{ H - 24 }}" text-anchor="middle" font-size="10" fill="#707070">{{ r.name }}</text>
+    {% endfor %}
+  </svg>
+  <div class="legend">
+    {% for c in cols %}<span><i style="background:{{ tones[loop.index0 % tones | length] }}"></i>{{ c }}</span>{% endfor %}
+  </div>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# A donut with its own key beside it. #}
+{%- macro donut(rows, name_key, value_key) -%}
+  {%- set tones = ['#F4D13C', '#141414', '#C79A12', '#B9BDC2', '#EFE2A6', '#8A8F94'] -%}
+  {%- set total = rows | sum(attribute=value_key) -%}
+  {%- if total -%}
+  <div class="ring-row" style="margin-top:18px">
+    <svg viewBox="0 0 42 42" width="176" height="176" role="img" aria-label="Breakdown by share">
+      {%- set ns2 = namespace(off=25) -%}
+      {% for r in rows[:6] %}
+        {%- set pct = r[value_key] / total * 100 -%}
+        <circle cx="21" cy="21" r="15.915" fill="transparent"
+                stroke="{{ tones[loop.index0 % tones | length] }}" stroke-width="9"
+                stroke-dasharray="{{ pct | round(2) }} {{ (100 - pct) | round(2) }}"
+                stroke-dashoffset="{{ ns2.off }}" />
+        {%- set ns2.off = ns2.off - pct -%}
+      {% endfor %}
+    </svg>
+    <div class="ring-key">
+      {% for r in rows[:6] %}
+      <div class="ring-item">
+        <span class="ring-swatch" style="background:{{ tones[loop.index0 % tones | length] }}"></span>
+        <span class="ring-figure">{{ r[value_key] | fmt }}</span>
+        <span class="ring-pct">{{ (r[value_key] / total * 100) | round(0) | int }}%</span>
+        <span class="ring-label">{{ r[name_key] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# ══════════════════════════════════════════════════════════════════════
+   01 · Cover
+   ══════════════════════════════════════════════════════════════════ #}
+
+<section class="slide cover-v2">
+  {#- Drawn, not an image: the rising chart stays sharp in the PDF. -#}
+  {{ cover_chart() }}
+
+  <div class="cv-body">
+    <span class="cv-eyebrow">{{ brand_line }}</span>
+    {%- set name = (ct('exec_summary') or client_name) | trim %}
+    {%- set words = name.split() %}
+    <h1 class="cv-title {{ 'long' if name | length > 18 }}">
+      {%- if words | length > 1 %}{{ words[:-1] | join(' ') }} <span>{{ words[-1] }}</span>{% else %}{{ name }}{% endif -%}
+    </h1>
+    {%- set lede = cs('exec_summary') or cover_lede %}
+    {% if lede %}<p class="cv-lede">{{ lede }}</p>{% endif %}
+    <span class="cv-rule" aria-hidden="true"></span>
+
+    <div class="cv-period">
+      <span class="cv-period-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="none" stroke="#141414" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="#141414" stroke-width="2" stroke-linecap="round"/><rect x="7" y="13" width="3" height="3" rx=".6" fill="#141414"/></svg>
+      </span>
+      <span class="cv-period-label">{{ t('cover.period_label') }}</span>
+      <span class="cv-period-sep" aria-hidden="true"></span>
+      <b>{{ t('cover.period', period=display_label, range=period_range or display_label) or display_label }}</b>
+    </div>
+    {% if baseline %}<p class="cv-baseline">{{ t('baseline.note') }}</p>{% endif %}
+  </div>
+
+  <div class="cv-foot">
+    <span>Prepared by <b>{{ agency_name }}</b></span>
+    <span class="cv-tags">
+      {%- for tag in t('cover.tags').split('|') if tag.strip() %}{% if not loop.first %}<i aria-hidden="true"></i>{% endif %}<span>{{ tag.strip() }}</span>{% endfor -%}
+    </span>
+  </div>
+</section>
+
+{# ══════════════════════════════════════════════════════════════════════
+   02 · Performance Highlight
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if shown('key_metrics') %}
+<section class="slide">
+  {{ head(ce('key_metrics'), ct('key_metrics'), cs('key_metrics') or (('Totals for the whole period; every change is ' ~ compare_label ~ '.' if compare_vs == '' else 'Every figure compared against ' ~ compare_label ~ '.') if compare_label else 'The starting point for this client — every following month is measured against these.')) }}
+  <div class="body">
+    {% if baseline %}<div class="baseline-strip">{{ baseline_note }}</div>{% endif %}
+    {#- Eight figures sit four across, two down. Sorting them by size would
+        move a figure between months, so the order is fixed in slide_deck. -#}
+    <div class="row {{ 'c5' if scorecard | length > 8 else ('c4' if scorecard | length > 6 else 'c3') }} tight {{ '' if scorecard | length > 8 else 'grow' }}">
+      {% for s in scorecard %}
+      <div class="card {{ 'cream' if s.highlight else 'fill' }}">
+        {% if s.tag %}<span class="delta tag">{{ s.tag }}</span>{% else %}{{ delta(s.raw, s.change) }}{% endif %}
+        <span class="stat-figure sm {{ 'ratio' if '/' in s.value }}">{{ s.value }}</span>
+        <span class="stat-name">{{ s.name }}</span>
+        {% if s.note %}<span class="stat-note">{{ s.note }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {{ verdict('key_metrics', t('verdict.key_metrics')) }}
+  </div>
+  {{ foot() }}
+</section>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   03 · Leads & Conversion
+   ══════════════════════════════════════════════════════════════════ #}
+
+{#- The enquiries themselves, not the traffic that produced them. A property
+    that records no conversion events has nothing true to put here, so the
+    slide is left out rather than printed full of zeros. -#}
+{% if sections.ga4 and shown('leads') %}
+<section class="slide">
+  {{ head(ce('leads'), ct('leads'), cs('leads') or 'The actions that turn a visit into an enquiry.') }}
+  <div class="body">
+    {% if lead_figures %}
+    {#- The total leads the slide, the figures behind it fill the rest in an
+        even grid: four across left one card stranded on a second row and a
+        gap the height of the page above the commentary. -#}
+    {%- set n = lead_figures | length %}
+    <div class="row c1-2 tight {{ 'grow' if not lead_events }} leads-row">
+      <div class="card cream pad-lg leads-total">
+        {% if leads_change %}{{ delta(leads_total, leads_change) }}{% endif %}
+        <span class="stat-figure lg">{{ leads_total | fmt }}</span>
+        <span class="stat-name">{{ t('kpi.leads.name') }}</span>
+        <span class="stat-note">{{ t('kpi.leads.note') }}</span>
+      </div>
+      <div class="leads-grid n{{ n if n <= 6 else 6 }}">
+        {% for f in lead_figures %}
+        <div class="card fill">
+          {% if f.change is defined %}{{ delta(f.raw, f.change) }}{% endif %}
+          <span class="stat-figure sm">{{ f.value }}</span>
+          <span class="stat-name">{{ f.name }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if lead_events %}
+    {#- Sized to its rows, not stretched: a property with one extra event was
+        printing a mostly empty box the height of the slide. -#}
+    <div class="card">
+      <p class="card-name">{{ t('leads.other.name') }}</p>
+      <p class="card-sub">{{ t('leads.other.sub') }}</p>
+      <div class="lead-events">
+        {% for e in lead_events %}
+        <div class="lead-event">
+          <span class="lead-event-name">{{ e.name }}</span>
+          <span class="lead-event-val">{{ e.value }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if not lead_figures %}<div class="grow"></div>{% endif %}
+    {{ verdict('leads', t('verdict.leads')) }}
+  </div>
+  {{ foot('ga4') }}
+</section>
+{% endif %}
+{# ══════════════════════════════════════════════════════════════════════
+   04 · Ranking Summary
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if sections.rankings %}
+{% if shown('rankings') %}
+<section class="slide">
+  {{ head(ce('rankings'), ct('rankings'), cs('rankings') or (position_bands.on_page_one ~ ' keywords now rank on Google\u2019s first page.')) }}
+  <div class="body">
+    <div class="row c2-1 grow">
+      <table class="data band-table">
+        <thead>
+          <tr>
+            <th>{{ t('rank.band_col') }}</th>
+            {% for c in position_bands.columns %}<th class="num {{ 'now' if loop.first }}">{{ c }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in position_bands.rows %}
+          <tr>
+            <td class="term">{{ r.name }}</td>
+            {% for n in r.counts %}<td class="num {{ 'now' if loop.first }}">{{ n }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="card viz">
+        <p class="card-name">{{ t('rank.chart.name') }}</p>
+        <p class="card-sub">{{ t('rank.chart.sub') }}</p>
+        {{ distribution_chart() }}
+      </div>
+    </div>
+    {{ verdict('rankings', t('verdict.rankings')) }}
+  </div>
+  {{ foot('rankings') }}
+</section>
+{% endif %}
+
+{# ── 05 · Keywords Rankings Tracking ── #}
+{% if shown('rankings_table') %}
+{#- Every tracked keyword prints, ten to a slide — none is left off for space. -#}
+{% set kw_pages = keywords | pages(18) %}
+{% for kw_page in kw_pages %}
+{% set kw_offset = kw_pages[:loop.index0] | map('length') | sum %}
+{% set kw_pages_n = kw_pages | length %}
+{% if not keywords %}{% set kw_pages_n = 1 %}{% endif %}
+<section class="slide">
+  {{ head(ce('rankings_table'), ct('rankings_table'), cs('rankings_table') if loop.first else none) }}
+  <div class="body">
+    <table class="data fit {{ density(kw_page | length, 10, 14) }}">
+      <thead>
+        <tr>
+          <th style="width:42px">#</th>
+          <th>{{ t('kw.term_col') }}</th>
+          <th class="num">{{ t('rank.initial') }}</th>
+          {#- The latest month sits in the middle, beside Initial; earlier
+              months follow it, newest first. -#}
+          {% for m in rank_months | reverse %}<th class="num {{ 'now' if loop.first }}">{{ m }}{% if loop.first and rank_months | length > 1 %} (Latest){% endif %}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for kw in kw_page %}
+        <tr>
+          <td class="idx">{{ kw_offset + loop.index }}</td>
+          <td class="term">{{ kw.get('term', '') }}</td>
+          {% set hist = kw.get('positions', {}) %}
+          <td class="num">{{ kw.get('initial_rank') or '—' }}</td>
+          {#- The newest month carries the movement: an arrow against the month
+              before it, green for a better (lower) position, red for worse. -#}
+          {% set now_pos = hist.get(rank_months[-1]) if rank_months else none %}
+          {% set was_pos = hist.get(rank_months[-2]) if rank_months | length > 1 else none %}
+          {% for m in rank_months | reverse %}
+            {% if loop.first %}
+            <td class="num now">
+              {#- The number sits in the middle of the column; the arrow hangs
+                  beside it without pushing it off centre. -#}
+              <span class="rank-now">{{ now_pos or '—' }}
+              {%- if now_pos and was_pos and was_pos > now_pos %}<span class="rank-arrow up" title="Up {{ was_pos - now_pos }}">&#9650;</span>
+              {%- elif now_pos and was_pos and was_pos < now_pos %}<span class="rank-arrow down" title="Down {{ now_pos - was_pos }}">&#9660;</span>
+              {%- elif now_pos and not was_pos and rank_months | length > 1 %}<span class="rank-new">{{ t('kw.new') }}</span>{% endif -%}
+              </span>
+            </td>
+            {% else %}
+            <td class="num">{{ hist.get(m) or '—' }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        {% if not kw_page %}<tr><td colspan="{{ 3 + rank_months | length }}" class="empty-row">No keywords tracked yet.</td></tr>{% endif %}
+      </tbody>
+    </table>
+    <p class="fine">{{ t('kw.note') }}</p>
+  </div>
+  {{ foot('rankings') }}
+</section>
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   06 · Traffic Progress Summary
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if sections.ga4 and shown('ga4') %}
+<section class="slide">
+  {{ head(ce('ga4'), ct('ga4'), cs('ga4') or 'Visits to the website and what visitors went on to do.') }}
+  <div class="body">
+    {% if ga4_channels.rows %}
+    {#- One side the period's own figures, small; the other side GA4's
+        Traffic acquisition table, channel by channel against last period. -#}
+    {%- set gd = deltas.get('ga4', {}) -%}
+    <div class="row c-traffic tight grow">
+      <div class="mini-grid">
+        {% if mo('ga4.sessions') %}
+        <div class="card cream">
+          {{ delta(ga4.get('sessions', 0), gd.get('sessions', 0)) }}
+          <span class="stat-figure">{{ ga4.get('sessions', 0) | fmt }}</span>
+          <span class="stat-name">{{ t('ga4.sessions') }}</span>
+        </div>
+        {% endif %}
+        {% if mo('ga4.users') %}
+        <div class="card fill">
+          {{ delta(ga4.get('users', 0), gd.get('users', 0)) }}
+          <span class="stat-figure">{{ ga4.get('users', 0) | fmt }}</span>
+          <span class="stat-name">{{ 'Avg. monthly users' if months | length > 1 else 'Users' }}</span>
+        </div>
+        {% endif %}
+        {% if mo('ga4.engaged_sessions') %}
+        <div class="card fill">
+          {{ delta(ga4.get('engaged_sessions', 0), gd.get('engaged_sessions', 0)) }}
+          <span class="stat-figure">{{ ga4.get('engaged_sessions', 0) | fmt }}</span>
+          <span class="stat-name">{{ t('ga4.engaged') }}</span>
+        </div>
+        {% endif %}
+        {% if mo('ga4.conversions') %}
+        <div class="card fill">
+          {{ delta(ga4.get('conversions', 0), gd.get('conversions', 0)) }}
+          <span class="stat-figure">{{ ga4.get('conversions', 0) | fmt }}</span>
+          <span class="stat-name">{{ t('ga4.conversions') }}</span>
+        </div>
+        {% endif %}
+        {% if mo('ga4.revenue') %}
+        <div class="card fill">
+          {{ delta(ga4.get('revenue', 0), gd.get('revenue', 0)) }}
+          <span class="stat-figure">{{ ga4.get('revenue', 0) | fmt }}</span>
+          <span class="stat-name">{{ t('ga4.revenue') }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {{ comparison(ga4_channels, 'Traffic acquisition by channel', 'Channel') }}
+    </div>
+    {% else %}
+    <div class="row c3 tight">
+      {% if mo('ga4.sessions') %}
+      <div class="card cream pad-lg">
+        {{ delta(ga4.get('sessions', 0), deltas.get('ga4', {}).get('sessions', 0)) }}
+        <span class="stat-figure sm">{{ ga4.get('sessions', 0) | fmt }}</span>
+        <span class="stat-name">{{ t('ga4.sessions') }}</span>
+      </div>
+      {% endif %}
+      {% if mo('ga4.users') %}
+      <div class="card fill">
+        {{ delta(ga4.get('users', 0), deltas.get('ga4', {}).get('users', 0)) }}
+        <span class="stat-figure sm">{{ ga4.get('users', 0) | fmt }}</span>
+        <span class="stat-name">{{ 'Avg. monthly users' if months | length > 1 else 'Users' }}</span>
+      </div>
+      {% endif %}
+      {% if mo('ga4.engaged_sessions') %}
+      <div class="card fill">
+        {{ delta(ga4.get('engaged_sessions', 0), deltas.get('ga4', {}).get('engaged_sessions', 0)) }}
+        <span class="stat-figure sm">{{ ga4.get('engaged_sessions', 0) | fmt }}</span>
+        <span class="stat-name">{{ t('ga4.engaged') }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if mo('ga4.conversions') %}
+    <div class="row c2 tight">
+      <div class="card fill">
+        {{ delta(ga4.get('conversions', 0), deltas.get('ga4', {}).get('conversions', 0)) }}
+        <span class="stat-figure sm">{{ ga4.get('conversions', 0) | fmt }}</span>
+        <span class="stat-name">{{ t('ga4.conversions') }}</span>
+      </div>
+      {% if mo('ga4.revenue') %}
+      <div class="card fill">
+        {{ delta(ga4.get('revenue', 0), deltas.get('ga4', {}).get('revenue', 0)) }}
+        <span class="stat-figure sm">{{ ga4.get('revenue', 0) | fmt }}</span>
+        <span class="stat-name">{{ t('ga4.revenue') }}</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+    {{ verdict('ga4', t('verdict.ga4')) }}
+  </div>
+  {{ foot('ga4') }}
+</section>
+{% endif %}
+
+{# ── 08 · Traffic (Geographical Distribution) ── #}
+{% if sections.ga4 and shown('ga4_countries') %}
+<section class="slide">
+  {{ head(ce('ga4_countries'), ct('ga4_countries'), cs('ga4_countries') or 'Where in the world this month\u2019s visitors came from.') }}
+  <div class="body">
+    {% if ga4_country_table.rows %}
+    {#- The share of visits, small, beside GA4's Demographic details table. -#}
+    <div class="row c-traffic tight grow">
+      <div class="card viz">
+        <p class="card-name">{{ t('src.share_col') }}</p>
+        <p class="card-sub">{{ ga4.get('sessions', 0) | fmt }} sessions by country</p>
+        {{ donut(ga4_countries[:4], 'country', 'sessions') }}
+      </div>
+      {{ comparison(ga4_country_table, 'Users by country', 'Country') }}
+    </div>
+    {% else %}
+    <div class="row c2 grow">
+      <div class="card viz">
+        <p class="card-name">{{ t('src.share_col') }}</p>
+        <p class="card-sub">{{ ga4.get('sessions', 0) | fmt }} sessions by country</p>
+        {{ donut(ga4_countries[:4], 'country', 'sessions') }}
+      </div>
+      <div class="card">
+        <p class="card-name">{{ t('geo.name') }}</p>
+        <p class="card-sub">{{ t('geo.sub') }}</p>
+        <div style="margin-top:16px">
+          {% set top_c = ga4_countries[0].get('sessions', 1) or 1 %}
+          {% for c in ga4_countries[:5] %}
+          <div class="qbar">
+            <div class="qbar-top">
+              <span class="qbar-name">{{ c.get('country') or 'Not set' }}</span>
+              <span class="qbar-val">{{ c.get('sessions', 0) | fmt }}</span>
+            </div>
+            <div class="qbar-track"><div class="qbar-fill" style="width:{{ (c.get('sessions', 0) / top_c * 100) | round(1) }}%"></div></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {{ verdict('ga4_countries', t('verdict.ga4_countries')) }}
+  </div>
+  {{ foot('ga4') }}
+</section>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   09 · Click & Impressions
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if sections.gsc and shown('gsc') %}
+<section class="slide">
+  {{ head(ce('gsc'), ct('gsc'), cs('gsc') or 'How often the site appears in Google search, and how often people click through.') }}
+  <div class="body">
+    <div class="row c2 tight">
+      {% if mo('gsc.clicks') %}
+      <div class="card cream pad-lg">
+        {{ delta(gsc.get('clicks', 0), deltas.get('gsc', {}).get('clicks', 0)) }}
+        <span class="stat-figure">{{ gsc.get('clicks', 0) | fmt }}</span>
+        <span class="stat-name">{{ t('gsc.clicks') }}</span>
+      </div>
+      {% endif %}
+      {% if mo('gsc.impressions') %}
+      <div class="card cream pad-lg">
+        {{ delta(gsc.get('impressions', 0), deltas.get('gsc', {}).get('impressions', 0)) }}
+        <span class="stat-figure">{{ gsc.get('impressions', 0) | fmt }}</span>
+        <span class="stat-name">{{ t('gsc.impressions') }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="row c2 tight">
+      {% if mo('gsc.ctr') %}
+      <div class="card fill">
+        {{ delta(gsc.get('ctr', 0), deltas.get('gsc', {}).get('ctr', 0)) }}
+        <span class="stat-figure sm">{{ (gsc.get('ctr', 0) * 100) | round(2) }}%</span>
+        <span class="stat-name">{{ t('gsc.ctr') }}</span>
+      </div>
+      {% endif %}
+      {% if mo('gsc.position') %}
+      <div class="card fill">
+        {{ delta_position(gsc.get('position', 0), deltas.get('gsc', {}).get('position', 0)) }}
+        <span class="stat-figure sm">{{ gsc.get('position', 0) | round(1) }}</span>
+        <span class="stat-name">{{ t('gsc.position') }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {{ verdict('gsc', t('verdict.gsc')) }}
+  </div>
+  {{ foot('gsc') }}
+</section>
+{% endif %}
+
+{# ── 09b · Search Console Performance: Google's own view, as it looks there ── #}
+{% set gc = gsc_console %}
+{% if sections.gsc and shown('gsc_console') %}
+<section class="slide">
+  {{ head(ce('gsc_console'), ct('gsc_console'), cs('gsc_console') or none) }}
+  <div class="body gsc-console">
+    <div class="gc-tiles">
+      <div class="gc-tile on clicks"><span class="gc-tile-name"><i>&#10003;</i>Total clicks</span><b>{{ gc.clicks }}</b></div>
+      <div class="gc-tile on impressions"><span class="gc-tile-name"><i>&#10003;</i>Total impressions</span><b>{{ gc.impressions }}</b></div>
+      <div class="gc-tile"><span class="gc-tile-name"><i></i>Average CTR</span><b>{{ gc.ctr }}</b></div>
+      <div class="gc-tile"><span class="gc-tile-name"><i></i>Average position</span><b>{{ gc.position }}</b></div>
+    </div>
+
+    {% if gc.chart %}{% set ch = gc.chart %}
+    <div class="gc-chart">
+      <div class="gc-axis-names"><span>Clicks</span><span>Impressions</span></div>
+      <svg viewBox="-34 -8 {{ ch.width + 72 }} {{ ch.height + 30 }}" role="img" aria-label="Daily clicks and impressions">
+        {% for tk in ch.ticks %}
+        <line x1="0" x2="{{ ch.width }}" y1="{{ tk.y }}" y2="{{ tk.y }}" class="gc-grid{% if loop.first %} base{% endif %}" />
+        <text x="-8" y="{{ tk.y + 3 }}" class="gc-tick" text-anchor="end">{{ tk.left }}</text>
+        <text x="{{ ch.width + 8 }}" y="{{ tk.y + 3 }}" class="gc-tick">{{ tk.right }}</text>
+        {% endfor %}
+        {% for d in ch.dates %}
+        <text x="{{ d.x }}" y="{{ ch.height + 18 }}" class="gc-tick" text-anchor="middle">{{ d.label }}</text>
+        {% endfor %}
+        <polyline points="{{ ch.impressions }}" class="gc-line impressions" />
+        <polyline points="{{ ch.clicks }}" class="gc-line clicks" />
+      </svg>
+    </div>
+    {% endif %}
+
+    {% if gc.queries %}
+    <div class="gc-table">
+      <div class="gc-tabs"><span class="on">Queries</span><span>Pages</span><span>Countries</span><span>Devices</span><span>Search appearance</span><span>Days</span></div>
+      <table>
+        <thead><tr><th>Top queries</th><th class="num">&darr; Clicks</th><th class="num">Impressions</th></tr></thead>
+        <tbody>
+          {% for q in gc.queries %}
+          <tr><td>{{ q.get('query') }}</td><td class="num clicks">{{ q.get('clicks', 0) | fmt }}</td><td class="num impressions">{{ q.get('impressions', 0) | fmt }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  {{ foot('gsc') }}
+</section>
+{% endif %}
+
+{# ── 10 · Top Performing Pages: the pages trending up, with their pictures ── #}
+{% if sections.gsc and gsc_trending and shown('gsc_pages') %}
+{% set tr_pages = gsc_trending | pages(10) %}
+{% for tr_page in tr_pages %}
+{% set tr_offset = tr_pages[:loop.index0] | map('length') | sum %}
+<section class="slide">
+  {{ head(ce('gsc_pages'), ct('gsc_pages'), (cs('gsc_pages') or 'The pages gaining the most search clicks against last period.') if loop.first else none) }}
+  <div class="body">
+    <div class="card grow trend-list {{ density(tr_page | length, 5, 7) }}">
+      {% for p in tr_page %}
+      {%- set url = p.get('page') or '' -%}
+      {%- set path = url.split('://', 1)[-1].split('/', 1)[1] if '/' in url.split('://', 1)[-1] else '' -%}
+      {%- set now = p.get('clicks', 0) | float -%}
+      {%- set was = p.get('prev_clicks', 0) | float -%}
+      <div class="trend-row">
+        <span class="trend-thumb">
+          {% if p.get('image') %}<img src="{{ p.get('image') }}" alt="" />{% else %}<span class="trend-thumb-none">{{ tr_offset + loop.index }}</span>{% endif %}
+        </span>
+        <span class="trend-page">
+          <span class="trend-path">{{ ('/' ~ path.rstrip('/')) if path.strip('/') else 'Homepage' }}</span>
+          <span class="trend-url">{{ url[:90] }}</span>
+        </span>
+        <span class="trend-figs">
+          <span class="trend-now">{{ now | fmt }} <small>clicks</small></span>
+          {%- if p.get('span_pct') is not none %}
+          <span class="trend-gain {{ 'down' if p.get('span_pct') < 0 }}">
+            {{ '+' if p.get('span_pct') >= 0 else '−' }}{{ p.get('span_pct') | abs }}% <small>{{ compare_label }}</small>
+          </span>
+          {%- endif %}
+          {%- if p.get('prev_clicks') is not none %}
+          {%- set diff = now - was %}
+          <span class="trend-gain {{ 'down' if diff < 0 }}">
+            {{ '+' if diff >= 0 else '−' }}{{ (diff | abs) | fmt }}
+            {%- if was > 0 %} · {{ '+' if diff >= 0 else '−' }}{{ ((diff | abs) / was * 100) | round(0) | int }}%{% else %} · {{ t('pages.new') }}{% endif %}
+            <small>from {{ was | fmt }}</small>
+          </span>
+          {%- endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% if loop.last %}{{ verdict('gsc_pages', t('verdict.gsc_pages')) }}{% endif %}
+  </div>
+  {{ foot('gsc') }}
+</section>
+{% endfor %}
+{% elif sections.gsc and shown('gsc_pages') %}
+<section class="slide">
+  {{ head(ce('gsc_pages'), ct('gsc_pages'), cs('gsc_pages') or 'The pages earning the site’s search clicks.') }}
+  <div class="body">
+    <div class="card grow">
+      {% set top_clicks = (gsc_top_pages[0].get('clicks', 1) if gsc_top_pages else 1) or 1 %}
+      {% if not gsc_top_pages %}<p class="empty-row">No page figures yet.</p>{% endif %}
+      {% for p in gsc_top_pages %}
+      <div class="qbar">
+        <div class="qbar-top">
+          <span class="qbar-name">{{ (p.get('page') or '')[:72] }}</span>
+          <span class="qbar-val">
+            {{ p.get('clicks', 0) | fmt }}
+            {%- if p.get('change') is not none %}{{ page_move(p.get('clicks', 0), p.get('change')) }}{% endif -%}
+          </span>
+        </div>
+        <div class="qbar-track"><div class="qbar-fill" style="width:{{ (p.get('clicks', 0) / top_clicks * 100) | round(1) }}%"></div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {{ verdict('gsc_pages', t('verdict.gsc_pages')) }}
+  </div>
+  {{ foot('gsc') }}
+</section>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   11 · AI Keyword Visibility
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if sections.ai_visibility %}
+{% if shown('ai_visibility') %}
+{% set ai_pages = ai_matrix.rows | pages(16) %}
+{% for ai_page in ai_pages %}
+{% set ai_offset = ai_pages[:loop.index0] | map('length') | sum %}
+<section class="slide">
+  {{ head(ce('ai_visibility'), ct('ai_visibility'), (cs('ai_visibility') or 'Whether each AI assistant names this brand when asked the questions your customers ask.') if loop.first else none) }}
+  <div class="body">
+    {#- The grid is the slide. Its totals are carried on the next one, so
+        repeating them here only took the rows' room. -#}
+    {#- One row per prompt, one column per assistant: which questions this
+        brand is found for, and where it is missing. -#}
+    <table class="data ai-grid fit {{ density(ai_page | length, 8, 12) }}">
+      <thead>
+        <tr>
+          <th class="col-index">#</th>
+          <th>{{ t('ai.prompt_col') }}</th>
+          {% for e in ai_matrix.engines %}<th class="num">{{ e }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ai_page %}
+        <tr>
+          <td class="num row-index">{{ ai_offset + loop.index }}</td>
+          <td class="term">{{ r.prompt[:74] }}</td>
+          {% for seen in r.seen %}
+            <td class="num">
+              {% if seen is none %}<span class="seen none">—</span>
+              {% elif seen %}<span class="seen yes">{{ t('ai.yes') }}</span>
+              {% else %}<span class="seen no">{{ t('ai.no') }}</span>{% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        {% if not ai_page %}<tr><td colspan="{{ 2 + ai_matrix.engines | length }}" class="empty-row">No prompts checked yet.</td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+  {{ foot('ai_visibility') }}
+</section>
+{% endfor %}
+{% endif %}
+
+{#- Straight after the grid: the captures that prove it. -#}
+{# ── 12 · Proof of AI visibility: six captures a page, three across ── #}
+{% if shown('ai_proof') %}
+{% for page in (ai_proof_pages or [[]]) %}
+<section class="slide">
+  {{ head(ce('ai_proof'), ct('ai_proof'), cs('ai_proof') or (
+      'Captured answers from each assistant.' if loop.first else none)) }}
+  <div class="body">
+    {#- Laid out by how many there are, each shown whole whatever its size:
+        uploads come in every shape, and cropping cut most of them off. -#}
+    {% if not page %}<div class="card grow empty-card">No screenshots added yet.</div>{% endif %}
+    <div class="shot-grid n{{ page | length }}">
+      {% for img in page %}
+      <figure class="proof" style="margin:0">
+        <span class="proof-shot">
+          <img src="{{ img.src or img.base64_data or (base_url ~ img.file_url if img.file_url.startswith('/') else img.file_url) }}"
+               alt="{{ img.caption or 'AI answer capture' }}" />
+        </span>
+        {% if img.caption %}<figcaption class="proof-cap">{{ img.caption }}</figcaption>{% endif %}
+      </figure>
+      {% endfor %}
+    </div>
+  </div>
+  {{ foot('ai_visibility') }}
+</section>
+{% endfor %}
+{% endif %}
+
+{# The commentary gets its own room rather than squeezing the grid. #}
+{% if sections.ai_visibility and shown('ai_results') %}
+<section class="slide">
+  {{ head(ce('ai_results'), ct('ai_results'), cs('ai_results') or none) }}
+  <div class="body">
+    {%- set sm = ai_summary %}
+    <div class="row c2 tight ai-sum {{ 'many' if sm.engines | length > 4 }}">
+      {#- The headline three, like the AI visibility tools show them: a gauge
+          for the score, then total mentions and total cited pages. -#}
+      <div class="card cream pad-lg ai-sum-left">
+        <div class="ai-sum-stat">
+          <span class="ai-sum-name">AI Visibility</span>
+          <span class="ai-sum-score">
+            <svg viewBox="0 0 64 36" width="80" height="45" aria-hidden="true">
+              <path d="M6,32 A26,26 0 0 1 58,32" fill="none" stroke="#E7E1C8" stroke-width="7" stroke-linecap="round"/>
+              <path d="M6,32 A26,26 0 0 1 58,32" fill="none" stroke="#C99A12" stroke-width="7" stroke-linecap="round"
+                    pathLength="100" stroke-dasharray="{{ sm.score }} 100"/>
+            </svg>
+            <b>{{ sm.score }}</b>
+          </span>
+        </div>
+        <div class="ai-sum-stat">
+          <span class="ai-sum-name">Total Mentions</span>
+          <b>{{ sm.mentions | fmt }}</b>
+        </div>
+        <div class="ai-sum-stat">
+          <span class="ai-sum-name">Total Cited Pages</span>
+          <b>{{ sm.cited | fmt }}</b>
+        </div>
+      </div>
+      <div class="card fill ai-sum-right">
+        <table class="ai-sum-table">
+          <thead><tr><th>Assistant</th><th class="num">Mentions</th><th class="num">Cited Pages</th></tr></thead>
+          <tbody>
+            {% for e in sm.engines %}
+            <tr>
+              <td><span class="ai-eng ai-eng-{{ e.key }}">{{ e.name[:1] }}</span>{{ e.name }}</td>
+              <td class="num">{{ e.mentions | fmt }}</td>
+              <td class="num">{{ e.cited | fmt }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {{ verdict('ai_visibility', t('verdict.ai_visibility')) }}
+  </div>
+  {{ foot('ai_visibility') }}
+</section>
+{% endif %}
+{% endif %}
+
+
+
+{# ══════════════════════════════════════════════════════════════════════
+   13 · AI Assistant Referral Traffic
+   ══════════════════════════════════════════════════════════════════ #}
+{% if sections.ga4 and shown('ai_referral') %}
+<section class="slide">
+  {{ head(ce('ai_referral'), ct('ai_referral'), cs('ai_referral') or 'Visits from people who asked an AI assistant and clicked through to the site.') }}
+  <div class="body">
+    <div class="row c1-2 grow">
+      <div class="card cream pad-lg">
+        <span class="stat-figure lg">{{ ai_referral.sessions | fmt }}</span>
+        <span class="stat-name">{{ t('airef.name') }}</span>
+        <span class="stat-note">{{ ai_referral.share }}% of all visits this period. This is real traffic, not a prompt check.</span>
+      </div>
+      <div class="card">
+        <p class="card-name">{{ t('airef.split.name') }}</p>
+        <p class="card-sub">{{ t('airef.split.sub') }}</p>
+        <div style="margin-top:16px">
+          {% set top_ai = (ai_referral.engines | map(attribute='sessions') | max if ai_referral.engines else 0) or 1 %}
+          {% for e in ai_referral.engines %}
+          <div class="qbar">
+            <div class="qbar-top"><span class="qbar-name">{{ e.name }}</span><span class="qbar-val">{{ e.sessions | fmt }}</span></div>
+            <div class="qbar-track"><div class="qbar-fill" style="width:{{ (e.sessions / top_ai * 100) | round(1) }}%"></div></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {{ verdict('ai_referral', t('verdict.ai_referral')) }}
+  </div>
+  {{ foot('ga4') }}
+</section>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   14 · Google Business Profile Performance
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if sections.gbp and shown('gbp') %}
+<section class="slide">
+  {{ head(ce('gbp'), ct('gbp'), cs('gbp') or 'The actions that turn a local search into an enquiry.') }}
+  <div class="body">
+    <div class="row c1-2 grow">
+      <div class="card cream pad-lg">
+        {{ delta(gbp_interactions, gbp_interactions_change) }}
+        <span class="stat-figure lg">{{ gbp_interactions | fmt }}</span>
+        <span class="stat-name">{{ t('gbp.total.name') }}</span>
+        <span class="stat-note">{{ t('gbp.total.sub') }}</span>
+      </div>
+
+      {#- Five actions in a two-column grid made three rows, and the cards
+          shrank until their names were cut off: past four, go three across. -#}
+      <div class="row {{ 'c3' if gbp_actions | length > 4 else 'c2' }} tight" style="grid-auto-rows:minmax(0,1fr)">
+        {% for m in gbp_actions %}
+        <div class="card fill">
+          {{ delta(m.raw, m.change) }}
+          <span class="stat-figure sm">{{ m.value }}</span>
+          <span class="stat-name">{{ m.name }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {{ verdict('gbp', t('verdict.gbp')) }}
+  </div>
+  {{ foot('gbp') }}
+</section>
+
+{% endif %}
+
+{# ── 14b · Google Business Profile screenshots, added in the builder ── #}
+{% if sections.gbp and shown('gbp_proof') %}
+<section class="slide">
+  {{ head(ce('gbp_proof'), ct('gbp_proof'), cs('gbp_proof') or 'Captures from the Business Profile this period.') }}
+  <div class="body">
+    {% if not gbp_shots %}<div class="card grow empty-card">No screenshots added yet.</div>{% endif %}
+    <div class="shot-grid n{{ gbp_shots | length }}">
+      {% for img in gbp_shots %}
+      <figure class="proof" style="margin:0">
+        <span class="proof-shot"><img src="{{ img.src }}" alt="{{ img.caption or 'Business Profile screenshot' }}" /></span>
+        {% if img.caption %}<figcaption class="proof-cap">{{ img.caption }}</figcaption>{% endif %}
+      </figure>
+      {% endfor %}
+    </div>
+  </div>
+  {{ foot('gbp') }}
+</section>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   16 · Authority Building Through Backlinks
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if sections.links and shown('links') %}
+<section class="slide">
+  {{ head(ce('links'), ct('links'), cs('links') or 'Authority signals built for the site this period.') }}
+  {#- Figures beside the breakdown rather than above it: stacked, the three
+      cards, the bar list and the commentary together asked for more height
+      than a slide has, and the list was the part that got cut. -#}
+  <div class="body">
+    <div class="row c1-2 grow">
+      <div class="row tight" style="grid-template-columns:1fr;align-content:start">
+        <div class="card cream compact">
+          <span class="stat-figure sm">{{ links | sum(attribute='count') if links else 0 }}</span>
+          <span class="stat-name">{{ t('links.total') }}</span>
+        </div>
+        <div class="card fill compact">
+          <span class="stat-figure sm">{{ unique_domains }}</span>
+          <span class="stat-name">{{ t('links.domains') }}</span>
+        </div>
+        <div class="card fill compact">
+          <span class="stat-figure sm">{{ link_types.keys() | length }}</span>
+          <span class="stat-name">{{ t('links.kinds') }}</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="card-name">{{ t('links.chart.name') }}</p>
+        <p class="card-sub">{{ t('links.chart.sub') }}</p>
+        <div style="margin-top:18px">
+          {% set max_lt = link_types.values() | max if link_types else 1 %}
+          {% if not link_kinds %}<p class="empty-row">No links recorded this month.</p>{% endif %}
+          {% for kind, n in link_kinds %}
+          <div class="qbar">
+            <div class="qbar-top"><span class="qbar-name">{{ kind }}</span><span class="qbar-val">{{ n }}</span></div>
+            <div class="qbar-track"><div class="qbar-fill" style="width:{{ (n / max_lt * 100) | round(1) }}%"></div></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {{ verdict('links', t('verdict.links')) }}
+  </div>
+  {{ foot('links') }}
+</section>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   17 · Work Done & Proof
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if sections.work and shown('work') %}
+{% set wk_pages = activities | pages(12) %}
+{% for wk_page in wk_pages %}
+{% set wk_offset = wk_pages[:loop.index0] | map('length') | sum %}
+<section class="slide">
+  {{ head(ce('work'), ct('work'), (cs('work') or ('Work delivered across ' ~ display_label ~ '.')) if loop.first else none) }}
+  <div class="body">
+    {% if not wk_page %}<div class="card grow empty-card">No work recorded this month yet.</div>{% endif %}
+    <div class="row {{ 'c3' if wk_page | length > 6 else 'c2' }} tight work-grid {{ density(wk_page | length, 6, 8) }}">
+      {% for act in wk_page %}
+      <div class="work">
+        <div class="work-no">{{ '%02d' % (wk_offset + loop.index) }}</div>
+        <div>
+          <div class="work-top">
+            <p class="work-name">{{ act.activity_type }}</p>
+            <span class="work-pill">{{ act.count }} delivered</span>
+          </div>
+          {% if act.notes %}<p class="work-desc">{{ act.notes }}</p>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if nar('work') and loop.last %}{{ verdict('work', t('verdict.work')) }}{% endif %}
+  </div>
+  {{ foot('work') }}
+</section>
+{% endfor %}
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   18 · Next Plan of Action
+   ══════════════════════════════════════════════════════════════════ #}
+
+{% if shown('plan') %}
+<section class="slide">
+  {{ head(ce('plan'), ct('plan'), cs('plan') or plan_lede or none) }}
+  <div class="body">
+    <div class="row c2 grow" style="align-content:start">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="lane-head now">{{ t('plan.now') }}</div>
+        {% for item in plan_now[:3] %}
+        <div class="lane-item">
+          <span class="lane-no">{{ '%02d' % loop.index }}</span>
+          <div>
+            <p class="lane-name">{{ item.title }}</p>
+            {% if item.detail %}<p class="lane-desc">{{ item.detail }}</p>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="lane-head next">{{ t('plan.next') }}</div>
+        {% for item in plan_next[:3] %}
+        <div class="lane-item">
+          <span class="lane-no">{{ '%02d' % loop.index }}</span>
+          <div>
+            <p class="lane-name">{{ item.title }}</p>
+            {% if item.detail %}<p class="lane-desc">{{ item.detail }}</p>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {{ foot() }}
+</section>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════════
+   19 · Closing
+   ══════════════════════════════════════════════════════════════════ #}
+
+<section class="slide cover-v2 closing-v2">
+  {{ cover_chart() }}
+
+  <div class="cv-body">
+    <span class="cv-eyebrow">{{ ce('closing') }}</span>
+    {%- set title = ct('closing') %}
+    <h2 class="cv-title cv-close-title">
+      {%- if client_name and client_name in title -%}
+        {{ title.split(client_name)[0] }}<span>{{ client_name }}</span>{{ title.split(client_name, 1)[1] }}
+      {%- else %}{{ title }}{% endif -%}
+    </h2>
+    {% if closing_note %}<p class="cv-lede cv-close-note">{{ closing_note }}</p>{% endif %}
+    <span class="cv-rule" aria-hidden="true"></span>
+
+    <div class="cv-period">
+      <span class="cv-period-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="5.5" width="18" height="13" rx="2.5" fill="none" stroke="#141414" stroke-width="2"/><path d="M4 7.5l8 6 8-6" fill="none" stroke="#141414" stroke-width="2" stroke-linejoin="round"/></svg>
+      </span>
+      <b>{{ agency_email }}</b>
+      {% if agency_contact_line %}<span class="cv-period-sep" aria-hidden="true"></span>
+      <span class="cv-period-label">{{ agency_contact_line }}</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="cv-foot">
+    <span>Prepared by <b>{{ agency_name }}</b></span>
+    <span class="cv-tags">
+      {%- for tag in t('cover.tags').split('|') if tag.strip() %}{% if not loop.first %}<i aria-hidden="true"></i>{% endif %}<span>{{ tag.strip() }}</span>{% endfor -%}
+    </span>
+  </div>
+</section>
+
+</body>
+</html>

@@ -89,10 +89,49 @@ def create_connection(
         property_tz=data.property_tz,
         status=ConnectionStatus.not_connected,
     )
+
+    # Check it at the moment it is mapped. Saving a property id is not the
+    # same as being able to read it, and leaving that unanswered until
+    # somebody presses Verify means a typo looks identical to a property the
+    # client has not shared yet. The row is still saved either way — mapping
+    # ahead of the client granting access is a normal thing to do — but the
+    # status and the message it carries are true straight away.
+    _run_verification(conn)
+
     db.add(conn)
     db.commit()
     db.refresh(conn)
     return conn
+
+
+def _run_verification(conn: Connection) -> None:
+    """Test the connection against Google and record the outcome on it.
+
+    Shared by mapping and the Verify button so the two can never disagree
+    about what counts as connected.
+    """
+    if conn.provider not in (ProviderType.gsc, ProviderType.ga4, ProviderType.gbp):
+        return
+
+    try:
+        if conn.provider == ProviderType.gsc:
+            verify_gsc(conn.property_id)
+        elif conn.provider == ProviderType.ga4:
+            conn.property_tz = verify_ga4(conn.property_id)
+        elif conn.provider == ProviderType.gbp:
+            verify_gbp(conn.property_id)
+    except ValueError as e:
+        conn.status = ConnectionStatus.error
+        conn.last_error = str(e)
+        return
+    except Exception as e:  # a network or client-library failure, not a rejection
+        conn.status = ConnectionStatus.error
+        conn.last_error = f"Could not reach Google to check this property: {e}"
+        return
+
+    conn.status = ConnectionStatus.connected
+    conn.last_verified_at = datetime.now(timezone.utc)
+    conn.last_error = None
 
 
 @read_router.get("", response_model=list[ConnectionResponse])
@@ -144,21 +183,7 @@ def verify_connection(
             status_code=400, detail="Verification only supported for Google providers in this phase."
         )
 
-    try:
-        if conn.provider == ProviderType.gsc:
-            verify_gsc(conn.property_id)
-        elif conn.provider == ProviderType.ga4:
-            conn.property_tz = verify_ga4(conn.property_id)
-        elif conn.provider == ProviderType.gbp:
-            verify_gbp(conn.property_id)
-
-        conn.status = ConnectionStatus.connected
-        conn.last_verified_at = datetime.now(timezone.utc)
-        conn.last_error = None
-
-    except ValueError as e:
-        conn.status = ConnectionStatus.error
-        conn.last_error = str(e)
+    _run_verification(conn)
 
     db.commit()
     db.refresh(conn)
@@ -185,7 +210,8 @@ def trigger_pull(
     data: PullRequest,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Manually trigger a data pull for a connection (testing purposes)."""
+    """Test a connection by pulling a window. Nothing is stored — reports keep
+    what they pull, and only published months reach the sheets."""
     conn = db.query(Connection).filter(Connection.id == connection_id).first()
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
@@ -201,21 +227,21 @@ def trigger_pull(
         from app.services.gsc_service import pull_gsc_data
         try:
             result = pull_gsc_data(db, connection_id, sd, ed)
-            return {"status": "success", "rows_inserted": result.get("rows_stored", 0)}
+            return {"status": "success", "rows_inserted": len(result.get("rows") or [])}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     elif conn.provider == ProviderType.ga4:
         from app.services.ga4_service import pull_ga4_data
         try:
             result = pull_ga4_data(db, connection_id, sd, ed)
-            return {"status": "success", "rows_inserted": result.get("rows_stored", 0)}
+            return {"status": "success", "rows_inserted": len(result.get("rows") or [])}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     elif conn.provider == ProviderType.gbp:
         from app.services.gbp_service import pull_gbp_data
         try:
-            rows_inserted = pull_gbp_data(db, connection_id, sd, ed)
-            return {"status": "success", "rows_inserted": rows_inserted}
+            rows = pull_gbp_data(db, connection_id, sd, ed)
+            return {"status": "success", "rows_inserted": len(rows)}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     else:

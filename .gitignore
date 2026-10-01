@@ -40,3 +40,13 @@ htmlcov/
 google_credentials.json
 frontend/node_modules/
 celerybeat-schedule
+backups/
+
+# Local only — never commit
+uploads/
+.claude/
+backups/
+clean_db_all.py
+delete_users_except_rajiv.py
+find_rajiv.py
+list_users.py

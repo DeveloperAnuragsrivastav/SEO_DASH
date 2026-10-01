@@ -1,19 +1,16 @@
 from __future__ import annotations
 import logging
 import uuid
-from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.models.connection import Connection
-from app.models.enums import ConnectionStatus, MetricSource, ProviderType, SyncStatus
-from app.models.metric import Metric
-from app.models.sync_run import SyncRun
+from app.models.enums import ConnectionStatus, ProviderType
 from app.services.google_clients import get_google_credentials
 
 logger = logging.getLogger(__name__)
@@ -36,171 +33,145 @@ def _execute_gsc_query(
     return response.get("rows", [])  # type: ignore
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(Exception),
-    reraise=True,
-)
-def _pull_gsc_data_with_retry(property_id: str, start_date: date, end_date: date) -> dict:
-    """Pull GSC data with retries. Returns a structured dict with totals + breakdowns."""
-    creds = get_google_credentials()
-    service = build("webmasters", "v3", credentials=creds, cache_discovery=False)
+def _pull_gsc_data_with_retry(property_id: str, start_date: date, end_date: date,
+                              with_previous: bool = True) -> dict:
+    """Every Search Console query a report needs for one window, run side by
+    side. `with_previous` also fetches the pages of the window just before,
+    for "trending up", which a pull of the comparison period does not need."""
+    from concurrent.futures import ThreadPoolExecutor
 
-    # ── 1. TRUE TOTALS: dimension-less query ─────────────────────────
-    # This gives us the exact same numbers as the GSC dashboard.
-    # No dimensions = no anonymization filtering = accurate totals.
-    totals_rows = _execute_gsc_query(service, property_id, start_date, end_date, dimensions=None)
-    if totals_rows:
-        row = totals_rows[0]  # Single row with aggregate data
-        totals = {
-            "clicks": row.get("clicks", 0),
-            "impressions": row.get("impressions", 0),
-            "ctr": row.get("ctr", 0),
-            "position": row.get("position", 0),
-        }
-    else:
-        totals = {"clicks": 0, "impressions": 0, "ctr": 0, "position": 0}
+    prev_end = start_date - timedelta(days=1)
+    prev_start = prev_end - (end_date - start_date)
 
-    # ── 2. Per-date rows (for daily trends + DB storage) ─────────────
-    date_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["date"])
-    for row in date_rows:
-        row["dimension_key"] = None
-        row["dimension_value"] = None
+    def q(dims, lo=start_date, hi=end_date, limit=25000, optional=False):
+        @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+        def run():
+            # One service per thread: the client library's HTTP object is not thread-safe.
+            service = build("webmasters", "v3", credentials=get_google_credentials(), cache_discovery=False)
+            return _execute_gsc_query(service, property_id, lo, hi, dims, row_limit=limit)
 
-    # ── 3. Page-level breakdown ──────────────────────────────────────
-    page_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["page"])
-    top_pages = sorted(page_rows, key=lambda r: r.get("clicks", 0), reverse=True)[:10]
+        def guarded():
+            if not optional:
+                return run()
+            try:
+                return run()
+            except Exception as e:  # the rest of the pull is still good without it
+                logger.warning("GSC %s unavailable for %s: %s", dims, property_id, e)
+                return []
+        return guarded
+
+    jobs = {
+        # No dimensions: the true totals, as the GSC dashboard shows them.
+        "totals": q(None),
+        "date": q(["date"]),
+        "page": q(["page"]),
+        "query": q(["query"], limit=250, optional=True),
+        "date_page": q(["date", "page"]),
+    }
+    if with_previous:
+        jobs["prev_pages"] = q(["date", "page"], prev_start, prev_end, optional=True)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {k: pool.submit(fn) for k, fn in jobs.items()}
+        got = {k: f.result() for k, f in futures.items()}
+
+    row = (got["totals"] or [{}])[0]
+    totals = {k: row.get(k, 0) for k in ("clicks", "impressions", "ctr", "position")}
+
+    date_rows = got["date"]
+    for r in date_rows:
+        r["dimension_key"] = None
+        r["dimension_value"] = None
+
     top_pages_clean = [
-        {
-            "page": r["keys"][0],
-            "clicks": r.get("clicks", 0),
-            "impressions": r.get("impressions", 0),
-            "ctr": round(r.get("ctr", 0) * 100, 2),
-            "position": round(r.get("position", 0), 1),
-        }
-        for r in top_pages
+        {"page": r["keys"][0], "clicks": r.get("clicks", 0), "impressions": r.get("impressions", 0),
+         "ctr": round(r.get("ctr", 0) * 100, 2), "position": round(r.get("position", 0), 1)}
+        for r in sorted(got["page"], key=lambda r: r.get("clicks", 0), reverse=True)[:10]
+    ]
+    top_queries = [
+        {"query": r["keys"][0], "clicks": r.get("clicks", 0), "impressions": r.get("impressions", 0),
+         "ctr": round(r.get("ctr", 0) * 100, 2), "position": round(r.get("position", 0), 1)}
+        for r in sorted(got["query"], key=lambda r: (r.get("clicks", 0), r.get("impressions", 0)), reverse=True)[:10]
     ]
 
-    # ── 4. Removed Query-level and Device-level breakdown as requested ──
-
-    # Prepare dimension-level rows for DB storage (page by date)
-    all_dimension_rows = []
-    page_date_rows = _execute_gsc_query(service, property_id, start_date, end_date, ["date", "page"])
-    for row in page_date_rows:
-        row["dimension_key"] = "page"
-        row["dimension_value"] = row["keys"][1]
-        all_dimension_rows.append(row)
+    def paged(rows):
+        for r in rows:
+            r["dimension_key"] = "page"
+            r["dimension_value"] = r["keys"][1]
+        return rows
 
     return {
         "totals": totals,
         "top_pages": top_pages_clean,
+        "top_queries": top_queries,
         "date_rows": date_rows,
-        "dimension_rows": all_dimension_rows,
+        "dimension_rows": paged(got["date_page"]),
+        "previous_page_rows": paged(got.get("prev_pages") or []),
+        "previous_window": (prev_start, prev_end),
     }
 
+
+def _metric_rows(provider: str, rows: list[dict], day_of, dims=None) -> list[tuple]:
+    """Pulled rows as (provider, day, metric_key, dimension_key, dimension_value, value, source)."""
+    out = []
+    for row in rows:
+        day = day_of(row)
+        for key in ("clicks", "impressions", "ctr", "position"):
+            out.append((provider, day, key, row.get("dimension_key"), row.get("dimension_value"),
+                        float(row.get(key, 0) or 0), "api"))
+    return out
+
+
+def gsc_rows(result: dict, end_date: date) -> list[tuple]:
+    """A pull as rows a report is built from."""
+    day = lambda row: datetime.strptime(row["keys"][0], "%Y-%m-%d").date()
+    rows = _metric_rows("gsc", result["date_rows"] + result["dimension_rows"] + (result.get("previous_page_rows") or []), day)
+    # Queries are kept as one row per query for the whole period, on its last day.
+    for q in result.get("top_queries") or []:
+        for key in ("clicks", "impressions", "ctr", "position"):
+            rows.append(("gsc", end_date, key, "query:period", q["query"], float(q.get(key, 0) or 0), "api"))
+    return rows
+
+
 def pull_gsc_data(db: Session, connection_id: uuid.UUID, start_date: date, end_date: date) -> dict:
-    """Pull GSC data for a connection, managing SyncRun and retries.
-    
-    Returns a structured dict with totals, top_pages, top_queries, devices
-    for direct use in snapshot generation.
+    """Pull Search Console figures for a window. Nothing is stored: the rows
+    come back with the totals, for the report being built to keep.
+
+    Only the connection's own health (connected, last error) is recorded.
     """
     conn = db.get(Connection, connection_id)
     if not conn:
         raise ValueError("Connection not found")
-
     if conn.provider != ProviderType.gsc:
         raise ValueError(f"Cannot pull GSC data for provider: {conn.provider}")
 
-    started_at = datetime.now(timezone.utc)
-
     try:
         result = _pull_gsc_data_with_retry(conn.property_id, start_date, end_date)
-
-        # Store per-date rows + dimension rows in DB for historical tracking / SearchConsole admin page
-        metrics_to_insert = []
-        all_raw_rows = result["date_rows"] + result["dimension_rows"]
-
-        for row in all_raw_rows:
-            captured_on = datetime.strptime(row["keys"][0], "%Y-%m-%d").date()
-
-            for metric_key in ["clicks", "impressions", "ctr", "position"]:
-                val = row.get(metric_key, 0)
-                metrics_to_insert.append(
-                    Metric(
-                        client_id=conn.client_id,
-                        provider="gsc",
-                        metric_key=metric_key,
-                        dimension_key=row.get("dimension_key"),
-                        dimension_value=row.get("dimension_value"),
-                        captured_on=captured_on,
-                        value=float(val),
-                        source=MetricSource.api,
-                    )
-                )
-
-        if metrics_to_insert:
-            db.query(Metric).filter(
-                Metric.client_id == conn.client_id,
-                Metric.provider == "gsc",
-                Metric.source == MetricSource.api,
-                Metric.captured_on >= start_date,
-                Metric.captured_on <= end_date,
-            ).delete(synchronize_session=False)
-
-            db.add_all(metrics_to_insert)
-
-        sync_run = SyncRun(
-            client_id=conn.client_id,
-            provider="gsc",
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc),
-            status=SyncStatus.success,
-            rows=len(metrics_to_insert),
-        )
-        db.add(sync_run)
-
-        conn.last_verified_at = datetime.now(timezone.utc)
-        conn.status = ConnectionStatus.connected
-        conn.last_error = None
-
-        db.commit()
-
-        # Return the structured data for snapshot use
-        return {
-            "totals": result["totals"],
-            "top_pages": result["top_pages"],
-            "rows_stored": len(metrics_to_insert),
-        }
-
     except Exception as e:
         error_msg = str(e)
         if isinstance(e, HttpError):
             import json
             try:
-                err_dict = json.loads(e.content)
-                error_msg = err_dict.get("error", {}).get("message", error_msg)
+                error_msg = json.loads(e.content).get("error", {}).get("message", error_msg)
             except Exception:
                 pass
-
         logger.error(f"GSC pull failed for connection {connection_id}: {error_msg}")
-
         db.rollback()
-
-        sync_run = SyncRun(
-            client_id=conn.client_id,
-            provider="gsc",
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc),
-            status=SyncStatus.failed,
-            error=error_msg,
-        )
-
         conn.status = ConnectionStatus.error
         conn.last_error = error_msg
-
-        db.add(sync_run)
-        db.add(conn)
         db.commit()
-
         raise ValueError(f"GSC pull failed: {error_msg}") from e
+
+    rows = gsc_rows(result, end_date)
+
+    conn.last_verified_at = datetime.now(timezone.utc)
+    conn.last_sync_at = datetime.now(timezone.utc)
+    conn.status = ConnectionStatus.connected
+    conn.last_error = None
+    db.commit()
+
+    return {
+        "totals": result["totals"],
+        "top_pages": result["top_pages"],
+        "top_queries": result.get("top_queries", []),
+        "rows": rows,
+    }

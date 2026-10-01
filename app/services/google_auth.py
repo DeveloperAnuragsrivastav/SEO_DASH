@@ -41,14 +41,44 @@ def get_google_credentials() -> service_account.Credentials:
         except Exception as e:
             raise ValueError(f"Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON: {e}") from e
 
-    # Fallback to file path
-    file_path = settings.GOOGLE_APPLICATION_CREDENTIALS
-    if file_path and os.path.exists(file_path):
-        return service_account.Credentials.from_service_account_file(
-            file_path, scopes=SCOPES
-        )  # type: ignore
+    # Fallback to a key file on disk.
+    tried: list[str] = []
+    for candidate in _candidate_paths(settings.GOOGLE_APPLICATION_CREDENTIALS):
+        tried.append(candidate)
+        if os.path.exists(candidate):
+            return service_account.Credentials.from_service_account_file(
+                candidate, scopes=SCOPES
+            )  # type: ignore
 
+    # Name what was actually looked for. Without this the message is the same
+    # whether nothing is configured or the path is simply pointing somewhere
+    # the process cannot see, which are very different problems.
+    where = ", ".join(tried) if tried else "nothing configured"
     raise ValueError(
         "Google Service Account credentials not found. "
-        "Set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS."
+        "Set GOOGLE_SERVICE_ACCOUNT_JSON, or point GOOGLE_APPLICATION_CREDENTIALS "
+        f"at a readable key file. Looked in: {where}."
     )
+
+
+def _candidate_paths(configured: str | None) -> list[str]:
+    """Where a key file might be, in order of preference.
+
+    The configured path is usually the container's — `/app/...` — because that
+    is where the Dockerfile copies the project. Running the same .env locally
+    then points at a directory that does not exist. Rather than make one
+    deployment's config wrong for the other, fall back to the same filename
+    beside the application itself.
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    paths: list[str] = []
+
+    if configured:
+        paths.append(configured)
+        local_twin = os.path.join(project_root, os.path.basename(configured))
+        if local_twin not in paths:
+            paths.append(local_twin)
+    else:
+        paths.append(os.path.join(project_root, "google_credentials.json"))
+
+    return paths

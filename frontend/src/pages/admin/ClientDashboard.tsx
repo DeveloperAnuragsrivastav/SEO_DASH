@@ -7,10 +7,10 @@ import {
   Palette, RefreshCw, FileText, Download, ArrowRight, ArrowUpRight,
   SearchX, Loader2, MousePointerClick, Users, TrendingUp, Bot,
   Crosshair, BarChart2, MapPin, Search, Link as LinkIcon, CheckSquare,
-  Image as ImageIcon, Plug
+  Image as ImageIcon, Plug, Pencil
 } from 'lucide-react';
 
-import PageHeader from '../../components/ui/PageHeader';
+import Page from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 import Sparkline from '../../components/ui/Sparkline';
 import PeriodPicker from '../../components/PeriodPicker';
@@ -19,6 +19,19 @@ import type { PeriodsInfo } from '../../components/PeriodPicker';
 const ClientDashboard: React.FC = () => {
   const { clientId } = useParams();
   const navigate = useNavigate();
+
+  /** Reopen a published report for changes. Publishing it again rewrites
+   *  its month on every sheet with the new figures. */
+  const makeDraft = async (id: string) => {
+    if (!window.confirm('Make this report a draft again?\n\nYou can change anything in it. The sheets keep the published figures until you publish it again — then they are replaced with the new ones.')) return;
+    try {
+      await api.post(`/clients/${clientId}/reports/${id}/unpublish`);
+      toast.success('The report is a draft again.');
+      navigate(`/admin/clients/${clientId}/reports/${id}/build`);
+    } catch {
+      // Handled by global interceptor
+    }
+  };
   const [client, setClient] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
   const [reportCount, setReportCount] = useState<number>(0);
@@ -406,24 +419,21 @@ const ClientDashboard: React.FC = () => {
   ];
 
   return (
-    <>
-      <PageHeader
-        title={`${client.name} Overview`}
+      <Page
+        screen="overview"
+        title={client.name}
         badge={
           <span className={`status-pill ${client.status === 'active' ? 'on' : ''}`}>
             {client.status === 'active' ? 'Active Client' : String(client.status || '').toUpperCase()}
           </span>
         }
-        subtitle={`${client.domain} · ${client.package_keywords} tracked keywords`}
-        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Clients', href: '/admin/clients' }, { label: client.name }]}
+        lede={`${client.domain} · ${client.package_keywords} keywords in package`}
         actions={
-          <>
-            <button className="btn btn-secondary" onClick={() => setShowWhitelabel(true)}>
-              <Palette size={15} /> Whitelabel Settings
-            </button>
-          </>
+          <button className="btn btn-secondary" onClick={() => setShowWhitelabel(true)}>
+            <Palette size={15} /> Whitelabel Settings
+          </button>
         }
-      />
+      >
 
       {!report ? (
         /* ── Nothing generated yet: state the next step plainly ───────── */
@@ -517,6 +527,11 @@ const ClientDashboard: React.FC = () => {
 
             <div className="report-card-actions">
               <button className="btn ghost" onClick={openGenerateModal}>All reports</button>
+              {report.status === 'published' && (
+                <button className="btn btn-secondary" onClick={() => makeDraft(report.id)}>
+                  <Pencil size={14} /> Make draft
+                </button>
+              )}
               <Link
                 to={report.status === 'draft'
                   ? `/admin/clients/${clientId}/reports/${report.id}/build`
@@ -754,7 +769,7 @@ const ClientDashboard: React.FC = () => {
           </div>
         </div>
       )}
-    </>
+    </Page>
   );
 };
 

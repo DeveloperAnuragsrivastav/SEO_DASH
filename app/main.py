@@ -7,24 +7,13 @@ from app.routes.connections import router as connections_router
 from app.routes.connections import verify_router
 from app.routes.connections import read_router as connections_read_router
 from app.routes.health import router as health_router
-from app.routes.manual_metrics import router as manual_metrics_router
-from app.routes.rankings import router as rankings_router
-from app.routes.webhooks import router as webhooks_router
-from app.routes.ai_prompts import router as ai_prompts_router
-from app.routes.ai_mentions import router as ai_mentions_router
-from app.routes.keywords import router as keywords_router
 from app.routes.keyword_research import router as keyword_research_router
 from app.routes.reports import router as reports_router
-from app.routes.search import router as search_router
-from app.routes.audience import router as audience_router
-from app.routes.ai_visibility import router as ai_visibility_router
-from app.routes.links import router as links_router
-from app.routes.work import router as work_router
 from app.routes.clients import router as clients_router
 from app.routes.users import router as users_router
-from app.routes.screenshots import router as screenshots_router
 from app.routes.admin import router as admin_router
 from app.routes.managers import router as managers_router
+from app.routes.sheets import router as sheets_router
 
 from app.routes.auth import router as auth_router
 
@@ -36,6 +25,55 @@ app = FastAPI(
     description="EZ Rankings agency portal",
     version="0.1.0",
 )
+
+class BodySizeLimit:
+    """Refuse any request body over MAX_REQUEST_MB — before it is read into
+    memory — so nobody can push a 100 MB file at the server. Each image is
+    held to MAX_IMAGE_MB where it is saved."""
+
+    def __init__(self, app, limit: int):
+        self.app = app
+        self.limit = limit
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        length = dict(scope.get("headers") or []).get(b"content-length")
+        if length and length.isdigit() and int(length) > self.limit:
+            return await self._too_large(send)
+
+        seen = 0
+
+        async def counted():
+            nonlocal seen
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body") or b"")
+                if seen > self.limit:
+                    raise _TooLarge()
+            return message
+
+        try:
+            await self.app(scope, counted, send)
+        except _TooLarge:
+            await self._too_large(send)
+
+    async def _too_large(self, send):
+        import json
+        body = json.dumps({"detail": f"That upload is too large — the limit is {self.limit // (1024 * 1024)} MB."}).encode()
+        await send({"type": "http.response.start", "status": 413,
+                    "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+        await send({"type": "http.response.body", "body": body})
+
+
+class _TooLarge(Exception):
+    pass
+
+
+
+# Added first so it sits inside CORS: a refusal still carries CORS headers
+# and the browser can show why.
+app.add_middleware(BodySizeLimit, limit=settings.MAX_REQUEST_MB * 1024 * 1024)
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,12 +89,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static folder for screenshot uploads
+# Fixed assets only (the agency logo); every uploaded image lives in the database.
 from fastapi.staticfiles import StaticFiles
 import os
 
-SCREENSHOTS_DIR = os.path.join(os.getcwd(), "app", "static", "screenshots")
-os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=os.path.join(os.getcwd(), "app", "static")), name="static")
 
 # Include Routers
@@ -65,25 +101,13 @@ app.include_router(auth_router)
 app.include_router(connections_router)
 app.include_router(connections_read_router)
 app.include_router(verify_router)
-app.include_router(manual_metrics_router)
 app.include_router(reports_router)
-app.include_router(keywords_router)
 app.include_router(keyword_research_router)
-app.include_router(screenshots_router)
 app.include_router(admin_router)
 app.include_router(managers_router)
-app.include_router(rankings_router)
-app.include_router(ai_mentions_router)
-app.include_router(ai_prompts_router)
-app.include_router(search_router)
-app.include_router(audience_router)
-app.include_router(webhooks_router)
-app.include_router(ai_visibility_router)
-app.include_router(links_router)
-app.include_router(work_router)
+app.include_router(sheets_router)
 app.include_router(clients_router)
 app.include_router(users_router)
-app.include_router(screenshots_router)
 
 # ── SPA Catch-All Route ────────────────────────────────────────────────
 from fastapi.responses import FileResponse

@@ -1,39 +1,55 @@
 import { useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useParams, Link } from 'react-router-dom';
 import { Menu, Moon, Sun } from 'lucide-react';
 import GlobalSearch from './GlobalSearch';
 import { useAuth } from '../../context/AuthContext';
 import { Sidebar } from './Sidebar';
 import { applyTheme, resolvedTheme, type Theme } from '../../lib/theme';
+import api from '../../api/client';
+import { screen, screenForPath } from '../../lib/nav';
 
-/** Page identity for the top bar, derived from the route — no extra fetches. */
-function pageIdentity(pathname: string): { title: string; subtitle: string } {
-  const p = (title: string, subtitle: string) => ({ title, subtitle });
+interface Crumb {
+  label: string;
+  href?: string;
+}
 
-  if (pathname.startsWith('/admin/users')) return p('Manager Directory', 'Create and oversee isolated manager accounts.');
-  if (pathname.startsWith('/admin/manager-tools')) return p('Team & Assignments', 'Manage your team and who works on what.');
-  if (pathname.includes('/reports/')) return p('Client Report', 'Review and publish what the client will see.');
-  if (pathname.includes('/connections')) return p('Connections', 'Link Google properties to pull data automatically.');
-  if (pathname.includes('/manual-entry') || pathname.includes('/manual-metrics')) return p('Add Data', 'Everything this month’s report is built from.');
-  if (pathname.includes('/keywords')) return p('Keyword Performance', 'Track how target keywords are moving.');
-  if (pathname.includes('/ai-mentions-data')) return p('AI Prompts Tracking', 'See where AI tools mention this brand.');
-  if (pathname.includes('/ai-prompts')) return p('AI Prompts', 'Prompts monitored for brand mentions.');
-  if (pathname.includes('/gbp')) return p('GBP Data', 'Google Business Profile calls, directions and clicks.');
-  if (pathname.includes('/google-analytics')) return p('Google Analytics', 'Sessions, users and conversions over time.');
-  if (pathname.includes('/search-console')) return p('Search Console', 'Clicks, impressions and average position.');
-  if (pathname.includes('/links')) return p('Backlinks', 'Links built for this client.');
-  if (pathname.includes('/work')) return p('On-Site SEO Activities', 'Work delivered on the site.');
-  if (pathname.includes('/screenshots')) return p('Screenshots', 'Evidence attached to the report.');
-  if (/^\/admin\/clients\/[^/]+$/.test(pathname)) return p('Client Overview', 'Track performance, monitor progress, and grow together.');
-  if (pathname.startsWith('/admin/clients')) return p('Clients', 'Every project you are responsible for.');
-  return p('Dashboard', 'Your agency at a glance.');
+/** Where you are, from the nav manifest — the same names the sidebar and the
+ *  page heading use, so the trail can never call a screen something else. */
+function trailFor(pathname: string, clientId?: string, clientName?: string | null): Crumb[] {
+  const here = screenForPath(pathname, clientId);
+  const crumbs: Crumb[] = [{ label: 'Clients', href: '/admin/clients' }];
+
+  if (clientId) {
+    crumbs.push({
+      label: clientName || 'Client',
+      href: screen('overview')!.path(clientId),
+    });
+  }
+
+  if (!here) return crumbs;
+
+  // A screen that sits under another shows its parent first.
+  if (here.parent) {
+    const parent = screen(here.parent);
+    if (parent && parent.key !== 'overview') {
+      crumbs.push({ label: parent.name, href: parent.path(clientId) });
+    }
+  }
+
+  // The client's own overview is already named by the client crumb.
+  if (!(clientId && here.key === 'overview') && here.key !== 'clients') {
+    crumbs.push({ label: here.name });
+  }
+
+  return crumbs;
 }
 
 export function AdminLayout() {
   const location = useLocation();
+  const { clientId } = useParams();
   const { user } = useAuth();
-  const page = pageIdentity(location.pathname);
   const [navOpen, setNavOpen] = useState(false);
+  const [clientName, setClientName] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('ez-nav-collapsed') === '1'; } catch { return false; }
   });
@@ -47,6 +63,16 @@ export function AdminLayout() {
   };
   const [theme, setTheme] = useState<Theme>(() => resolvedTheme());
 
+  // Fetched once here and handed to both the trail and the sidebar.
+  useEffect(() => {
+    if (!clientId) { setClientName(null); return; }
+    let live = true;
+    api.get(`/clients/${clientId}`, { skipErrorToast: true } as never)
+      .then(res => { if (live) setClientName(res.data.name); })
+      .catch(() => { if (live) setClientName(null); });
+    return () => { live = false; };
+  }, [clientId]);
+
   // Never leave the mobile drawer hanging open across navigations.
   useEffect(() => { setNavOpen(false); }, [location.pathname]);
 
@@ -56,6 +82,8 @@ export function AdminLayout() {
     applyTheme(next);
   };
 
+  const crumbs = trailFor(location.pathname, clientId, clientName);
+
   return (
     <div className="app-layout">
       <Sidebar
@@ -63,6 +91,7 @@ export function AdminLayout() {
         onClose={() => setNavOpen(false)}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
+        clientName={clientName}
       />
 
       <div className="app-main">
@@ -75,10 +104,18 @@ export function AdminLayout() {
             >
               <Menu size={18} />
             </button>
-            <div className="topbar-identity">
-              <strong>{page.title}</strong>
-              <span className="hide-s">{page.subtitle}</span>
-            </div>
+            <nav className="trail" aria-label="Breadcrumb">
+              {crumbs.map((c, i) => (
+                <span key={`${c.label}-${i}`} className="trail-item">
+                  {i > 0 && <span className="trail-sep" aria-hidden="true">/</span>}
+                  {c.href && i < crumbs.length - 1 ? (
+                    <Link to={c.href} className="trail-link">{c.label}</Link>
+                  ) : (
+                    <span className="trail-current" aria-current="page">{c.label}</span>
+                  )}
+                </span>
+              ))}
+            </nav>
           </div>
 
           <div className="topbar-right">

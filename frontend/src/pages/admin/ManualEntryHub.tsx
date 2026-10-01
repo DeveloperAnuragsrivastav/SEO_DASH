@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import PageHeader from '../../components/ui/PageHeader';
 import ManualGSCUI from '../../components/ManualGSCUI';
 import ManualGA4UI from '../../components/ManualGA4UI';
+import usePasteImage from '../../lib/usePasteImage';
 import { FileSpreadsheet, X, Check, Download, Database, ChevronRight,
          MapPin, Link as LinkIcon, CheckSquare, Crosshair, Bot, Image as ImageIcon,
          Search, BarChart2, MoreVertical, Pencil, HelpCircle } from 'lucide-react';
@@ -31,17 +32,25 @@ const GBPManualForm = ({ clientId, onComplete }: { clientId: string, onComplete:
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-      <div className="form-group" style={{ gridColumn: '1 / -1' }}><label className="form-label">Date</label><input type="date" max={new Date().toISOString().split('T')[0]} className="form-input" required value={form.captured_on} onChange={e => setForm({ ...form, captured_on: e.target.value })} /></div>
+    <form onSubmit={handleSubmit} className="form-grid">
+      <div className="form-group"><label className="form-label">Date</label><input type="date" max={new Date().toISOString().split('T')[0]} className="form-input" required value={form.captured_on} onChange={e => setForm({ ...form, captured_on: e.target.value })} /></div>
+      <div className="field-grid">
       <div className="form-group"><label className="form-label">Desk Maps</label><input type="number" className="form-input" required value={form.impressions_desktop_maps} onChange={e => setForm({ ...form, impressions_desktop_maps: parseInt(e.target.value) || 0 })} /></div>
       <div className="form-group"><label className="form-label">Desk Search</label><input type="number" className="form-input" required value={form.impressions_desktop_search} onChange={e => setForm({ ...form, impressions_desktop_search: parseInt(e.target.value) || 0 })} /></div>
+      </div>
+      <div className="field-grid">
       <div className="form-group"><label className="form-label">Mob Maps</label><input type="number" className="form-input" required value={form.impressions_mobile_maps} onChange={e => setForm({ ...form, impressions_mobile_maps: parseInt(e.target.value) || 0 })} /></div>
       <div className="form-group"><label className="form-label">Mob Search</label><input type="number" className="form-input" required value={form.impressions_mobile_search} onChange={e => setForm({ ...form, impressions_mobile_search: parseInt(e.target.value) || 0 })} /></div>
+      </div>
+      <div className="field-grid">
       <div className="form-group"><label className="form-label">Calls</label><input type="number" className="form-input" required value={form.calls} onChange={e => setForm({ ...form, calls: parseInt(e.target.value) || 0 })} /></div>
       <div className="form-group"><label className="form-label">Directions</label><input type="number" className="form-input" required value={form.direction_requests} onChange={e => setForm({ ...form, direction_requests: parseInt(e.target.value) || 0 })} /></div>
+      </div>
+      <div className="field-grid">
       <div className="form-group"><label className="form-label">Clicks</label><input type="number" className="form-input" required value={form.website_clicks} onChange={e => setForm({ ...form, website_clicks: parseInt(e.target.value) || 0 })} /></div>
       <div className="form-group"><label className="form-label">Bookings</label><input type="number" className="form-input" required value={form.bookings} onChange={e => setForm({ ...form, bookings: parseInt(e.target.value) || 0 })} /></div>
-      <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}><button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Save Record</button></div>
+      </div>
+      <div><button type="submit" className="btn btn-primary btn-block">Save Record</button></div>
     </form>
   );
 };
@@ -61,13 +70,13 @@ const LinksManualForm = ({ clientId, onComplete }: { clientId: string, onComplet
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
+    <form onSubmit={handleSubmit} className="form-grid">
       <div className="form-group"><label className="form-label">Date</label><input type="date" max={new Date().toISOString().split('T')[0]} className="form-input" required value={form.created_on} onChange={e => setForm({ ...form, created_on: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">URL</label><input type="url" className="form-input" required placeholder="https://example.com" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">Domain</label><input type="text" className="form-input" required placeholder="example.com" value={form.domain} onChange={e => setForm({ ...form, domain: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">Activity Type</label><input type="text" className="form-input" required placeholder="Guest Post" value={form.activity_type} onChange={e => setForm({ ...form, activity_type: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">Domain Rating (DR)</label><input type="number" className="form-input" value={form.dr} onChange={e => setForm({ ...form, dr: e.target.value })} /></div>
-      <button type="submit" className="btn btn-primary" style={{ marginTop: '8px', width: '100%' }}>Save Link</button>
+      <button type="submit" className="btn btn-primary btn-block">Save Link</button>
     </form>
   );
 };
@@ -87,12 +96,12 @@ const WorkManualForm = ({ clientId, onComplete }: { clientId: string, onComplete
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
+    <form onSubmit={handleSubmit} className="form-grid">
       <div className="form-group"><label className="form-label">Date (Month mapping)</label><input type="date" max={new Date().toISOString().split('T')[0]} className="form-input" required value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">Activity Type</label><input type="text" className="form-input" required placeholder="Content Optimization" value={form.activity_type} onChange={e => setForm({ ...form, activity_type: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">Count</label><input type="number" className="form-input" required value={form.count} onChange={e => setForm({ ...form, count: parseInt(e.target.value) || 1 })} /></div>
       <div className="form-group"><label className="form-label">Notes (Optional)</label><input type="text" className="form-input" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-      <button type="submit" className="btn btn-primary" style={{ marginTop: '8px', width: '100%' }}>Save Activity</button>
+      <button type="submit" className="btn btn-primary btn-block">Save Activity</button>
     </form>
   );
 };
@@ -118,12 +127,12 @@ const KeywordsManualForm = ({ clientId, onComplete }: { clientId: string, onComp
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
+    <form onSubmit={handleSubmit} className="form-grid">
       <div className="form-group"><label className="form-label">Keyword Term</label><input type="text" className="form-input" required placeholder="plumber near me" value={form.term} onChange={e => setForm({ ...form, term: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">Group Tag (Optional)</label><input type="text" className="form-input" placeholder="emergency services" value={form.group_tag} onChange={e => setForm({ ...form, group_tag: e.target.value })} /></div>
       <div className="form-group"><label className="form-label">Target URL (Optional)</label><input type="text" className="form-input" placeholder="https://example.com/plumbing" value={form.target_url} onChange={e => setForm({ ...form, target_url: e.target.value })} /></div>
 
-      <button type="submit" className="btn btn-primary" style={{ marginTop: '8px', width: '100%' }}>Save Keyword</button>
+      <button type="submit" className="btn btn-primary btn-block">Save Keyword</button>
     </form>
   );
 };
@@ -143,9 +152,9 @@ const AIPromptsManualForm = ({ clientId, onComplete }: { clientId: string, onCom
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
+    <form onSubmit={handleSubmit} className="form-grid">
       <div className="form-group"><label className="form-label">Prompt Text</label><textarea className="form-input" rows={4} required placeholder="best seo agency in new york" value={prompt_text} onChange={e => setPromptText(e.target.value)} /></div>
-      <button type="submit" className="btn btn-primary" style={{ marginTop: '8px', width: '100%' }}>Save Prompt</button>
+      <button type="submit" className="btn btn-primary btn-block">Save Prompt</button>
     </form>
   );
 };
@@ -156,6 +165,12 @@ const ScreenshotsManualForm = ({ clientId }: { clientId: string }) => {
   const [files, setFiles] = useState<{ file: File, caption: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [recent, setRecent] = useState<any[]>([]);
+
+  // A pasted screenshot or copied image (⌘V / Ctrl+V) joins the upload list.
+  usePasteImage(file => {
+    setFiles(prev => [...prev, { file, caption: '' }]);
+    toast.success('Pasted image added.');
+  });
 
   useEffect(() => {
     api.get(`/clients/${clientId}/screenshots`).then(res => {
@@ -195,21 +210,21 @@ const ScreenshotsManualForm = ({ clientId }: { clientId: string }) => {
 
   return (
     <div>
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px', marginBottom: '24px' }}>
+      <form onSubmit={handleSubmit} className="form-grid" style={{ marginBottom: '24px' }}>
         <div className="form-group"><label className="form-label">Report Month</label><input type="date" max={new Date().toISOString().split('T')[0]} className="form-input" required value={month} onChange={e => setMonth(e.target.value)} /></div>
         <div className="form-group">
-          <label className="form-label">Image Files</label>
-          <input type="file" className="form-input" accept="image/*" multiple onChange={e => {
+          <label className="form-label">Image Files <span style={{ fontWeight: 400, color: 'var(--ink-3)' }}>— or paste a copied image (⌘V / Ctrl+V)</span></label>
+          <input type="file" className="file-input" accept="image/*" multiple onChange={e => {
             const newFiles = Array.from(e.target.files || []).map(f => ({ file: f, caption: '' }));
             setFiles(prev => [...prev, ...newFiles]);
           }} />
         </div>
 
         {files.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+          <div className="stack" style={{ marginTop: '8px' }}>
             <label className="form-label">File Captions (Optional)</label>
             {files.map((f, i) => (
-              <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div key={i} className="upload-caption-row">
                 <div style={{ flex: '1', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', background: 'var(--neutral-bg)', padding: '8px', borderRadius: '4px' }}>
                   {f.file.name}
                 </div>
@@ -218,17 +233,17 @@ const ScreenshotsManualForm = ({ clientId }: { clientId: string }) => {
                   newF[i].caption = e.target.value;
                   setFiles(newF);
                 }} />
-                <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '6px 10px' }} onClick={() => {
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
                   const newF = [...files];
                   newF.splice(i, 1);
                   setFiles(newF);
-                }}>✕</button>
+                }}><X size={13} /></button>
               </div>
             ))}
           </div>
         )}
 
-        <button type="submit" className="btn btn-primary" style={{ marginTop: '12px', width: '100%' }} disabled={uploading || files.length === 0}>
+        <button type="submit" className="btn btn-primary btn-block" disabled={uploading || files.length === 0}>
           {uploading ? 'Uploading...' : 'Upload Screenshots'}
         </button>
       </form>
@@ -491,30 +506,30 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
 
       {modalOpen && (
         <div className="overlay">
-          <div className="card" style={{ width: '450px', margin: 0, maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="card-header" style={{ position: 'sticky', top: 0, background: 'var(--card)', zIndex: 10 }}>
-              <h3 className="h2">{showManual ? `Add ${title}` : `Inject ${title}`}</h3>
+          <div className="form-card ingestion-modal">
+            <div className="card-header sticky-card-head">
+              <h3 className="h2">{showManual ? `Add ${title}` : `Add ${title} Data`}</h3>
               <button className="icon-btn" onClick={closeModal} aria-label="Close"><X size={17} /></button>
             </div>
-            <div className="card-body">
+            <div className="form-card-body">
               {!showUploader && !showManual ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="choice-stack">
                   {endpoint && (
-                    <button className="btn btn-primary" style={{ width: '100%', padding: '12px' }} onClick={() => setShowUploader(true)}>
+                    <button className="choice-button primary" onClick={() => setShowUploader(true)}>
                       Upload Sheet (Excel)
                     </button>
                   )}
-                  <button className="btn btn-secondary" style={{ width: '100%', padding: '12px' }} onClick={() => setShowManual(true)}>
-                    Select Mutiple Images At once
+                  <button className="choice-button" onClick={() => setShowManual(true)}>
+                    Enter Manually
                   </button>
                 </div>
               ) : showManual ? (
                 <div>
                   {manualForm}
-                  <button className="btn btn-secondary" style={{ width: '100%', marginTop: '8px' }} onClick={() => setShowManual(false)}>Back</button>
+                  <button className="btn btn-secondary btn-block" onClick={() => setShowManual(false)}>Back</button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-grid">
                   {requiresMonth && (
                     <div className="form-group">
                       <label className="form-label">Data Month</label>
@@ -533,15 +548,6 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    style={{
-                      border: `2px dashed ${isDragging ? 'var(--brand-primary)' : 'var(--border)'}`,
-                      backgroundColor: isDragging ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
-                      padding: '32px',
-                      textAlign: 'center',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
                   >
                     <div className="dropzone-icon"><FileSpreadsheet size={22} /></div>
                     <div className="dropzone-text" style={{ fontWeight: 500 }}>
@@ -554,11 +560,11 @@ const IngestionCard: React.FC<UploaderProps> = ({ title, endpoint, templateColum
                   </div>
 
                   {file && (
-                    <button className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={handleUpload} disabled={uploading}>
+                    <button className="btn btn-primary btn-block" onClick={handleUpload} disabled={uploading}>
                       {uploading ? 'Uploading...' : `Upload Data`}
                     </button>
                   )}
-                  <button className="btn btn-secondary" style={{ width: '100%', marginTop: '8px' }} onClick={() => setShowUploader(false)}>
+                  <button className="btn btn-secondary btn-block" onClick={() => setShowUploader(false)}>
                     Back
                   </button>
                 </div>

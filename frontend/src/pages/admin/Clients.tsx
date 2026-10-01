@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import {
   ArrowRight, Building2, ExternalLink, Search, KeyRound, Layers,
-  Clock, LayoutGrid, List, ChevronDown,
+  LayoutGrid, List, ChevronDown,
 } from 'lucide-react';
 
 import { usePermissions } from '../../hooks/usePermissions';
-import PageHeader from '../../components/ui/PageHeader';
+import Page, { Summary, Empty, type Figure } from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 
 interface ClientRow {
@@ -25,7 +25,7 @@ const toneFor = (id: string) =>
   TONES[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % TONES.length];
 
 const Clients: React.FC = () => {
-  const { isManager } = usePermissions();
+  const { isManager, isSuperAdmin } = usePermissions();
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -80,13 +80,18 @@ const Clients: React.FC = () => {
     window.open(`https://${domain}`, '_blank', 'noopener,noreferrer');
   };
 
+  const figures: Figure[] = [
+    { label: 'Clients', value: clients.length.toLocaleString() },
+    { label: 'Active', value: active.toLocaleString(), note: `of ${clients.length}` },
+    { label: 'Keywords tracked', value: totalKw.toLocaleString(), note: 'across all clients' },
+  ];
+
   return (
-    <>
-      <PageHeader
-        title={isManager ? 'My Clients' : 'Assigned Projects'}
-        subtitle={`${active} active · ${totalKw} keywords tracked`}
-        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Clients' }]}
-      />
+    <Page
+      title={isManager ? 'My Clients' : isSuperAdmin ? 'All Clients' : 'Assigned Clients'}
+      lede="Every project you are responsible for."
+      summary={clients.length > 0 ? <Summary figures={figures} /> : undefined}
+    >
 
       {clients.length > 0 && (
         <div className="toolbar">
@@ -147,24 +152,26 @@ const Clients: React.FC = () => {
       )}
 
       {clients.length === 0 ? (
-        <div className="page-card">
-          <div className="empty-state">
-            <span className="empty-state-icon"><Building2 size={22} /></span>
-            <h3>No projects yet</h3>
-            <p>Once a project is assigned to you it will appear here with its keywords, traffic and reporting history.</p>
-          </div>
-        </div>
+        <section className="surface">
+          <Empty
+            icon={<Building2 size={22} />}
+            title="No clients yet"
+            hint="Once a client is assigned to you it appears here with its keywords, traffic and reporting history."
+          />
+        </section>
       ) : visible.length === 0 ? (
-        <div className="page-card">
-          <div className="empty-state">
-            <span className="empty-state-icon"><Search size={22} /></span>
-            <h3>No clients match those filters</h3>
-            <p>Try a different search term, or clear the status and type filters.</p>
-            <button className="btn btn-secondary" onClick={() => { setQuery(''); setStatus('all'); setType('all'); }}>
-              Clear filters
-            </button>
-          </div>
-        </div>
+        <section className="surface">
+          <Empty
+            icon={<Search size={22} />}
+            title="No clients match those filters"
+            hint="Try a different search term, or clear the status and type filters."
+            action={
+              <button className="btn btn-secondary" onClick={() => { setQuery(''); setStatus('all'); setType('all'); }}>
+                Clear filters
+              </button>
+            }
+          />
+        </section>
       ) : (
         <div className={view === 'grid' ? 'client-grid' : 'client-list'}>
           {visible.map(c => (
@@ -195,13 +202,11 @@ const Clients: React.FC = () => {
               </div>
 
               <span className="client-cta">View Dashboard <ArrowRight size={14} /></span>
-
-              <span className="client-foot"><Clock size={12} /> {c.package_keywords} tracked · {c.status}</span>
             </Link>
           ))}
         </div>
       )}
-    </>
+    </Page>
   );
 };
 

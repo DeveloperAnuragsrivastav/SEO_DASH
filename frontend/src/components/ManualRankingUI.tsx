@@ -75,23 +75,26 @@ const ManualRankingUI: React.FC<ManualRankingUIProps> = ({ clientId, onSuccess }
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '24px' }}>
-      {/* CSV Upload */}
-      <div className="card">
-        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Upload size={18} style={{ color: 'var(--ink)' }} /> Upload CSV
-        </h3>
-        <p style={{ fontSize: '13px', color: 'var(--ink-2)', marginBottom: '16px' }}>
-          Required columns: <code>keyword, position, date, url</code>
-        </p>
+    <div className="surface-grid">
+      <div className="form-card">
+        <div className="form-card-head">
+          <span className="form-card-icon"><Upload size={18} /></span>
+          <div>
+            <h3 className="form-card-title">Upload CSV</h3>
+            <p className="form-card-sub">
+              Required columns: <code>keyword, position, date, url</code>
+            </p>
+          </div>
+        </div>
         
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div className="form-card-body">
+        <div className="upload-row">
           <input 
+            className="file-input"
             type="file" 
             accept=".csv"
             data-testid="csv-input"
             onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-            style={{ fontSize: '13px', flex: 1 }}
           />
           <button 
             data-testid="csv-submit"
@@ -104,35 +107,43 @@ const ManualRankingUI: React.FC<ManualRankingUIProps> = ({ clientId, onSuccess }
         </div>
 
         {uploadStatus === 'success' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--up)', fontSize: '13px', fontWeight: 500 }}>
+          <div className="inline-status success">
             <CheckCircle size={16} /> Successfully inserted {rowsInserted} rows.
           </div>
         )}
 
         {uploadErrors.length > 0 && (
-          <div data-testid="upload-errors" style={{ marginTop: '16px', background: 'var(--down-soft)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--down)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--down)', fontWeight: 600, marginBottom: '8px', fontSize: '13px' }}>
+          <div data-testid="upload-errors" className="inline-status error">
+            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '8px' }}>
               <AlertCircle size={16} /> Errors found {rowsInserted > 0 && `(Inserted ${rowsInserted} rows)`}
             </div>
-            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: 'var(--down)', fontFamily: 'var(--font-mono)' }}>
+            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
               {uploadErrors.map((err, i) => (
                 <li key={i}>Row {err.row}: {err.error}</li>
               ))}
             </ul>
+            </div>
           </div>
         )}
+        </div>
       </div>
 
-      {/* Manual Entry Form */}
-      <div className="card">
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Plus size={18} style={{ color: 'var(--ink)' }} /> Add Single Keyword
-        </h3>
-        <form onSubmit={handleFormSubmit} data-testid="manual-form">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+      <div className="form-card">
+        <div className="form-card-head">
+          <span className="form-card-icon"><Plus size={18} /></span>
+          <div>
+            <h3 className="form-card-title">Add Single Keyword</h3>
+            <p className="form-card-sub">Record a ranking update for one tracked keyword.</p>
+          </div>
+        </div>
+        <div className="form-card-body">
+        <form onSubmit={handleFormSubmit} data-testid="manual-form" className="form-grid">
+          <div className="field-grid">
             <div>
-              <label>Keyword ID</label>
-              <input 
+              <label className="form-label">Keyword ID</label>
+              <input
+                className="form-input"
                 required
                 type="text"
                 data-testid="kw-input"
@@ -141,8 +152,9 @@ const ManualRankingUI: React.FC<ManualRankingUIProps> = ({ clientId, onSuccess }
               />
             </div>
             <div>
-              <label>Date</label>
-              <input 
+              <label className="form-label">Date</label>
+              <input
+                className="form-input"
                 required
                 type="date"
                 value={capturedOn}
@@ -150,10 +162,11 @@ const ManualRankingUI: React.FC<ManualRankingUIProps> = ({ clientId, onSuccess }
               />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+          <div className="field-grid">
             <div>
-              <label>Position (optional)</label>
-              <input 
+              <label className="form-label">Position (optional)</label>
+              <input
+                className="form-input"
                 type="number"
                 min="1"
                 data-testid="pos-input"
@@ -162,8 +175,9 @@ const ManualRankingUI: React.FC<ManualRankingUIProps> = ({ clientId, onSuccess }
               />
             </div>
             <div>
-              <label>URL (optional)</label>
-              <input 
+              <label className="form-label">URL (optional)</label>
+              <input
+                className="form-input"
                 type="url"
                 value={url}
                 onChange={e => setUrl(e.target.value)}
@@ -171,7 +185,7 @@ const ManualRankingUI: React.FC<ManualRankingUIProps> = ({ clientId, onSuccess }
             </div>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="form-actions start">
             <button 
               type="submit"
               disabled={formStatus === 'loading'}
@@ -181,17 +195,18 @@ const ManualRankingUI: React.FC<ManualRankingUIProps> = ({ clientId, onSuccess }
             </button>
 
             {formStatus === 'success' && (
-              <span style={{ color: 'var(--up)', fontSize: '13px', fontWeight: 600 }}>Saved!</span>
+              <span className="inline-status success" style={{ marginTop: 0 }}>Saved!</span>
             )}
           </div>
 
           {formError && (
-            <div data-testid="form-error" style={{ marginTop: '12px', color: 'var(--down)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div data-testid="form-error" className="inline-status error">
               <AlertCircle size={14} />
               {formError}
             </div>
           )}
         </form>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import PageHeader from '../../components/ui/PageHeader';
+import { useParams } from 'react-router-dom';
+import Page from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 
 import api from '../../api/client';
@@ -82,12 +82,23 @@ const Connections: React.FC = () => {
   const addConnection = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post(`/clients/${clientId}/connections`, {
+      const { data } = await api.post(`/clients/${clientId}/connections`, {
         provider: formData.provider,
         property_id: formData.property_id,
         property_tz: (formData.provider === 'ga4' || formData.provider === 'gbp') ? formData.property_tz || undefined : undefined
       });
-      toast.success(`${formData.provider.toUpperCase()} mapped successfully.`);
+
+      // Mapping now checks the property, so say which of the two happened
+      // rather than calling a saved row a success.
+      const label = formData.provider.toUpperCase();
+      if (data?.status === 'connected') {
+        toast.success(`${label} mapped and verified — data can be pulled from it.`);
+      } else {
+        toast.warning(`${label} mapped, but it could not be read yet.`, {
+          description: data?.last_error || 'Ask the client to grant the service account access, then press Verify.',
+          duration: 8000,
+        });
+      }
       setFormData({
         provider: 'gsc', property_id: '', property_tz: ''
       });
@@ -110,23 +121,17 @@ const Connections: React.FC = () => {
   if (loading && !client) return <PageSkeleton />;
 
   return (
-    <>
-      <div style={{ marginBottom: 16 }}>
-        <Link to={`/admin/clients/${clientId}`} style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-tertiary)', textDecoration: 'none' }}>← Back to {client?.name}</Link>
-      </div>
-      <PageHeader 
-        title="Google Connections"
-        subtitle="Map Google properties to the Agency Master Service Account."
-      />
+      <Page screen="connections">
 
-      <div style={{ display: 'grid', gap: 24 }}>
-        <div className="card">
+      <div className={`connection-layout ${isAgencyAdmin ? '' : 'single'}`}>
+        <div className="page-card-flush data-panel">
           <div className="card-header">
             <div>
               <h3 className="h2">Mapped Properties</h3>
               <p className="section-sub">Google properties linked to this client.</p>
             </div>
           </div>
+          <div className="table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
@@ -139,7 +144,14 @@ const Connections: React.FC = () => {
             </thead>
             <tbody>
               {connections.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)' }}>No Google properties mapped.</td></tr>
+                <tr>
+                  <td colSpan={5}>
+                    <div className="table-empty">
+                      <strong>No Google properties mapped.</strong>
+                      Add Search Console or GA4 details to start pulling data automatically.
+                    </div>
+                  </td>
+                </tr>
               ) : connections.map(conn => {
                 const vState = verifyStatus[conn.id];
                 return (
@@ -165,12 +177,14 @@ const Connections: React.FC = () => {
                     </td>
                     {isAgencyAdmin && (
                       <td className="num">
-                        <button className="btn btn-secondary btn-sm" style={{ marginRight: 6 }} onClick={() => handleVerify(conn.id)} disabled={verifyingId === conn.id}>
+                        <span className="table-actions">
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleVerify(conn.id)} disabled={verifyingId === conn.id}>
                           {verifyingId === conn.id ? '...' : 'Verify'}
                         </button>
                         <button className="btn btn-secondary btn-sm" style={{ color: 'var(--down)', borderColor: 'var(--down-soft)' }} onClick={() => deleteConnection(conn.id)}>
                           Delete
                         </button>
+                        </span>
                       </td>
                     )}
                   </tr>
@@ -178,15 +192,16 @@ const Connections: React.FC = () => {
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
         {isAgencyAdmin && (
-          <div className="card">
+          <div className="form-card">
             <div className="card-header">
               <h3 className="h2">Map Property</h3>
             </div>
-            <div className="card-body">
-              <div className="notice notice-warning">
+            <div className="form-card-body">
+              <div className="notice-warning">
                 <h4 className="notice-title">Grant Access First</h4>
                 <p className="notice-body">
                   Before mapping, you must grant <strong>Viewer</strong> access in your client's Google Search Console and Google Analytics 4 properties to the following Service Account email:
@@ -205,7 +220,7 @@ const Connections: React.FC = () => {
                   </button>
                 </div>
               </div>
-            <form onSubmit={addConnection} style={{ display: 'grid', gap: 12 }}>
+            <form onSubmit={addConnection} className="form-grid">
               <div className="form-group">
                 <label className="form-label">Google Provider</label>
                 <select
@@ -242,7 +257,7 @@ const Connections: React.FC = () => {
                 </div>
               )}
               
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+              <div className="form-actions">
                 <button
                   type="reset"
                   onClick={() => setFormData({ provider: 'gsc', property_id: '', property_tz: '' })}
@@ -259,7 +274,7 @@ const Connections: React.FC = () => {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 

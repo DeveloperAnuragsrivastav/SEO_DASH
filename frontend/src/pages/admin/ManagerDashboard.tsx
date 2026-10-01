@@ -5,7 +5,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { UserPlus, Users as UsersIcon, FolderOpen, Search, ExternalLink, ChevronDown, Plus } from 'lucide-react';
 
-import PageHeader from '../../components/ui/PageHeader';
+import Page from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
 
 interface AssignedClient {
@@ -166,17 +166,14 @@ export default function ManagerDashboard() {
   if (loading) return <PageSkeleton stats={2} />;
 
   return (
-    <>
-      <PageHeader 
-        title="Manager Tools" 
-        subtitle="Manage your team and project assignments."
-        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Team & Assignments' }]}
+      <Page
+        screen="team"
         actions={
           <button className="btn btn-primary" onClick={openWizard}>
             Create Team Member
           </button>
         }
-      />
+      >
 
       <div className="stat-duo">
         <div className="stat">
@@ -386,6 +383,6 @@ export default function ManagerDashboard() {
           </div>
         </div>
       )}
-    </>
+    </Page>
   );
 }

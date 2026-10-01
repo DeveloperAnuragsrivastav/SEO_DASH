@@ -2,12 +2,11 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import { toast } from 'sonner';
-import { useAuth } from '../context/AuthContext';
 import { SlidersHorizontal } from 'lucide-react';
 import '../report.css';
 
-/** Width of one sheet in report_pdf.html. */
-const SHEET_PX = 794;
+/** Width of one slide in report_slides.html — 1280×720px, i.e. 960×540pt. */
+const SHEET_PX = 1280;
 
 /* Screen-only adjustments layered onto the PDF template: drop the grey desk
    behind the sheet, and open links in a new tab rather than inside the frame. */
@@ -15,19 +14,16 @@ const SCREEN_HEAD = `<base target="_blank"><style>
   html, body { background: transparent !important; overflow: hidden !important; }
 </style>`;
 
-/* The template has two layouts: on screen every section is an A4-tall sheet
-   with generous padding; in print (which the PDF renderer emulates) sections
-   flow into each other. The frame renders as screen, so without this every
-   short section left a near-empty A4 page behind it. Applying the print rules
-   everywhere makes the frame lay out exactly as the PDF does. */
-const asPrinted = (html: string) => html.replace('@media print {', '@media all {');
+/* The deck is already a stack of fixed 1280×720 slides on screen and in
+   print, so it needs no rewriting to preview — what the frame shows is what
+   the PDF prints. */
+const asPrinted = (html: string) => html;
 
 const ReportView: React.FC = () => {
   const { clientId, snapshotId } = useParams<{ clientId: string; snapshotId: string }>();
   const [searchParams] = useSearchParams();
   const count = searchParams.get('count') || '1';
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [client, setClient] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -148,11 +144,13 @@ const ReportView: React.FC = () => {
   };
 
   const handlePublish = async () => {
+    const month = report?.end_date ? new Date(`${report.end_date}T00:00:00`).toLocaleString('en', { month: 'long', year: 'numeric' }) : 'this month';
+    if (!window.confirm(`Publish the ${month} report?\n\nIts figures become ${month}'s column in every sheet (Search Console, Analytics, Keywords…). To change it later, use Make draft and publish again.`)) return;
     try {
       await api.post(`/clients/${clientId}/reports/${snapshotId}/publish`);
       const full = await api.get(`/clients/${clientId}/reports/${snapshotId}`);
       setReport(full.data);
-      toast.success('Report published!');
+      toast.success(`Published — ${month} is now on every sheet.`);
     } catch (err: any) {
       // Handled by global interceptor
     }
@@ -215,8 +213,18 @@ const ReportView: React.FC = () => {
             </button>
           )}
 
-          {report?.status === 'draft' && (user?.role === 'agency_admin' || user?.role === 'super_admin') && (
+          {report?.status === 'draft' && snapshotId !== 'multi' && (
             <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
+          )}
+          {report?.status === 'published' && snapshotId !== 'multi' && (
+            <button className="btn btn-secondary" onClick={async () => {
+              if (!window.confirm('Make this report a draft again?\n\nYou can change anything in it. The sheets keep the published figures until you publish it again — then they are replaced with the new ones.')) return;
+              try {
+                await api.post(`/clients/${clientId}/reports/${snapshotId}/unpublish`);
+                toast.success('The report is a draft again.');
+                navigate(`/admin/clients/${clientId}/reports/${snapshotId}/build`);
+              } catch { /* Handled by global interceptor */ }
+            }}>Make draft</button>
           )}
         </div>
       </div>

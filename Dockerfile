@@ -1,71 +1,43 @@
-# ── Frontend Builder Stage ─────────────────────────────────────
-FROM node:20-slim AS frontend-builder
+# ── 1. Frontend build ──────────────────────────────────────────────────
+FROM node:22-slim AS frontend
 WORKDIR /frontend
-COPY frontend/package*.json ./
-RUN npm install
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm install -g npm@11 --no-audit --no-fund && npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN VITE_API_URL="" npm run build
 
-# ── Backend Builder Stage ──────────────────────────────────────
-FROM python:3.11-slim AS builder
-
-WORKDIR /app
-
-# Install build dependencies for Python packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-
-# Install Python dependencies to a virtual environment
+# ── 2. Python dependencies ─────────────────────────────────────────────
+FROM python:3.11-slim AS python-deps
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Remove dev dependencies (mypy, ruff, pytest)
-RUN pip uninstall -y mypy ruff pytest pytest-cov 2>/dev/null || true
-
-# Install Playwright Chromium browser
-RUN python -m playwright install chromium
-RUN python -m playwright install-deps chromium
-
-# ── Runtime Stage ──────────────────────────────────────────────
+# ── 3. Runtime ─────────────────────────────────────────────────────────
 FROM python:3.11-slim
-
 WORKDIR /app
 
-# Install runtime dependencies (PostgreSQL client, Chromium deps)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    # Chromium runtime dependencies
-    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-    libdrm2 libdbus-1-3 libxkbcommon0 libatspi2.0-0 \
-    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
-    libpango-1.0-0 libcairo2 libasound2 libwayland-client0 \
-    fonts-liberation fonts-noto-color-emoji && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-
-# Copy Playwright browsers from builder
-COPY --from=builder /root/.cache/ms-playwright /root/.cache/ms-playwright
-
-# Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONOPTIMIZE=2
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    APP_ENV=production
 
-COPY . .
-# Remove the raw frontend source code to save space
-RUN rm -rf frontend/
+COPY --from=python-deps /opt/venv /opt/venv
 
-# Copy the built React app from the frontend builder stage
-COPY --from=frontend-builder /frontend/dist /app/frontend/dist
+# Only Chromium's headless shell (what PDFs need) and its system libraries.
+RUN playwright install --with-deps --only-shell chromium \
+    && apt-get install -y --no-install-recommends fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# Only what runs: the API, its templates/static files and the migrations.
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY app ./app
+COPY --from=frontend /frontend/dist ./frontend/dist
 
 EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Railway sets $PORT. One worker: PDFs and report builds are memory-heavy,
+# and a second worker would double the idle memory for a handful of users.
+CMD ["sh", "-c", "alembic upgrade head && python -m app.init_db && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --proxy-headers --forwarded-allow-ips '*' --no-access-log"]

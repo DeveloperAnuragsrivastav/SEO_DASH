@@ -115,47 +115,55 @@ const ManualAiMentionUI: React.FC<ManualAiMentionUIProps> = ({ clientId, monthSt
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '32px' }}>
-      
-      {/* CSV Upload Section */}
-      <div className="card">
-        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Upload size={18} style={{ color: 'var(--ink)' }} /> Upload CSV
-        </h3>
-        <p style={{ fontSize: '13px', color: 'var(--ink-2)', marginBottom: '16px' }}>
-          Required: <code>captured_on, platform, mentioned</code><br/>Optional: <code>prompt_id</code>
-        </p>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <input type="file" accept=".csv" onChange={e => setCsvFile(e.target.files?.[0] || null)} style={{ fontSize: '13px', flex: 1 }} />
+    <div className="surface-grid">
+      <div className="form-card">
+        <div className="form-card-head">
+          <span className="form-card-icon"><Upload size={18} /></span>
+          <div>
+            <h3 className="form-card-title">Upload CSV</h3>
+            <p className="form-card-sub">
+              Required: <code>captured_on, platform, mentioned</code><br />Optional: <code>prompt_id</code>
+            </p>
+          </div>
+        </div>
+        <div className="form-card-body">
+        <div className="upload-row">
+          <input className="file-input" type="file" accept=".csv" onChange={e => setCsvFile(e.target.files?.[0] || null)} />
           <button onClick={handleFileUpload} disabled={!csvFile || uploadStatus === 'loading'} className="btn btn-primary btn-sm">
             {uploadStatus === 'loading' ? 'Uploading...' : 'Upload'}
           </button>
         </div>
         {uploadStatus === 'success' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--up)', marginTop: '12px', fontSize: '13px', fontWeight: 500 }}>
+          <div className="inline-status success">
             <CheckCircle size={16} /> Successfully uploaded {rowsInserted} rows.
           </div>
         )}
         {uploadErrors.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--down)', marginTop: '12px', fontSize: '13px', fontWeight: 500 }}>
+          <div className="inline-status error">
             <AlertCircle size={16} /> {uploadErrors[0]}
           </div>
         )}
+        </div>
       </div>
 
-      {/* Manual Add Section */}
-      <div className="card">
-        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Plus size={18} style={{ color: 'var(--ink)' }} /> Add Single AI Mention
-        </h3>
-        
-        {error && <div style={{ color: 'var(--down)', fontSize: '13px', marginBottom: '12px' }}>{error}</div>}
-        {rowErrors[0] && <div style={{ color: 'var(--down)', fontSize: '13px', marginBottom: '12px' }}>Validation error: {rowErrors[0]}</div>}
-
-        <form onSubmit={handleSingleSubmit} style={{ display: 'grid', gap: '14px' }}>
+      <div className="form-card">
+        <div className="form-card-head">
+          <span className="form-card-icon"><Plus size={18} /></span>
           <div>
-            <label>Platform</label>
-            <select 
+            <h3 className="form-card-title">Add Single AI Mention</h3>
+            <p className="form-card-sub">Record one AI visibility check for this period.</p>
+          </div>
+        </div>
+        
+        <div className="form-card-body">
+        {error && <div className="inline-status error">{error}</div>}
+        {rowErrors[0] && <div className="inline-status error">Validation error: {rowErrors[0]}</div>}
+
+        <form onSubmit={handleSingleSubmit} className="form-grid">
+          <div>
+            <label className="form-label">Platform</label>
+            <select
+              className="form-select"
               value={platform} 
               onChange={e => setPlatform(e.target.value)}
             >
@@ -165,39 +173,40 @@ const ManualAiMentionUI: React.FC<ManualAiMentionUIProps> = ({ clientId, monthSt
               <option value="perplexity">Perplexity</option>
             </select>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="field-grid">
             <div>
-              <label>Captured On</label>
-              <input 
+              <label className="form-label">Captured On</label>
+              <input
+                className="form-input"
                 required
                 type="date" 
                 value={capturedOn} 
                 onChange={e => setCapturedOn(e.target.value)}
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0, marginTop: '16px' }}>
+            <div>
+              <label className="form-label">Mention Status</label>
+              <label className="inline-check">
                 <input 
                   type="checkbox" 
                   checked={mentioned} 
                   onChange={e => setMentioned(e.target.checked)}
-                  style={{ width: 'auto' }}
                 />
-                <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>Mentioned?</span>
+                <span>Mentioned?</span>
               </label>
             </div>
           </div>
           <div>
-            <label>Prompt ID (optional UUID)</label>
-            <input 
+            <label className="form-label">Prompt ID (optional UUID)</label>
+            <input
+              className="form-input mono"
               type="text" 
               value={promptId} 
               onChange={e => setPromptId(e.target.value)}
               placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}
             />
           </div>
-          <div>
+          <div className="form-actions start">
             <button 
               type="submit" 
               disabled={loading}
@@ -207,6 +216,7 @@ const ManualAiMentionUI: React.FC<ManualAiMentionUIProps> = ({ clientId, monthSt
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );
