@@ -71,11 +71,12 @@ def generate_report(
     data: Optional[GenerateRequest] = None,
     db: Session = Depends(get_db),
 ):
-    """Generate the report for the current 30-day cycle, optionally combined
-    with the cycles before it that already have data stored.
+    """Generate the report for the last finished month, optionally combined
+    with the published months before it.
 
-    Only the current cycle is pulled from Google. One report per cycle: the
-    next can be generated 30 days after the last one ended.
+    Only that month (and the one before, for its comparison) is pulled from
+    Google. One report per month: September's is made in October, and once it
+    is published the next opens on 1 November.
     """
     client = db.get(Client, client_id)
     if not client:
@@ -85,7 +86,8 @@ def generate_report(
     if anchor["mode"] == "locked":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Please wait {anchor['days_remaining']} more days to generate the next report.",
+            detail=(f"{anchor['anchor_end']:%B}'s report is published. The next report opens on the 1st of next month "
+                    f"— in {anchor['days_remaining']} day{'s' if anchor['days_remaining'] != 1 else ''}."),
         )
     if anchor["mode"] == "draft":
         raise HTTPException(
@@ -105,7 +107,9 @@ def generate_report(
     from app.tasks.reports import generate_snapshot_report
 
     task_id = str(uuid.uuid4())
-    background_tasks.add_task(generate_snapshot_report, str(client_id), months)
+    # The month the checks above were made for — never "yesterday", which
+    # mid-month would start a report for the month still under way.
+    background_tasks.add_task(generate_snapshot_report, str(client_id), months, anchor["anchor_end"])
 
     return {
         "status": "processing",

@@ -104,11 +104,14 @@ def pull_for_report(db, client_id: uuid.UUID, end_date: datetime.date, months: i
     return rows, live
 
 
-def generate_snapshot_report(client_id_str: str, months: int = 1):
-    """Build (or rebuild) the draft for the cycle ending yesterday."""
+def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: datetime.date | None = None):
+    """Build (or rebuild) the draft for the last finished month — on any day
+    of October, September 1–30. Reports run month on month: September's is
+    made in October, October's in November."""
+    from app.services.report_period import last_complete_month
 
     client_id = uuid.UUID(client_id_str)
-    end_date = datetime.date.today() - datetime.timedelta(days=1)
+    end_date = end_date or last_complete_month()
     lock_id = hash(f"{client_id}-{end_date.isoformat()}") & 0x7FFFFFFFFFFFFFFF
 
     with engine.connect() as lock_conn:

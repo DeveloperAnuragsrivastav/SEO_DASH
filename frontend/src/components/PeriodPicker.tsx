@@ -99,8 +99,16 @@ const PeriodPicker: React.FC<Props> = ({ clientId, snapshotId, initialMonths, bu
         <div className="pp-note">
           <Info size={14} />
           <span>
-            This cycle's report is published. The next report can be generated in {info.days_remaining} day
-            {info.days_remaining === 1 ? '' : 's'}.
+            {(() => {
+              // Month on month: September's report is made in October, October's opens on 1 November.
+              const e = new Date(`${info.anchor_end}T00:00:00`);
+              const name = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleString('en', o);
+              const done = name(e, { month: 'long', year: 'numeric' });
+              const next = name(new Date(e.getFullYear(), e.getMonth() + 1, 1), { month: 'long' });
+              const opens = name(new Date(e.getFullYear(), e.getMonth() + 2, 1), { day: 'numeric', month: 'long' });
+              const n = info.days_remaining;
+              return `${done}'s report is published. ${next}'s report opens on ${opens}${n > 0 ? ` — in ${n} day${n === 1 ? '' : 's'}` : ''}.`;
+            })()}
           </span>
         </div>
       )}

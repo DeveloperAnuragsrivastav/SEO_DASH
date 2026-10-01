@@ -205,16 +205,6 @@ const ClientDashboard: React.FC = () => {
     return `${month(new Date(start.getTime() + 29 * 86400000))} – ${month(end)}`;
   };
 
-  let daysRemaining = 0;
-  if (report && report.end_date) {
-    const endDate = new Date(report.end_date);
-    const today = new Date();
-    const diffTime = today.getTime() - endDate.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays < 30) {
-      daysRemaining = 30 - diffDays;
-    }
-  }
 
   if (loading) return <PageSkeleton cards={2} header={true} stats={4} />;
 
@@ -519,11 +509,6 @@ const ClientDashboard: React.FC = () => {
                 Generated {report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}
                 {' · '}{reportCount} total {reportCount === 1 ? 'report' : 'reports'}
               </div>
-              {daysRemaining > 0 && report.status !== 'published' && (
-                <p className="report-card-note">
-                  Generating a new snapshot is blocked for {daysRemaining} more day(s).
-                </p>
-              )}
             </div>
 
             <div className="report-card-actions">
