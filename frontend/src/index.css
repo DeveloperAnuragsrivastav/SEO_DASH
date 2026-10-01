@@ -985,6 +985,12 @@ a.link {
 .app-sidebar.collapsed { width: var(--sidebar-width-collapsed); }
 .app-sidebar.collapsed .sidebar-logo { width: 30px; object-fit: cover; object-position: left center; }
 .app-sidebar.collapsed .sidebar-collapse { transform: rotate(180deg); }
+/* Collapsed, the rail is 68px: logo, gap and button need 64px of the 32px
+   left after padding, so the button was pushed under the page. The rail's
+   header holds only the expand button; the logo returns when expanded. */
+.app-sidebar.collapsed .sidebar-header { padding: 0; justify-content: center; }
+.app-sidebar.collapsed .sidebar-header .sidebar-logo { display: none; }
+.app-sidebar.collapsed .sidebar-collapse { margin: 0; width: 32px; height: 32px; color: rgba(255, 255, 255, 0.75); }
 .app-sidebar.collapsed .nav-text,
 .app-sidebar.collapsed .nav-section-title,
 .app-sidebar.collapsed .account-meta,
@@ -996,6 +1002,8 @@ a.link {
 
 @media (max-width: 860px) {
   .app-sidebar.collapsed { width: var(--sidebar-width); }
+  .app-sidebar.collapsed .sidebar-header { padding: 0 18px; justify-content: flex-start; }
+  .app-sidebar.collapsed .sidebar-header .sidebar-logo { display: block; }
   .app-sidebar.collapsed .nav-text,
   .app-sidebar.collapsed .nav-section-title,
   .app-sidebar.collapsed .account-meta { display: block; }
