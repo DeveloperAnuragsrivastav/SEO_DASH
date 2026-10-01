@@ -33,8 +33,10 @@ def init_db():
         password = os.environ.get("ADMIN_PASSWORD") or ""
         if db.query(User).filter(User.role == UserRole.super_admin).first():
             logger.info("A super admin already exists.")
-        elif not email or len(password) < 10:
-            logger.warning("No super admin yet: set ADMIN_EMAIL and ADMIN_PASSWORD (10+ characters) and redeploy.")
+        elif not email or len(password) < 8:
+            why = "ADMIN_EMAIL is not set" if not email else (
+                "ADMIN_PASSWORD is not set" if not password else f"ADMIN_PASSWORD has {len(password)} characters")
+            logger.warning("No super admin yet (%s): set ADMIN_EMAIL and ADMIN_PASSWORD (8+ characters) and redeploy.", why)
         else:
             db.add(User(email=email, password_hash=get_password_hash(password), is_active=True,
                         role=UserRole.super_admin, account_id=account.id))

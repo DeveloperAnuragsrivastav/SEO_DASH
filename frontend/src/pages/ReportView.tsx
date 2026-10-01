@@ -97,9 +97,19 @@ const ReportView: React.FC = () => {
 
   // The sheet is content-sized; size the frame to it so the app scrolls, not the frame.
   const frameObserver = useRef<ResizeObserver | null>(null);
-  const measure = () => {
+  const measure = async () => {
     const doc = frameRef.current?.contentDocument;
     if (!doc) return;
+    // Fit each slide to its page exactly as the PDF does: the deck carries its
+    // own deckFit(), which the script-free frame cannot run, so it runs here
+    // on the frame's document once the fonts are in.
+    try {
+      await (doc as any).fonts?.ready;
+      const code = doc.getElementById('deck-fit')?.textContent;
+      if (code) (new Function(`${code}\nreturn deckFit;`)() as (d: Document) => void)(doc);
+    } catch {
+      // The deck still shows, just without the tightening.
+    }
     const update = () => setSheetHeight(doc.documentElement.scrollHeight);
     update();
     // Fonts and images land after load and change the height. Follow the
@@ -258,7 +268,8 @@ const ReportView: React.FC = () => {
             style={{ width: SHEET_PX * scale, height: sheetHeight * scale }}
           >
             {/* No scripts are allowed in the frame: the template is static, and it
-                carries text people typed. Same-origin only so it can be measured. */}
+                carries text people typed. Same-origin only so it can be measured
+                and fitted from here. */}
             <iframe
               ref={frameRef}
               title="Report"

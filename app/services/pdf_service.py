@@ -2,6 +2,8 @@ from __future__ import annotations
 """PDF generation service — renders a Jinja2 HTML template with Playwright/Chromium."""
 
 import logging
+import re
+import base64
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -168,7 +170,12 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     agency_logo_b64 = ""
     try:
         from pathlib import Path
-        logo_path = Path(__file__).resolve().parent.parent / "static" / "agency_logo.png"
+        # The logo prints 42px tall on every slide, so a 128px copy is plenty
+        # sharp — the full-size file, repeated per slide, cost Chromium ~3.6 MB.
+        static = Path(__file__).resolve().parent.parent / "static"
+        logo_path = static / "agency_logo_print.png"
+        if not logo_path.exists():
+            logo_path = static / "agency_logo.png"
         if logo_path.exists():
             with open(logo_path, "rb") as image_file:
                 encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
@@ -284,6 +291,96 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     )
 
 
+# Lean Chromium for a small server: no GPU, extensions or background traffic,
+# and /dev/shm (tiny in containers) not used for rendering.
+_CHROMIUM_ARGS = [
+    "--disable-dev-shm-usage", "--disable-gpu", "--disable-extensions",
+    "--disable-background-networking", "--disable-sync", "--disable-default-apps",
+    "--no-first-run", "--mute-audio", "--renderer-process-limit=1",
+    "--js-flags=--max-old-space-size=128", "--single-process", "--no-zygote",
+]
+
+# Pictures are shrunk to what the page prints before Chromium sees them. A
+# page thumbnail prints at most 92px wide but sites serve 1,600px PNGs of
+# 1–1.5 MB; an uploaded screenshot may be 5 MB. Chromium would download and
+# decode every one at full size.
+_THUMB_PX = 276        # 3× the widest thumbnail, sharp in print
+_SHOT_PX = 1400        # a screenshot never prints wider than half a slide
+_BIG_DATA_URI = 300_000
+_IMG_SRC = re.compile(r'(<img\b[^>]*?\bsrc=")([^"]+)(")')
+_thumb_cache: "dict[str, str | None]" = {}
+
+
+def _jpeg_data_uri(raw: bytes, max_px: int) -> "str | None":
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    try:
+        with Image.open(BytesIO(raw)) as src:
+            src.draft("RGB", (max_px, max_px))     # JPEGs decode straight at the smaller size
+            im = ImageOps.exif_transpose(src)      # a phone photo keeps the way up it was taken
+            im.thumbnail((max_px, max_px * 4))
+            if im.mode in ("RGBA", "LA", "P"):
+                im = im.convert("RGBA")
+                flat = Image.new("RGB", im.size, (255, 255, 255))
+                flat.paste(im, mask=im.getchannel("A"))
+                im = flat
+            elif im.mode != "RGB":
+                im = im.convert("RGB")
+            out = BytesIO()
+            im.save(out, "JPEG", quality=82, optimize=True, progressive=True)
+    except Exception:
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()
+
+
+def _fetch_thumb(url: str) -> "str | None":
+    if url in _thumb_cache:
+        return _thumb_cache[url]
+    import httpx
+    small = None
+    try:
+        with httpx.Client(timeout=httpx.Timeout(6.0, connect=4.0), follow_redirects=True) as c:
+            # Sites behind bot protection refuse anything that is not plainly a browser.
+            res = c.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+                "Accept": "image/avif,image/webp,image/png,image/*;q=0.8,*/*;q=0.5",
+            })
+            if res.status_code == 200 and len(res.content) <= 12_000_000:
+                small = _jpeg_data_uri(res.content, _THUMB_PX)
+    except Exception:
+        small = None
+    if len(_thumb_cache) > 300:
+        _thumb_cache.clear()
+    _thumb_cache[url] = small
+    return small
+
+
+def shrink_images(html: str, base_url: str = "") -> str:
+    """Every picture in the deck at the size it prints. A picture that cannot
+    be fetched or read is left exactly as it was."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    srcs = {m.group(2) for m in _IMG_SRC.finditer(html)}
+    remote = [u for u in srcs if u.startswith(("http://", "https://")) and not (base_url and u.startswith(base_url))]
+    big = [u for u in srcs if u.startswith("data:image/") and len(u) > _BIG_DATA_URI and "svg" not in u[:30]]
+    swap: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for url, small in zip(remote, pool.map(_fetch_thumb, remote)):
+            if small:
+                swap[url] = small
+    for uri in big:
+        try:
+            small = _jpeg_data_uri(base64.b64decode(uri.split(",", 1)[1]), _SHOT_PX)
+        except Exception:
+            small = None
+        if small and len(small) < len(uri):
+            swap[uri] = small
+    if not swap:
+        return html
+    return _IMG_SRC.sub(lambda m: m.group(1) + swap.get(m.group(2), m.group(2)) + m.group(3), html)
+
+
 # One Chromium at a time: each is a few hundred MB, and a small server asked
 # for three PDFs at once would otherwise run out of memory. The rest wait.
 _PDF_SLOT = None
@@ -308,11 +405,13 @@ async def generate_report_pdf(comparative_data: dict, client: dict, base_url: st
     """
     from playwright.async_api import async_playwright
 
+    import asyncio
     html_content = render_report_html(comparative_data, client, base_url)
+    html_content = await asyncio.to_thread(shrink_images, html_content, base_url)
 
     async with _pdf_slot(), async_playwright() as p:
         # /dev/shm is tiny in containers; Chromium crashes on big pages without this.
-        browser = await p.chromium.launch(headless=True, args=["--disable-dev-shm-usage", "--disable-gpu"])
+        browser = await p.chromium.launch(headless=True, args=_CHROMIUM_ARGS)
         try:
             # One slide is 1280×720px, which is exactly 960×540pt — the standard
             # widescreen page. Laying out at that width means what Chromium
@@ -324,6 +423,10 @@ async def generate_report_pdf(comparative_data: dict, client: dict, base_url: st
 
             # Wait for the web fonts themselves rather than a fixed pause.
             await page.evaluate("document.fonts.ready.then(() => true)")
+            # Measure each slide at its print size and tighten any that would
+            # cut or spill (deckFit is defined in report_slides.html).
+            await page.emulate_media(media="print")
+            await page.evaluate("typeof deckFit === 'function' && deckFit(document)")
 
             # Each slide is its own page at a fixed size, so the deck needs
             # none of the content-measuring the old single-sheet report did —

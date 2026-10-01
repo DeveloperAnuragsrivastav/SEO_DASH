@@ -32,6 +32,13 @@ export default function ManagerDashboard() {
   const { isManager } = usePermissions();
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  // Members whose project list is folded away.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setCollapsed(cur => {
+    const next = new Set(cur);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [stats, setStats] = useState({ total_users: 0, total_projects: 0 });
   const [loading, setLoading] = useState(true);
   
@@ -250,10 +257,20 @@ export default function ManagerDashboard() {
                   <Plus size={13} /> Assign Project
                 </button>
 
-                <ChevronDown size={16} className="member-chevron" />
+                <button
+                  type="button"
+                  className="icon-btn member-toggle"
+                  aria-expanded={!collapsed.has(u.id)}
+                  aria-label={collapsed.has(u.id) ? `Show ${u.email}'s projects` : `Hide ${u.email}'s projects`}
+                  title={collapsed.has(u.id) ? 'Show projects' : 'Hide projects'}
+                  disabled={!u.assigned_clients?.length}
+                  onClick={() => toggle(u.id)}
+                >
+                  <ChevronDown size={16} className={`member-chevron ${collapsed.has(u.id) ? '' : 'open'}`} />
+                </button>
               </div>
               
-              {u.assigned_clients && u.assigned_clients.length > 0 && (
+              {!collapsed.has(u.id) && u.assigned_clients && u.assigned_clients.length > 0 && (
                 <div className="member-projects">
                   <div className="member-projects-head">Assigned Projects ({u.assigned_clients.length})</div>
                   <div className="stack">

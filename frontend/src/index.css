@@ -1436,7 +1436,10 @@ a.link {
 
 .member-count { font-size: 13px; color: var(--ink-3); white-space: nowrap; }
 .member-count strong { color: var(--ink); font-weight: 700; }
-.member-chevron { color: var(--ink-4); flex-shrink: 0; }
+.member-chevron { color: var(--ink-4); flex-shrink: 0; transition: transform 0.16s var(--ease); }
+.member-chevron.open { transform: rotate(180deg); }
+.member-toggle { flex-shrink: 0; }
+.member-toggle:disabled { opacity: 0.35; cursor: default; }
 
 .member-projects {
   padding: 0 20px 18px;

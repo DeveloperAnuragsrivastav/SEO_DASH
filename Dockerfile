@@ -22,7 +22,10 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-    APP_ENV=production
+    APP_ENV=production \
+    MALLOC_ARENA_MAX=2
+# MALLOC_ARENA_MAX: fewer malloc arenas, so memory freed after a PDF is not
+# kept reserved per thread.
 
 COPY --from=python-deps /opt/venv /opt/venv
 
