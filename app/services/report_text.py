@@ -73,6 +73,7 @@ TEXTS: list[tuple[str, str, str, str]] = [
     ("band.51_100", "rankings", "Band — 51 to 100", "51 – 100"),
     ("band.none", "rankings", "Band — unranked", "Not in Top 100"),
     ("verdict.rankings", "rankings", "Commentary heading", "Takeaway"),
+    ("verdict.rankings_table", "rankings_table", "Commentary heading", "How the keywords moved"),
 
     # ── Keywords Rankings Tracking ─────────────────────────────────────────
     ("kw.term_col", "rankings_table", "Table — keyword column", "Keyword"),

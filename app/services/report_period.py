@@ -75,16 +75,76 @@ def pulled(rows: Iterable[tuple]):
 
 # ── Cycles ──────────────────────────────────────────────────────────────────
 
+def _shift_months(day: datetime.date, months: int) -> datetime.date:
+    """The same day number `months` later (or earlier). Only used with days
+    1–28, which every month has."""
+    y, m = divmod(day.year * 12 + day.month - 1 + months, 12)
+    return day.replace(year=y, month=m + 1)
+
+
+def cycle_start_day(end: datetime.date) -> int:
+    """The day of the month a client's reports start on: the day after a
+    report ends. 1 is calendar months."""
+    return (end + _ONE).day
+
+
+def valid_period_end(end: datetime.date) -> bool:
+    """A period may end on a month's last day or on the 1st–27th, so the next
+    one starts on a date every month has (the 1st–28th)."""
+    return cycle_start_day(end) <= 28
+
+
 def last_complete_month(today: Optional[datetime.date] = None) -> datetime.date:
-    """The last day of the most recent month that has ended — what the next
-    report covers. On any day of October that is 30 September."""
+    """The last day of the most recent month that has ended. On any day of
+    October that is 30 September."""
     return (today or datetime.date.today()).replace(day=1) - _ONE
 
 
+def due_cycle_end(last_end: datetime.date, today: Optional[datetime.date] = None) -> datetime.date:
+    """The end of the latest period, on the client's own cycle, that is over
+    by today. Reports ending 4 Oct run 5th to 4th: on 7 Nov that is 4 Nov."""
+    today = today or datetime.date.today()
+    nxt = last_end + _ONE                       # the day the next period starts
+    if not valid_period_end(last_end):
+        return last_complete_month(today)
+    k = 0
+    while _shift_months(nxt, k + 1) - _ONE < today:
+        k += 1
+    return _shift_months(nxt, k) - _ONE
+
+
+def next_cycle_opens(end: datetime.date) -> datetime.date:
+    """The day the period after the one ending `end` is over and can be made."""
+    if not valid_period_end(end):
+        return (end.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) + datetime.timedelta(days=31)
+    return _shift_months(end + _ONE, 1)
+
+
+def first_period_suggestion(today: Optional[datetime.date] = None) -> tuple[datetime.date, datetime.date]:
+    """What a client's first report offers before anyone picks: the month up
+    to yesterday (5 Sep – 4 Oct on 5 Oct). If yesterday is the 28th–30th the
+    next period could not start on the same date every month, so it ends on
+    the 27th instead."""
+    today = today or datetime.date.today()
+    end = today - _ONE
+    if not valid_period_end(end):
+        end = end.replace(day=27)
+    return _shift_months(end + _ONE, -1), end
+
+
 def cycle_bounds(anchor_end: datetime.date, index: int) -> tuple[datetime.date, datetime.date]:
-    """Calendar month `index` counted back from the anchor's month; 0 is the
-    anchor's own month. A report always covers whole months — September is
-    1–30 September whichever day it is made — so no two reports can overlap."""
+    """Period `index` counted back from the one ending on `anchor_end` (0).
+
+    Every period runs from the same date in one month to the day before it
+    in the next — the date fixed by the client's first report. Reports from
+    the 1st are calendar months (1–30 September); a client who started on
+    the 5th runs 5 Sep – 4 Oct, 5 Oct – 4 Nov… No two periods overlap and none
+    is skipped.
+    """
+    nxt = anchor_end + _ONE
+    if valid_period_end(anchor_end):
+        return _shift_months(nxt, -(index + 1)), _shift_months(nxt, -index) - _ONE
+    # An end that breaks the rule (older data): the calendar month instead.
     import calendar
     y, m = divmod(anchor_end.year * 12 + anchor_end.month - 1 - index, 12)
     first = datetime.date(y, m + 1, 1)
@@ -102,43 +162,54 @@ def short_range(start: datetime.date, end: datetime.date) -> str:
     return f"{start.day} {start:%b %Y} – {end.day} {end:%b %Y}"
 
 
+def period_name(start: datetime.date, end: datetime.date) -> str:
+    """A whole calendar month by its name ("September 2026"); any other
+    period by its dates ("5 Sep – 4 Oct 2026")."""
+    import calendar
+    if start.day == 1 and start.year == end.year and start.month == end.month \
+            and end.day == calendar.monthrange(end.year, end.month)[1]:
+        return end.strftime("%B %Y")
+    return short_range(start, end)
+
+
 def cycle_labels(cycles: list[tuple[datetime.date, datetime.date]]) -> list[str]:
-    """Each cycle is named for the month it ends in, as reports always have
-    been. Two cycles can end in the same month; those fall back to dates."""
-    names = [end.strftime("%B %Y") for _, end in cycles]
-    clashes = {n for n in names if names.count(n) > 1}
-    return [short_range(s, e) if n in clashes else n for (s, e), n in zip(cycles, names)]
+    """Each period's name: a calendar month by name, any other by its dates."""
+    return [period_name(s, e) for s, e in cycles]
 
 
 def cycle_sources(published: set, end: datetime.date) -> dict[str, bool]:
     """Whether a cycle's month has been published, and so has final figures."""
-    done = sheets.month_of(end) in published
+    done = sheets.cycle_month(end) in published
     return {k: done for k in ("gsc", "ga4", "gbp", "rankings", "ai_visibility", "links", "work")}
 
 
 def anchor_for(db: Session, client_id: uuid.UUID, today: Optional[datetime.date] = None) -> dict:
-    """Which month the next report covers, and whether it can be made now.
+    """Which period the next report covers, and whether it can be made now.
 
-    One report per calendar month, made once that month is over:
-    new    — the last finished month has no report yet
+    A client's first report covers a period the person picks (first). After
+    that, reports run on the same date every month, from the day after the
+    last one ended, once each period is over:
+    new    — the latest finished period has no report yet
     draft  — it has a draft; reopen that rather than make another
-    locked — it is published; the next month's report opens on the 1st
+    locked — it is published; the next opens the day the next period ends
     """
     today = today or datetime.date.today()
-    anchor = last_complete_month(today)
-    month = anchor.replace(day=1)
-    existing = [r for r in db.execute(select(ReportSnapshot).where(
-        ReportSnapshot.client_id == client_id, ReportSnapshot.end_date >= month)).scalars()
-        if r.end_date.replace(day=1) == month]
-    if existing:
-        last = sorted(existing, key=lambda r: r.end_date)[-1]
-        next_open = (today.replace(day=1) + datetime.timedelta(days=32)).replace(day=1)
-        info = {"anchor_end": last.end_date, "report_id": str(last.id),
-                "months": ((last.snapshot or {}).get("period") or {}).get("months", 1)}
+    reports = db.execute(select(ReportSnapshot).where(ReportSnapshot.client_id == client_id)
+                         .order_by(ReportSnapshot.end_date.desc())).scalars().all()
+    if not reports:
+        start, end = first_period_suggestion(today)
+        return {"mode": "first", "anchor_end": end, "suggested_start": start, "report_id": None,
+                "months": None, "days_remaining": 0}
+    last = reports[0]
+    due = due_cycle_end(last.end_date, today)
+    info = {"report_id": str(last.id), "months": ((last.snapshot or {}).get("period") or {}).get("months", 1)}
+    if due <= last.end_date:
+        opens = next_cycle_opens(last.end_date)
         if last.status == ReportStatus.published:
-            return {"mode": "locked", "days_remaining": (next_open - today).days, **info}
-        return {"mode": "draft", "days_remaining": 0, **info}
-    return {"mode": "new", "anchor_end": anchor, "report_id": None, "months": None, "days_remaining": 0}
+            return {"mode": "locked", "anchor_end": last.end_date, "days_remaining": max(0, (opens - today).days),
+                    "opens_on": opens, **info}
+        return {"mode": "draft", "anchor_end": last.end_date, "days_remaining": 0, **info}
+    return {"mode": "new", "anchor_end": due, "report_id": None, "months": None, "days_remaining": 0}
 
 
 def timeline(db: Session, client_id: uuid.UUID, anchor_end: datetime.date) -> list[dict]:
@@ -156,9 +227,9 @@ def timeline(db: Session, client_id: uuid.UUID, anchor_end: datetime.date) -> li
         sources = cycle_sources(published, end)
         # Each published month backs one cycle only: two 30-day cycles can end
         # in the same month, and the second would count that month twice.
-        if i > 0 and (not any(sources.values()) or sheets.month_of(end) in months_used):
+        if i > 0 and (not any(sources.values()) or sheets.cycle_month(end) in months_used):
             break
-        months_used.add(sheets.month_of(end))
+        months_used.add(sheets.cycle_month(end))
         found.append((start, end, sources))
     found.reverse()
     labels = cycle_labels([(s, e) for s, e, _ in found])
@@ -604,7 +675,7 @@ def _add_cycle_positions(db: Session, client_id: uuid.UUID, rankings: dict, cycl
     """Each keyword's position in every month of a combined report: older
     months from the sheet, the current one as the report has it."""
     keywords = rankings.get("keywords") or []
-    months = [sheets.month_of(end) for _, end in cycles[:-1]]
+    months = [sheets.cycle_month(end) for _, end in cycles[:-1]]
     history = sheets.row_history(db, client_id, "keywords", "kw:", months)
     for kw in keywords:
         hist = history.get(f"kw:{kw.get('keyword_id')}", {})
@@ -690,7 +761,8 @@ def _short_months(labels: list[str]) -> str:
 
 
 def build_report_data(db: Session, client_id: uuid.UUID, anchor_end: datetime.date, months: int,
-                      live: Optional[dict] = None, with_page_images: bool = True) -> dict:
+                      live: Optional[dict] = None, with_page_images: bool = True,
+                      start: Optional[datetime.date] = None) -> dict:
     """Everything a report shows, for `months` cycles ending on `anchor_end`.
 
     Only the current month ever comes from Google: what was pulled for this
@@ -701,6 +773,8 @@ def build_report_data(db: Session, client_id: uuid.UUID, anchor_end: datetime.da
     months = max(1, min(int(months or 1), MAX_CYCLES))
     live = live if isinstance(live, dict) else {}
     cycles = report_cycles(anchor_end, months)
+    if months == 1 and start and start != cycles[0][0]:
+        cycles = [(start, anchor_end)]          # a first report's own period
     labels = cycle_labels(cycles)
     start, end = cycles[0][0], anchor_end
     published = _published_snapshots(db, client_id) if months > 1 else {}
@@ -712,7 +786,7 @@ def build_report_data(db: Session, client_id: uuid.UUID, anchor_end: datetime.da
         entry: dict[str, Any] = {"label": label, "range": short_range(c_start, c_end),
                                  "start": c_start.isoformat(), "end": c_end.isoformat()}
         is_current = c_end == anchor_end
-        older = published.get(sheets.month_of(c_end)) or {}
+        older = published.get(sheets.cycle_month(c_end)) or {}
         for provider in ("gsc", "ga4"):
             if is_current:
                 block = provider_block(db, client_id, provider, c_start, c_end)
@@ -743,7 +817,7 @@ def build_report_data(db: Session, client_id: uuid.UUID, anchor_end: datetime.da
     # Several months: the saved months before the span, combined the same way
     # — only when every one of them is saved, so a total is never set against
     # a partial one.
-    prev_start, prev_end = previous_window(anchor_end, months)
+    prev_start, prev_end = previous_window(anchor_end, months, start)
     if months == 1:
         previous = {
             "gsc": provider_block(db, client_id, "gsc", prev_start, prev_end),
@@ -754,7 +828,7 @@ def build_report_data(db: Session, client_id: uuid.UUID, anchor_end: datetime.da
         # Several months are compared among themselves (see span_compare
         # below): nothing before the span is needed.
         previous = {"gsc": {}, "ga4": {}, "gbp": {}}
-    before = month_on_sheet(db, client_id, sheets.month_of(prev_end)) if months == 1 else {}
+    before = month_on_sheet(db, client_id, sheets.cycle_month(prev_end)) if months == 1 else {}
     for provider in ("gsc", "ga4", "gbp"):
         if before.get(provider):
             previous[provider] = {**previous[provider], **before[provider]}
@@ -885,10 +959,38 @@ def _previous_leads(previous: dict) -> dict:
     return {k: v for k, v in lead_values({"ga4": previous["ga4"]}).items()}
 
 
-def previous_window(anchor_end: datetime.date, months: int) -> tuple[datetime.date, datetime.date]:
-    """The period a report is compared with: the same length, just before."""
+def previous_window(anchor_end: datetime.date, months: int,
+                    start: Optional[datetime.date] = None) -> tuple[datetime.date, datetime.date]:
+    """The period a report is compared with: the same length, just before.
+    A first report's own period (any length) is compared with as many days
+    straight before it."""
     months = max(1, min(int(months or 1), MAX_CYCLES))
+    if months == 1 and start and start != cycle_bounds(anchor_end, 0)[0]:
+        days = (anchor_end - start).days + 1
+        return start - datetime.timedelta(days=days), start - _ONE
     return cycle_bounds(anchor_end, 2 * months - 1)[0], cycle_bounds(anchor_end, months)[1]
+
+
+def has_comparison(snap: dict) -> bool:
+    """Whether a report has anything to compare with. Read from the figures
+    themselves — the stored flag is set when the report is made, before a
+    later fetch, sheet or typed figure brings last period in."""
+    snap = snap or {}
+    period = snap.get("period") or {}
+    if (period.get("compare") or {}).get("hasData") or (period.get("months") or 1) > 1:
+        return True
+    def any_number(block) -> bool:
+        return any(isinstance(v, (int, float)) and not isinstance(v, bool) and v
+                   for v in (block or {}).values())
+    if any(any_number(b) for b in (snap.get("previous_values") or {}).values()):
+        return True
+    if any(any_number(b) for b in (snap.get("kpi_deltas") or {}).values()):
+        return True
+    if any((k or {}).get("previous_position") for k in ((snap.get("rankings") or {}).get("keywords") or [])):
+        return True
+    if any_number((snap.get("ga4") or {}).get("lead_overrides_previous")):
+        return True
+    return bool(((snap.get("ai_compare") or {}) if isinstance(snap.get("ai_compare"), dict) else {}).get("hasData"))
 
 
 def merge_section(snapshot: dict, fresh: dict, section: str) -> dict:
@@ -926,4 +1028,11 @@ def merge_section(snapshot: dict, fresh: dict, section: str) -> dict:
         snap["live"] = live
     snap.setdefault("period", fresh.get("period"))
     snap.setdefault("periods", fresh.get("periods"))
+    # Fresh figures may bring the first comparison (a report made before its
+    # Google source was connected): the report now has something to measure against.
+    fresh_compare = ((fresh.get("period") or {}).get("compare") or {})
+    if fresh_compare.get("hasData") and isinstance(snap.get("period"), dict):
+        period = dict(snap["period"])
+        period["compare"] = {**(period.get("compare") or {}), **fresh_compare}
+        snap["period"] = period
     return snap

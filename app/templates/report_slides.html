@@ -354,6 +354,14 @@ table.data .idx { color: var(--ink-4); font-size: 12px; }
 .c-traffic .ring-pct { font-size: 11.5px; }
 .c-traffic .ring-label { grid-column: auto; margin-top: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card.chan { padding: 12px 14px; display: flex; flex-direction: column; }
+/* Eight or more figures across (GA4 countries with revenue): each change sits
+   under its figure instead of beside it, and the donut gives up some width —
+   otherwise the last columns run off the card. */
+.row.c-traffic.wide { grid-template-columns: 0.8fr 3.2fr; }
+table.chan.wide { font-size: 12px; }
+table.chan.wide th { padding: 6px 4px; font-size: 9px; letter-spacing: 0.02em; }
+table.chan.wide td { padding: 4px 4px; }
+table.chan.wide .cv small { display: block; margin: 1px 0 0; }
 .card.chan .card-name small { margin-left: 8px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
 table.chan { margin-top: 8px; font-size: 12.5px; line-height: 1.25; }
 table.chan th { padding: 6px 6px; font-size: 9.5px; letter-spacing: 0.04em; line-height: 1.2; vertical-align: bottom; }
@@ -901,6 +909,14 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
 
 @page { size: 1280px 720px; margin: 0; }
 
+/* Keyword tables: a narrow index column; side by side when there are many. */
+table.data.kw th.kw-idx { width: 42px; }
+.kw-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; flex: none; }
+table.data.kw.half th.kw-idx { width: 30px; }
+table.data.kw.half td.term { max-width: 0; width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.data.kw.half th, table.data.kw.half td { padding-left: 6px; padding-right: 6px; }
+table.data.kw.half .rank-new { display: none; }
+
 /* ── Fit to page ───────────────────────────────────────────────────────
    A slide is a fixed 1280×720 page, but its content is not fixed: a first
    report adds a baseline strip, a client may have nine figures or three, and
@@ -978,6 +994,49 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
 .slide.fit-4 .verdict p { font-size: 12px; line-height: 1.38; max-width: none; }
 .slide.fit-4 .baseline-strip { padding: 6px 12px; font-size: 11.5px; line-height: 1.3; }
 
+.slide.fit-1 table.chan th { padding: 5px 4px; }
+.slide.fit-1 table.chan td { padding: 3px 4px; }
+.slide.fit-2 table.chan { font-size: 11.5px; }
+.slide.fit-2 table.chan th { padding: 5px 3px; font-size: 8.5px; letter-spacing: 0; }
+.slide.fit-2 table.chan td { padding: 3px 3px; }
+.slide.fit-2 table.chan .cv small { display: block; margin: 1px 0 0; font-size: 9.5px; }
+.slide.fit-2 table.chan .cp { font-size: 9.5px; }
+.slide.fit-3 table.chan { font-size: 11px; }
+.slide.fit-3 table.chan td.term { font-size: 11px; }
+.slide.fit-3 table.chan th { font-size: 8px; }
+.slide.fit-3 table.chan td { padding: 2px 3px; }
+.slide.fit-4 table.chan { font-size: 10.5px; }
+.slide.fit-4 table.chan td.term { font-size: 10.5px; }
+.slide.fit-4 table.chan .cv small, .slide.fit-4 table.chan .cp { font-size: 9px; }
+.slide.fit-4 table.data th, .slide.fit-4 table.data td { padding-left: 3px; padding-right: 3px; }
+
+.slide.fit-1 table.data.fit td { padding-top: 4px; padding-bottom: 4px; }
+.slide.fit-2 table.data.fit td { padding-top: 2px; padding-bottom: 2px; font-size: 11px; line-height: 1.25; }
+.slide.fit-2 table.data.fit th { padding-top: 5px; padding-bottom: 5px; }
+.slide.fit-3 table.data.fit td { padding-top: 1px; padding-bottom: 1px; font-size: 10.5px; line-height: 1.2; }
+.slide.fit-3 table.data.fit th { padding-top: 4px; padding-bottom: 4px; font-size: 9.5px; }
+.slide.fit-4 table.data.fit td { padding-top: 0; padding-bottom: 0; font-size: 10px; line-height: 1.18; }
+.slide.fit-4 table.data.fit th { padding-top: 3px; padding-bottom: 3px; font-size: 9px; }
+
+.slide.fit-1 .mini-grid .card { padding: 12px 14px; }
+.slide.fit-2 .mini-grid .card { padding: 10px 12px; }
+.slide.fit-2 .mini-grid .stat-figure { font-size: 32px; }
+.slide.fit-2 .mini-grid .stat-name { margin-top: 5px; font-size: 11.5px; line-height: 1.25; }
+.slide.fit-3 .mini-grid { gap: 8px; }
+.slide.fit-3 .mini-grid .card { padding: 8px 10px; }
+.slide.fit-3 .mini-grid .stat-figure { font-size: 27px; }
+.slide.fit-3 .mini-grid .delta { margin-bottom: 2px; }
+.slide.fit-4 .mini-grid { gap: 6px; }
+.slide.fit-4 .mini-grid .card { padding: 6px 9px; }
+.slide.fit-4 .mini-grid .stat-figure { font-size: 23px; }
+.slide.fit-4 .mini-grid .stat-name { margin-top: 3px; font-size: 11px; line-height: 1.2; }
+.slide.fit-4 .mini-grid .delta { font-size: 10.5px; margin-bottom: 1px; }
+
+/* Five across starts smaller than the general sizes above: keep it shrinking. */
+.slide.fit-2 .row.c5 .stat-figure.sm { font-size: 28px; }
+.slide.fit-3 .row.c5 .stat-figure.sm { font-size: 26px; }
+.slide.fit-4 .row.c5 .stat-figure.sm { font-size: 23px; }
+
 @media print {
   html, body { background: #FFFFFF; }
   .slide {
@@ -1043,7 +1102,7 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
       <div class="card chan">
         <p class="card-name">{{ title }}
           {%- if tbl.has_previous %}<small>{{ compare_vs if compare_label else 'vs ' }}{{ compare_label or 'previous period' }}</small>{% endif %}</p>
-        <table class="data chan">
+        <table class="data chan{{ ' wide' if tbl.columns | length > 7 }}">
           <thead>
             <tr>
               <th>{{ name_col }}</th>
@@ -1475,32 +1534,24 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
 {% endif %}
 
 {# ── 05 · Keywords Rankings Tracking ── #}
-{% if shown('rankings_table') %}
-{#- Every tracked keyword prints, ten to a slide — none is left off for space. -#}
-{% set kw_pages = keywords | pages(18) %}
-{% for kw_page in kw_pages %}
-{% set kw_offset = kw_pages[:loop.index0] | map('length') | sum %}
-{% set kw_pages_n = kw_pages | length %}
-{% if not keywords %}{% set kw_pages_n = 1 %}{% endif %}
-<section class="slide">
-  {{ head(ce('rankings_table'), ct('rankings_table'), cs('rankings_table') if loop.first else none) }}
-  <div class="body">
-    <table class="data fit {{ density(kw_page | length, 10, 14) }}">
+{#- One keyword table: `rows` from position `offset`, at a given density. -#}
+{%- macro kw_table(rows, offset, dens, half=false) -%}
+    <table class="data fit kw {{ dens }}{{ ' half' if half }}">
       <thead>
         <tr>
-          <th style="width:42px">#</th>
+          <th class="kw-idx">#</th>
           <th>{{ t('kw.term_col') }}</th>
           <th class="num">{{ t('rank.initial') }}</th>
           {#- The latest month sits in the middle, beside Initial; earlier
               months follow it, newest first. -#}
-          {% for m in rank_months | reverse %}<th class="num {{ 'now' if loop.first }}">{{ m }}{% if loop.first and rank_months | length > 1 %} (Latest){% endif %}</th>{% endfor %}
+          {% for m in rank_months | reverse %}<th class="num {{ 'now' if loop.first }}">{{ m }}{% if loop.first and rank_months | length > 1 and not half %} (Latest){% endif %}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>
-        {% for kw in kw_page %}
+        {% for kw in rows %}
         <tr>
-          <td class="idx">{{ kw_offset + loop.index }}</td>
-          <td class="term">{{ kw.get('term', '') }}</td>
+          <td class="idx">{{ offset + loop.index }}</td>
+          <td class="term" title="{{ kw.get('term', '') }}">{{ kw.get('term', '') }}</td>
           {% set hist = kw.get('positions', {}) %}
           <td class="num">{{ kw.get('initial_rank') or '—' }}</td>
           {#- The newest month carries the movement: an arrow against the month
@@ -1510,8 +1561,6 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
           {% for m in rank_months | reverse %}
             {% if loop.first %}
             <td class="num now">
-              {#- The number sits in the middle of the column; the arrow hangs
-                  beside it without pushing it off centre. -#}
               <span class="rank-now">{{ now_pos or '—' }}
               {%- if now_pos and was_pos and was_pos > now_pos %}<span class="rank-arrow up" title="Up {{ was_pos - now_pos }}">&#9650;</span>
               {%- elif now_pos and was_pos and was_pos < now_pos %}<span class="rank-arrow down" title="Down {{ now_pos - was_pos }}">&#9660;</span>
@@ -1524,10 +1573,39 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
           {% endfor %}
         </tr>
         {% endfor %}
-        {% if not kw_page %}<tr><td colspan="{{ 3 + rank_months | length }}" class="empty-row">No keywords tracked yet.</td></tr>{% endif %}
+        {% if not rows %}<tr><td colspan="{{ 3 + rank_months | length }}" class="empty-row">No keywords tracked yet.</td></tr>{% endif %}
       </tbody>
     </table>
-    <p class="fine">{{ t('kw.note') }}</p>
+{%- endmacro -%}
+
+{% if shown('rankings_table') %}
+{#- (Up to four months of columns still fit in half a slide.)
+    Every tracked keyword prints — none is left off for space. Up to 18 sit in
+    one table. More, with up to three months of columns, sit in two tables side
+    by side, 36 to a slide (100 keywords: three slides, not six); with more
+    months than that the table is too wide to halve, so it stays 18 to a slide.
+    The commentary prints once, under the last of them. -#}
+{% set kw_n = keywords | length %}
+{% set kw_two = kw_n > 18 and (rank_months | length) <= 4 %}
+{% set kw_per = 36 if kw_two else 18 %}
+{% set kw_pages = keywords | pages(kw_per) %}
+{% for kw_page in kw_pages %}
+{% set kw_offset = kw_pages[:loop.index0] | map('length') | sum %}
+<section class="slide">
+  {{ head(ce('rankings_table'), ct('rankings_table'), cs('rankings_table') if loop.first else none) }}
+  <div class="body">
+    {% if kw_two %}
+    {% set halves = kw_page | pages(((kw_page | length) + 1) // 2) %}
+    <div class="kw-split">
+      {% for half in halves %}
+      {{ kw_table(half, kw_offset + (halves[:loop.index0] | map('length') | sum), 'd2', true) }}
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ kw_table(kw_page, kw_offset, density(kw_page | length, 10, 14)) }}
+    {% endif %}
+    {% if loop.last %}{{ verdict('rankings_table', t('verdict.rankings_table')) }}{% else %}<p class="fine">{{ t('kw.note') }}</p>{% endif %}
+    {% if loop.last %}<p class="fine">{{ t('kw.note') }}</p>{% endif %}
   </div>
   {{ foot('rankings') }}
 </section>
@@ -1547,7 +1625,7 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
     {#- One side the period's own figures, small; the other side GA4's
         Traffic acquisition table, channel by channel against last period. -#}
     {%- set gd = deltas.get('ga4', {}) -%}
-    <div class="row c-traffic tight grow">
+    <div class="row c-traffic tight grow{{ ' wide' if ga4_country_table.columns | length > 7 }}">
       <div class="mini-grid">
         {% if mo('ga4.sessions') %}
         <div class="card cream">
@@ -2255,6 +2333,18 @@ function deckFit(doc) {
     var body = slide.querySelector('.body');
     if (!body) return false;
     if (body.scrollHeight > body.clientHeight + 1) return true;
+    // Too wide: a table or a row of figures running off its card's right edge.
+    var cards = body.querySelectorAll('.card');
+    for (var c = 0; c < cards.length; c++) {
+      if (cards[c].scrollWidth > cards[c].clientWidth + 1) return true;
+    }
+    if (body.scrollWidth > body.clientWidth + 1) return true;
+    // A block squeezed shorter than its content spills over whatever is
+    // below it (a table under the commentary) without being cut anywhere.
+    for (var k = 0; k < body.children.length; k++) {
+      var child = body.children[k];
+      if (child.scrollHeight > child.clientHeight + 2) return true;
+    }
     var foot = slide.querySelector('.foot');
     var footTop = foot ? foot.getBoundingClientRect().top - 4 : Infinity;
     if (textOut(body, Math.min(body.getBoundingClientRect().bottom + 0.5, footTop))) return true;

@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def pull_for_report(db, client_id: uuid.UUID, end_date: datetime.date, months: int,
-                    providers: tuple[str, ...] = ("gsc", "ga4", "gbp")) -> tuple[list[tuple], dict]:
+                    providers: tuple[str, ...] = ("gsc", "ga4", "gbp"),
+                    start: datetime.date | None = None) -> tuple[list[tuple], dict]:
     """Pull every connected Google source for the report's current cycle and
     the period it is compared with — all of them at once, since each is a
     handful of slow network calls. Returns the rows and the current cycle's
@@ -35,8 +36,10 @@ def pull_for_report(db, client_id: uuid.UUID, end_date: datetime.date, months: i
     # Only the current month, and the month before it for its comparison and
     # its trending pages. Every earlier month is read from what was saved when
     # it was published — nothing old is pulled again.
-    start_date = cycle_bounds(end_date, 0)[0]
-    compare_start, compare_end = previous_window(end_date, 1)
+    # A first report may cover a period the person picked; every later one
+    # is one cycle. Either way it is compared with as long a stretch before.
+    start_date = start or cycle_bounds(end_date, 0)[0]
+    compare_start, compare_end = previous_window(end_date, 1, start)
     connections = [
         c for c in db.execute(select(Connection).where(Connection.client_id == client_id)).scalars().all()
         if c.status == ConnectionStatus.connected and c.provider.value in providers
@@ -104,7 +107,8 @@ def pull_for_report(db, client_id: uuid.UUID, end_date: datetime.date, months: i
     return rows, live
 
 
-def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: datetime.date | None = None):
+def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: datetime.date | None = None,
+                             start_date: datetime.date | None = None):
     """Build (or rebuild) the draft for the last finished month — on any day
     of October, September 1–30. Reports run month on month: September's is
     made in October, October's in November."""
@@ -131,9 +135,13 @@ def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: date
             if existing and existing.status == ReportStatus.published:
                 return "Report is published"
 
-            rows, live = pull_for_report(db, client_id, end_date, months)
+            first_start = start_date if months == 1 else None
+            rows, live = pull_for_report(db, client_id, end_date, months, start=first_start)
             with pulled(rows):
-                snapshot: dict[str, Any] = build_report_data(db, client_id, end_date, months, live=live)
+                snapshot: dict[str, Any] = build_report_data(db, client_id, end_date, months, live=live,
+                                                             start=first_start)
+            if first_start:
+                snapshot["own_start"] = first_start.isoformat()   # kept for every rebuild of this report
             window_start = datetime.date.fromisoformat(snapshot["period"]["start"])
 
             # No AI here: the summaries, subtitles and plan are written only
@@ -143,7 +151,7 @@ def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: date
             if existing:
                 for keep in ("included_sections", "included_items", "copy", "narration", "narration_source",
                              "subtitle_ai", "subtitles_drafted", "links", "activities", "hidden_slides", "hidden_cards",
-                             "next_month_plan", "plan_source"):
+                             "next_month_plan", "plan_source", "own_start"):
                     if keep in (existing.snapshot or {}):
                         snapshot[keep] = existing.snapshot[keep]
                 existing.start_date = window_start

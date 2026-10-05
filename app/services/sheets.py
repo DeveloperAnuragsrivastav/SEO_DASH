@@ -74,10 +74,25 @@ def month_of(day: datetime.date) -> datetime.date:
     return datetime.date(day.year, day.month, 1)
 
 
+def cycle_month(end: datetime.date) -> datetime.date:
+    """The sheet column a report period ending on `end` is filed under.
+
+    Reports run on the same date every month (see report_period.cycle_bounds),
+    from the day after the last one ended. A period from the 1st is its own
+    month. One starting by the 15th mostly falls in the month it starts in
+    (5 Sep – 4 Oct is September's); one starting later mostly falls in the
+    month it ends in (20 Sep – 19 Oct is October's). The rule depends only on
+    the start day, so consecutive periods always get consecutive months.
+    """
+    start_day = (end + datetime.timedelta(days=1)).day
+    if start_day == 1 or start_day >= 16:
+        return month_of(end)
+    return month_of(month_of(end) - datetime.timedelta(days=1))
+
+
 def report_month(report) -> datetime.date:
-    """The month a report is filed under: the month its period ends in, which
-    is also the name the report gives itself ("September 2026")."""
-    return month_of(report.end_date)
+    """The month a report is filed under on the sheets."""
+    return cycle_month(report.end_date)
 
 
 def _num(v: Any) -> Optional[float]:
@@ -399,11 +414,18 @@ def sheet_view(db: Session, client_id: uuid.UUID, sheet: str) -> dict:
     ).scalars().all()
     months = sorted({c.month for c in cells})
     # The report each month was published from, to open it from the column head.
-    reports = {
-        month_of(r.end_date): str(r.id)
-        for r in db.execute(select(ReportSnapshot).where(
-            ReportSnapshot.client_id == client_id, ReportSnapshot.status == ReportStatus.published)).scalars()
-    }
+    published = db.execute(select(ReportSnapshot).where(
+        ReportSnapshot.client_id == client_id, ReportSnapshot.status == ReportStatus.published)).scalars().all()
+    reports = {cycle_month(r.end_date): str(r.id) for r in published}
+    # A column is named by its period: "Sep 2026" for a calendar month, its
+    # dates ("5 Sep – 4 Oct") for a client whose reports start on another day.
+    from app.services.report_period import period_name
+    period_of = {cycle_month(r.end_date): (r.start_date, r.end_date) for r in published}
+
+    def column_label(m: datetime.date) -> str:
+        span = period_of.get(m)
+        name = period_name(*span) if span and span[0] else None
+        return m.strftime("%b %Y") if not name or name == span[1].strftime("%B %Y") else name
 
     rows: dict[str, dict] = {}
     for c in cells:  # newest month first, so a row takes its latest name and place
@@ -452,7 +474,7 @@ def sheet_view(db: Session, client_id: uuid.UUID, sheet: str) -> dict:
     return {
         "sheet": sheet,
         "name": spec["name"],
-        "months": [{"key": m.isoformat(), "label": m.strftime("%b %Y"), "report": reports.get(m)} for m in months],
+        "months": [{"key": m.isoformat(), "label": column_label(m), "report": reports.get(m)} for m in months],
         "extraColumns": extra_cols,
         "groups": groups,
     }
@@ -464,7 +486,7 @@ def month_details(db: Session, client_id: uuid.UUID, sheet: str, month: datetime
     from app.models.enums import ReportStatus
     report = next((r for r in db.execute(select(ReportSnapshot).where(
         ReportSnapshot.client_id == client_id, ReportSnapshot.status == ReportStatus.published)).scalars()
-        if month_of(r.end_date) == month), None)
+        if cycle_month(r.end_date) == month), None)
     if report is None:
         return []
     snap = report.snapshot or {}

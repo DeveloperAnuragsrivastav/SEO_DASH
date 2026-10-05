@@ -1331,12 +1331,12 @@ const ReportBuilder: React.FC = () => {
       case 'links':
         return {
           title: 'Upload links built', hint: 'One row per link.',
-          columns: 'Month,Activity Name,URL,Count', sample: `${m},Guest Post,https://example.com/article,1`,
+          columns: 'Month,Activity Name,URL', sample: `${m},Guest Post,https://example.com/article`,
         };
       case 'work':
         return {
-          title: 'Upload work delivered', hint: 'One row per task.',
-          columns: 'Activity Type,Count,Notes', sample: 'Optimized Homepage,1,Updated meta titles',
+          title: 'Upload work delivered', hint: 'One row per task — the same task on several rows is added up.',
+          columns: 'Activity Type,Notes', sample: 'Optimized Homepage,Updated meta titles',
         };
       default:
         return null;

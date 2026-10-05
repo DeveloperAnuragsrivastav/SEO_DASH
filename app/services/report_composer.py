@@ -41,7 +41,7 @@ NARRATION_EDITED = "edited"
 # evidence behind a slide that is already written about, and the last four
 # are chrome rather than findings.
 NARRATION_EXCLUDED = {
-    "exec_summary", "rankings_table", "gbp_discovery", "ai_proof", "evidence", "plan", "closing",
+    "exec_summary", "gbp_discovery", "ai_proof", "evidence", "plan", "closing",
     # The traffic-sources slide is no longer printed.
     "ga4_sources",
     # Screenshots only; there is nothing for commentary to describe.
@@ -1055,7 +1055,7 @@ def brand_line(copy: dict | None) -> str:
 # and the review list show them in too.
 _BLOCK_ORDER = [
     "key_metrics", "leads",
-    "rankings", "ga4", "ga4_countries",
+    "rankings", "rankings_table", "ga4", "ga4_countries",
     "gsc", "gsc_pages",
     "ai_visibility", "ai_referral",
     "gbp", "links", "work",
@@ -1088,6 +1088,7 @@ _BLOCK_NEEDS: dict[str, tuple[str, ...]] = {
     "ga4_devices": ("ga4.devices",),
     "ga4_countries": ("ga4.countries",),
     "ai_referral": ("ga4.traffic_sources",),
+    "rankings_table": ("rankings",),
 }
 
 
@@ -1169,7 +1170,7 @@ SLIDES: list[dict] = [
      "parts": [{"type": "rows", "prefix": "rankings.kw.", "label": "Keywords",
                 "hint": "Initial, last month and this month for each keyword. Untick one to leave it out."},
                {"type": "editor", "name": "add_keyword", "label": "Add a keyword", "hint": ""}],
-     "heading": "rankings_table", "narration": None, "texts": "block"},
+     "heading": "rankings_table", "narration": "rankings_table", "texts": "block"},
 
     {"key": "ga4", "name": "Traffic Progress Summary", "step": "traffic", "section": "ga4",
      "about": "Visits to the website, beside Google Analytics' traffic-by-channel table.",

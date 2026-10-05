@@ -302,6 +302,7 @@ SECTION_TOPIC = {
     "ga4_countries": "Top countries — where in the world the website's visitors are",
     "gbp": "Google Business Profile — calls, direction requests and website clicks from Google Search and Maps",
     "rankings": "Keyword rankings — where the tracked keywords rank on Google",
+    "rankings_table": "Keyword by keyword — which tracked keywords moved up or down on Google, and by how much",
     "ai_visibility": "AI visibility — how often AI assistants such as ChatGPT name the brand "
                      "when asked the tracked questions. Report this as a share, never as a "
                      "count out of a total",
@@ -499,6 +500,29 @@ def section_facts(snapshot: dict, section: str, shown: Optional[dict] = None) ->
             {"keyword": k.get("term"), "position": k.get("position"), "positions_gained_since_start": k.get("change")}
             for k in (rankings.get("keywords") or [])[:6]
         ]
+    elif section == "rankings_table":
+        kws = [k for k in ((snap.get("rankings") or {}).get("keywords") or []) if isinstance(k, dict)]
+        moved = []
+        for k in kws:
+            now, before = k.get("position"), k.get("previous_position")
+            if now and before and now != before:
+                moved.append({"keyword": k.get("term"), "from": before, "to": now, "places": before - now})
+        moved.sort(key=lambda m: -m["places"])
+        facts = {
+            "keywords_tracked": len(kws),
+            "ranked_this_period": sum(1 for k in kws if k.get("position")),
+            "in_top_10": sum(1 for k in kws if k.get("position") and k["position"] <= 10),
+            "moved_up": sum(1 for m in moved if m["places"] > 0),
+            "moved_down": sum(1 for m in moved if m["places"] < 0),
+            "biggest_gains": [m for m in moved if m["places"] > 0][:4],
+            "biggest_drops": [m for m in reversed(moved) if m["places"] < 0][:3],
+            "new_in_top_10": [k.get("term") for k in kws if k.get("position") and k["position"] <= 10
+                              and (not k.get("previous_position") or k["previous_position"] > 10)][:5],
+            "closest_to_page_one": [k.get("term") for k in sorted(kws, key=lambda k: k.get("position") or 999)
+                                    if k.get("position") and 11 <= k["position"] <= 15][:4],
+        }
+        if not moved:
+            facts.pop("biggest_gains"); facts.pop("biggest_drops")
     elif section == "ai_visibility":
         rows = snap.get("ai_visibility") or []
         by_platform: dict[str, list[int]] = {}
@@ -557,6 +581,8 @@ def generate_section_summaries(client_name: str, period_label: str, snapshot: di
     period = snap.get("period") or {}
     months = period.get("months") or 1
     compare = period.get("compare") or {}
+    from app.services.report_period import has_comparison
+    compare = {**compare, "hasData": has_comparison(snap)}
     work_done = [f"{a.get('activity_type')} ×{a.get('count')}" for a in (snap.get("activities") or [])][:15]
     link_kinds: dict[str, int] = {}
     for l in snap.get("links") or []:
@@ -742,6 +768,8 @@ def generate_slide_subtitles(client_name: str, period_label: str, snapshot: dict
     if not facts:
         return {}
     compare = ((snapshot or {}).get("period") or {}).get("compare") or {}
+    from app.services.report_period import has_comparison
+    compare = {**compare, "hasData": has_comparison(snapshot or {})}
 
     prompt_text = f"""Client: {client_name}
 Report period: {period_label or 'this period'}

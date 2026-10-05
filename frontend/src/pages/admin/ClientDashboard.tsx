@@ -137,7 +137,12 @@ const ClientDashboard: React.FC = () => {
   };
 
   /** A period was chosen: generate a new report, or reopen this cycle's draft. */
-  const onPickPeriod = async (months: number, info: PeriodsInfo) => {
+  const onPickPeriod = async (months: number, info: PeriodsInfo, period?: { start: string; end: string }) => {
+    if (info.mode === 'first' && period) {
+      setShowGenerateModal(false);
+      navigate(`/admin/clients/${clientId}/reports/new?months=1&start=${period.start}&end=${period.end}`);
+      return;
+    }
     if (info.mode === 'new') {
       setShowGenerateModal(false);
       navigate(`/admin/clients/${clientId}/reports/new?months=${months}`);
@@ -696,7 +701,7 @@ const ClientDashboard: React.FC = () => {
         <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowGenerateModal(false); }}>
           <div className="modal modal-lg" role="dialog" aria-modal="true">
             <h2 className="modal-title">Reports</h2>
-            <p className="modal-desc">Generate this month's report — on its own, or combined with earlier months — or open one already made.</p>
+            <p className="modal-desc">Generate this period’s report — on its own, or combined with earlier ones — or open one already made.</p>
 
             <div className="overline" style={{ marginBottom: 10 }}>Report period</div>
             {clientId && (

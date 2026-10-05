@@ -16,6 +16,9 @@ const ReportPreparing: React.FC = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const [params] = useSearchParams();
   const months = Math.max(1, Number(params.get('months')) || 1);
+  // A client's first report: the period picked on the client page.
+  const pickedStart = params.get('start') || undefined;
+  const pickedEnd = params.get('end') || undefined;
   const navigate = useNavigate();
 
   const [info, setInfo] = useState<PeriodsInfo | null>(null);
@@ -43,7 +46,7 @@ const ReportPreparing: React.FC = () => {
         setInfo(periods.data);
         before = latest.data?.id ?? null;
         if (periods.data.mode === 'draft') {
-          setError({ text: 'This cycle already has a draft report.', draftId: periods.data.report_id });
+          setError({ text: 'This period already has a draft report.', draftId: periods.data.report_id });
           return;
         }
       } catch (e) {
@@ -51,7 +54,7 @@ const ReportPreparing: React.FC = () => {
       }
 
       try {
-        await api.post(`/clients/${clientId}/reports/generate`, { months }, { skipErrorToast: true } as any);
+        await api.post(`/clients/${clientId}/reports/generate`, { months, start: pickedStart, end: pickedEnd }, { skipErrorToast: true } as any);
       } catch (e: any) {
         setError({ text: e?.response?.data?.detail || 'The report could not be started.' });
         return;
@@ -76,7 +79,9 @@ const ReportPreparing: React.FC = () => {
 
   const cycles = info?.cycles || [];
   const chosen = cycles.slice(Math.max(0, cycles.length - months));
-  const current = chosen[chosen.length - 1];
+  const d = (s: string) => new Date(`${s}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const picked = pickedStart && pickedEnd ? { label: `${d(pickedStart)} – ${d(pickedEnd)}` } : null;
+  const current = picked || chosen[chosen.length - 1];
   const earlier = chosen.slice(0, -1);
   const google = [info?.connected?.gsc && 'Search Console', info?.connected?.ga4 && 'Analytics'].filter(Boolean).join(' and ');
 
@@ -84,7 +89,7 @@ const ReportPreparing: React.FC = () => {
     <div className="prep">
       <h1>Preparing the report</h1>
       <p className="prep-sub">
-        {cycles.length ? periodLabel(cycles, Math.min(months, cycles.length)) : 'This month'} · {months} month{months === 1 ? '' : 's'}.
+        {picked ? `${picked.label} · first report` : <>{cycles.length ? periodLabel(cycles, Math.min(months, cycles.length)) : 'This period'} · {months} month{months === 1 ? '' : 's'}</>}.
         The builder opens as soon as the figures are ready — you can check and change everything there.
       </p>
 
@@ -92,11 +97,11 @@ const ReportPreparing: React.FC = () => {
         <li>
           {google ? <CloudDownload size={17} /> : <Database size={17} />}
           <span>
-            {google ? `Fetching ${current?.label || 'this month'} from ${google}` : `${current?.label || 'This month'}: no Google connection`}
-            <small>{google ? 'Only the current cycle is pulled from Google.' : "You'll add this month's figures with a sheet in the builder."}</small>
+            {google ? `Fetching ${current?.label || 'this period'} from ${google}` : `${current?.label || 'This period'}: no Google connection`}
+            <small>{google ? 'Only the current period (and the one before, to compare) is pulled from Google.' : "You'll add this period's figures with a sheet in the builder."}</small>
           </span>
         </li>
-        {earlier.length > 0 && (
+        {!picked && earlier.length > 0 && (
           <li>
             <Database size={17} />
             <span>

@@ -84,10 +84,11 @@ def generate_report(
 
     anchor = periods_svc.anchor_for(db, client_id)
     if anchor["mode"] == "locked":
+        n = anchor["days_remaining"]
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(f"{anchor['anchor_end']:%B}'s report is published. The next report opens on the 1st of next month "
-                    f"— in {anchor['days_remaining']} day{'s' if anchor['days_remaining'] != 1 else ''}."),
+            detail=(f"This period's report is published. The next one opens on {anchor['opens_on']:%-d %B} "
+                    f"— in {n} day{'s' if n != 1 else ''}."),
         )
     if anchor["mode"] == "draft":
         raise HTTPException(
@@ -96,6 +97,15 @@ def generate_report(
         )
 
     months = data.months if data else 1
+    first_start = None
+    if anchor["mode"] == "first":
+        # The first report covers the period the person picked (or the
+        # suggestion); its end fixes the date every later report starts on.
+        start = (data.start if data and data.start else anchor["suggested_start"])
+        end = (data.end if data and data.end else anchor["anchor_end"])
+        _check_first_period(start, end)
+        anchor["anchor_end"], months = end, 1
+        first_start = start if start != periods_svc.cycle_bounds(end, 0)[0] else None
     available = len(periods_svc.timeline(db, client_id, anchor["anchor_end"]))
     if months < 1 or months > available:
         raise HTTPException(
@@ -109,7 +119,7 @@ def generate_report(
     task_id = str(uuid.uuid4())
     # The month the checks above were made for — never "yesterday", which
     # mid-month would start a report for the month still under way.
-    background_tasks.add_task(generate_snapshot_report, str(client_id), months, anchor["anchor_end"])
+    background_tasks.add_task(generate_snapshot_report, str(client_id), months, anchor["anchor_end"], first_start)
 
     return {
         "status": "processing",
@@ -215,8 +225,43 @@ class CopyUpdate(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    # How many 30-day cycles the report covers, ending with the current one.
+    # How many periods the report covers, ending with the current one.
     months: int = 1
+    # A client's first report only: the period the person picked.
+    start: Optional[datetime.date] = None
+    end: Optional[datetime.date] = None
+
+
+def _own_start(report: ReportSnapshot) -> Optional[datetime.date]:
+    """A first report's own start, when the person picked a period that is
+    not one whole cycle; None for every other report."""
+    raw = (report.snapshot or {}).get("own_start")
+    try:
+        return datetime.date.fromisoformat(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def _check_first_period(start: datetime.date, end: datetime.date) -> None:
+    """A first period the person picked: over, in order, Google-reachable, and
+    ending where the next period can start on the same date every month."""
+    today = datetime.date.today()
+    bad = None
+    if end >= today:
+        bad = "The period has to be over — pick an end date before today."
+    elif start > end:
+        bad = "The start date is after the end date."
+    elif (end - start).days + 1 < 7:
+        bad = "Pick a period of at least 7 days."
+    elif (end - start).days + 1 > 92:
+        bad = "Pick a period of at most 3 months — a longer first report can be built from monthly ones."
+    elif start < today - datetime.timedelta(days=480):
+        bad = "Google keeps 16 months of data — pick a start date in the last 16 months."
+    elif not periods_svc.valid_period_end(end):
+        bad = ("End the period on the 1st–27th or on the last day of a month, so every later report can "
+               "start on the same date each month.")
+    if bad:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, bad)
 
 
 class PeriodChange(BaseModel):
@@ -297,8 +342,7 @@ def get_report_periods(client_id: uuid.UUID, snapshot_id: Optional[uuid.UUID] = 
         for p in ("gsc", "ga4")
     }
     return {
-        **anchor,
-        "anchor_end": anchor["anchor_end"].isoformat(),
+        **{k: (v.isoformat() if isinstance(v, datetime.date) else v) for k, v in anchor.items()},
         "cycles": cycles,
         "maxMonths": len(cycles),
         "connected": connected,
@@ -1239,7 +1283,8 @@ def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{name} is not connected for this client.")
 
     months = ((report.snapshot or {}).get("period") or {}).get("months") or 1
-    rows, live = pull_for_report(db, client_id, report.end_date, months, providers=(provider,))
+    own = _own_start(report) if months == 1 else None
+    rows, live = pull_for_report(db, client_id, report.end_date, months, providers=(provider,), start=own)
     if not rows:
         db.refresh(conn)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not fetch from {name}: {conn.last_error or 'no data returned'}")
@@ -1253,7 +1298,7 @@ def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str
     current.update(live)
     with periods_svc.pulled(rows):
         fresh = periods_svc.build_report_data(db, client_id, report.end_date, months, live=current,
-                                              with_page_images=provider == "gsc")
+                                              with_page_images=provider == "gsc", start=own)
     snapshot = periods_svc.merge_section(snapshot, fresh, provider)
     snapshot["live"] = {**(snapshot.get("live") or {}), **{k: v for k, v in (fresh.get("live") or {}).items() if k == provider}}
     provenance = dict(snapshot.get("provenance") or {})
@@ -1268,7 +1313,7 @@ def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str
 
 def _legacy_period(report: ReportSnapshot) -> dict:
     """Period details for a report made before reports could span months."""
-    label = report.end_date.strftime("%B %Y")
+    label = periods_svc.period_name(report.start_date, report.end_date)
     return {
         "months": 1,
         "start": report.start_date.isoformat(),
@@ -1370,6 +1415,7 @@ def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: Per
     # Nothing is pulled: this month is the draft's own, the others are saved.
     snapshot = dict(report.snapshot or {})
     fresh = periods_svc.build_report_data(db, client_id, report.end_date, data.months, live=_live_of(snapshot),
+                                          start=_own_start(report) if data.months == 1 else None,
                                           with_page_images=True)
     # What the builder entered for this month is the report's own, whatever
     # span it covers: keywords, prompt checks, links, work, words.
@@ -1392,7 +1438,7 @@ def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: Per
     if data.months > 1:
         from app.services import sheets as _sheets
         cycles = periods_svc.report_cycles(report.end_date, data.months)[:-1]
-        wanted = {_sheets.month_of(end) for _, end in cycles}
+        wanted = {_sheets.cycle_month(end) for _, end in cycles}
         earlier = sorted((r for m, r in _sheets.month_reports(db, client_id).items()
                           if m in wanted and r.id != report.id), key=lambda r: r.end_date)
         fresh["span_links"] = [{**l, "id": f"m{i}-{l.get('id') or j}"} for i, r in enumerate(earlier)
@@ -1470,12 +1516,14 @@ async def upload_to_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, kind: st
     try:
         table = up.read_table(file.filename or "", content)
         if kind in up.METRIC_SHEETS:
-            start = periods_svc.cycle_bounds(report.end_date, 0)[0]
-            windows = [(start, report.end_date), periods_svc.previous_window(report.end_date, months)]
-            if kind == "gbp":
-                # Business Profile sheets are kept by month, dated the 1st.
-                windows = [(month, report.end_date), (prev_month, start - datetime.timedelta(days=1))]
-            rows = up.metric_rows(kind, table, windows)
+            own = _own_start(report) if months == 1 else None
+            start = own or periods_svc.cycle_bounds(report.end_date, 0)[0]
+            prev_window = periods_svc.previous_window(report.end_date, months, own)
+            windows = [(start, report.end_date), prev_window]
+            # Business Profile is often kept by month: a row dated by its month
+            # alone ("Sep'26") counts for the period filed under that month.
+            month_rows = {month: (start, report.end_date), prev_month: prev_window}
+            rows = up.metric_rows(kind, table, windows, month_rows)
             if not rows:
                 raise up.SheetError(f"No rows fall in {periods_svc.short_range(*windows[1])} or "
                                     f"{periods_svc.short_range(start, report.end_date)}.")
@@ -1501,10 +1549,13 @@ async def upload_to_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, kind: st
     except up.SheetError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
 
+    # When the sheet's columns or months did not name this period exactly,
+    # say which ones were read rather than guess silently.
+    note = snapshot.pop("_upload_note", "") or ""
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
-    return {**get_composer(client_id, snapshot_id, db), "uploaded": what}
+    return {**get_composer(client_id, snapshot_id, db), "uploaded": what + (f" — {note}" if note else "")}
 
 
 @router.put("/{snapshot_id}/narration")
@@ -1597,7 +1648,7 @@ def get_report_history(client_id: uuid.UUID, db: Session = Depends(get_db)):
         out.append({
             "id": str(r.id), "start_date": r.start_date, "end_date": r.end_date, "status": r.status.value,
             "generated_at": r.generated_at, "published_at": r.published_at,
-            "label": period.get("label") or r.end_date.strftime("%B %Y"),
+            "label": period.get("label") or periods_svc.period_name(r.start_date, r.end_date),
             "range": period.get("range") or periods_svc.short_range(r.start_date, r.end_date),
             "months": period.get("months") or 1,
             "on_sheets": r.id in owners,
@@ -2004,7 +2055,7 @@ def _build_comparative_report(snapshots):
     
     months = []
     for s in snapshots:
-        months.append(s.end_date.strftime("%B %Y"))
+        months.append(periods_svc.period_name(s.start_date, s.end_date) if s.start_date else s.end_date.strftime("%B %Y"))
     # A report spanning several cycles names them itself.
     if len(snapshots) == 1:
         labels = ((snapshots[0].snapshot or {}).get("period") or {}).get("labels")
@@ -2127,7 +2178,8 @@ def _build_comparative_report(snapshots):
     if len(months) == 1 and any(k.get("previous_position") for k in kw_list):
         compare = ((latest_snap.get("period") or {}).get("compare") or {})
         try:
-            prev_label = datetime.date.fromisoformat(compare.get("end")).strftime("%B %Y")
+            prev_label = periods_svc.period_name(datetime.date.fromisoformat(compare.get("start")),
+                                                 datetime.date.fromisoformat(compare.get("end")))
         except (TypeError, ValueError):
             prev_label = "Last month"
         if prev_label == months[0]:

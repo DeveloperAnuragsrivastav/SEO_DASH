@@ -40,6 +40,9 @@ def _month(raw: str) -> datetime.date:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Use a month like 2026-09.")
 
 
+from app.services.report_period import period_name  # noqa: E402
+
+
 @router.get("/screenshots/months")
 def screenshot_months(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(ANYONE)):
     """Every published report's screenshots, newest month first."""
@@ -57,7 +60,8 @@ def screenshot_months(client_id: uuid.UUID, db: Session = Depends(get_db), user:
             images.setdefault(img.report_id, []).append(
                 {"section": img.section, "slot": img.slot, "caption": img.caption or ""})
     return [
-        {"month": sheets.report_month(r).isoformat(), "label": f"{sheets.report_month(r):%B %Y}",
+        {"month": sheets.report_month(r).isoformat(),
+         "label": period_name(r.start_date, r.end_date) if r.start_date else f"{sheets.report_month(r):%B %Y}",
          "report": str(r.id), "images": images.get(r.id, [])}
         for r in reports
     ]

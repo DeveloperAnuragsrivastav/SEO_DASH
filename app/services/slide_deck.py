@@ -1005,15 +1005,17 @@ def build(data: dict, client: dict, sections: dict, metric_on,
     keywords = (data.get("rankings") or {}).get("keywords") or []
     months = data.get("months") or []
 
+    from app.services.report_period import has_comparison
     compare = (data.get("period") or {}).get("compare") or {}
-    compare_label = compare.get("range") if compare.get("hasData") else ""
+    compared = has_comparison(data)
+    compare_label = (compare.get("range") or "") if compared else ""
 
     # With nothing stored for an earlier period there is nothing to compare
     # against, which is not a gap in the report — it is the whole character of
     # a first one. Said plainly, it turns an absence into information.
     # A report spanning several months carries its own earlier months, so it is
     # never a client's "first report" even with nothing before it.
-    baseline = not compare.get("hasData") and ((data.get("period") or {}).get("months") or 1) == 1
+    baseline = not compared
 
     journey = ranking_journey(keywords, months)
     bands = ranking_bands(keywords, months)
