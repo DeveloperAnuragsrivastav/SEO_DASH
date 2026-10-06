@@ -248,6 +248,105 @@ class GenerateRequest(BaseModel):
     end: Optional[datetime.date] = None
 
 
+TABLES = ("channels", "countries")
+
+
+def _tables_for(snapshot: dict) -> dict:
+    from app.services import slide_deck
+    ga4 = (composer.apply_selection(snapshot).get("ga4") or {})
+    settings = snapshot.get("table_settings") or {}
+    return {"channels": slide_deck.channel_table(ga4, settings.get("channels")),
+            "countries": slide_deck.country_table(ga4, settings.get("countries"))}
+
+
+class TableSettingsUpdate(BaseModel):
+    table: str
+    settings: dict[str, Any] = {}
+
+
+@router.put("/{snapshot_id}/tables")
+def set_table_settings(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: TableSettingsUpdate, db: Session = Depends(get_db)):
+    """What a GA4 table shows: columns, rows, the change and last period's
+    figure per column or per cell, and figures typed over GA4's. Everything
+    sent is checked; {} puts the table back as GA4 has it."""
+    from app.services import slide_deck
+    if data.table not in TABLES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown table — use channels or countries.")
+    report = _load_draft(client_id, snapshot_id, db, lock=True)
+    if report.status == ReportStatus.published:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This report is published — press Make draft to change it.")
+    snapshot = dict(report.snapshot or {})
+    meta = _tables_for({**snapshot, "table_settings": {}})[data.table].get("meta") or {}
+    labels = {c["label"] for c in meta.get("columns") or []}
+    names = {r["name"] for r in meta.get("rows") or []} | {"Total"}
+    fields = set(slide_deck.TABLE_FIELDS.values())
+    if not labels:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "This table has no data yet — fetch Google Analytics first, then choose what it shows.")
+    raw = data.settings or {}
+
+    def label_list(key: str) -> list[str]:
+        vals = raw.get(key) or []
+        if not isinstance(vals, list):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"“{key}” must be a list of column names.")
+        bad = [v for v in vals if v not in labels]
+        if bad:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown column: {bad[0]}.")
+        return sorted(set(vals))
+
+    clean: dict[str, Any] = {}
+    cols_off = label_list("cols_off")
+    if set(cols_off) >= labels:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Keep at least one column in the table.")
+    for key, vals in (("cols_off", cols_off), ("change_off", label_list("change_off")), ("prev_off", label_list("prev_off"))):
+        if vals:
+            clean[key] = vals
+    cells = raw.get("cells_off") or []
+    if cells:
+        bad = [c for c in cells if not (isinstance(c, str) and "|" in c and c.split("|", 1)[0] in names and c.split("|", 1)[1] in labels)]
+        if bad:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown cell: {bad[0]}.")
+        clean["cells_off"] = sorted(set(cells))
+    rows = raw.get("rows")
+    if rows:
+        rows = [str(r) for r in rows]
+        bad = [r for r in rows if r not in names or r == "Total"]
+        if bad:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown row: {bad[0]}.")
+        if len(rows) > slide_deck.TABLE_ROWS_MAX:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                f"Show at most {slide_deck.TABLE_ROWS_MAX} rows — the slide has room for no more.")
+        clean["rows"] = rows
+    edits = raw.get("edits") or {}
+    if edits:
+        out: dict[str, dict] = {}
+        for row, e in edits.items():
+            if row not in names or row == "Total":
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown row: {row}.")
+            for which in ("now", "prev"):
+                for field, v in ((e or {}).get(which) or {}).items():
+                    if field not in fields:
+                        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"“{field}” cannot be typed over — it is worked out from the other figures.")
+                    if v is None:
+                        continue
+                    if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0 or v > 1e12:
+                        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                            f"{row} · {field.replace('_', ' ')}: type a number, 0 or more.")
+                    out.setdefault(row, {}).setdefault(which, {})[field] = float(v)
+        if out:
+            clean["edits"] = out
+    settings = dict(snapshot.get("table_settings") or {})
+    if clean:
+        settings[data.table] = clean
+    else:
+        settings.pop(data.table, None)
+    snapshot["table_settings"] = settings
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"tables": _tables_for(snapshot)}
+
+
 def _sheet_months(report: ReportSnapshot, snapshot: dict) -> list[str]:
     """The sheet month of every period a report covers, oldest first."""
     from app.services import sheets
@@ -425,6 +524,9 @@ def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Dep
         "aiSummaryAuto": __import__("app.services.slide_deck", fromlist=["ai_summary"]).ai_summary(
             {**snapshot, "ai_summary": {"engines": {k: {} for k in ((snapshot.get("ai_summary") or {}).get("engines") or {})}}}),
         "period": snapshot.get("period") or _legacy_period(report),
+        # The GA4 tables exactly as the report prints them, with every column
+        # and row and what is switched off, for the builder's table editor.
+        "tables": _tables_for(snapshot),
         # The sheet month each period is filed under ("2026-09-01"), oldest
         # first — what the upload sheets name their month columns by. Worked out
         # here, not stored, so older reports get it too.
@@ -1525,7 +1627,7 @@ def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: Per
     # span it covers: keywords, prompt checks, links, work, words.
     for keep in ("included_sections", "included_items", "copy", "narration", "narration_source",
                  "rankings", "ai_visibility", "ai_summary", "links", "activities", "hidden_slides", "hidden_cards",
-                 "next_month_plan", "plan_source", "subtitle_ai", "subtitles_drafted"):
+                 "next_month_plan", "plan_source", "subtitle_ai", "subtitles_drafted", "table_settings"):
         if keep in snapshot:
             fresh[keep] = snapshot[keep]
     # This month's own leads, typed or found — kept apart so the month can be
@@ -2243,6 +2345,7 @@ def _build_comparative_report(snapshots):
     comparative_data["ai_summary"] = latest_snap.get("ai_summary") or {}
     comparative_data["hidden_slides"] = latest_snap.get("hidden_slides") or []
     comparative_data["hidden_cards"] = latest_snap.get("hidden_cards") or []
+    comparative_data["table_settings"] = latest_snap.get("table_settings") or {}
 
     # Carry the composer's choices into the PDF. For a multi-month export the
     # most recent snapshot's selection wins, since that is the one just edited.

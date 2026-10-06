@@ -8,6 +8,7 @@ ready to draw. The template stays a layout; this module holds the arithmetic.
 from __future__ import annotations
 
 import datetime
+import re
 from typing import Any, Optional
 
 # The four Business Profile impression metrics, and how to name them once a
@@ -425,15 +426,60 @@ _COUNTRY_COLUMNS: list[tuple[str, Any, Any]] = [
 _REVENUE_COLUMN = ("Revenue", lambda c: _n(c.get("revenue")), _fmt)
 
 
+# The stored figure each column is read from, where a person can type over it.
+# Ratios (rate, per-session, average time) are worked out from these, so an
+# edit flows through them — the table can never disagree with itself.
+TABLE_FIELDS = {
+    "Sessions": "sessions", "Engaged sessions": "engaged_sessions", "Event count": "event_count",
+    "Key events": "key_events", "Active users": "active_users", "New users": "new_users", "Revenue": "revenue",
+}
+TABLE_ROWS_MAX = 8
+
+
 def comparison_table(current: Any, previous: Any, name_key: str,
-                     columns: list[tuple[str, Any, Any]], limit: int = 4, show_prev: bool = True) -> dict:
+                     columns: list[tuple[str, Any, Any]], limit: int = 4, show_prev: bool = True,
+                     settings: Optional[dict] = None) -> dict:
     """A GA4 comparison view: the biggest rows, each figure beside the same
-    row's figure last period and the change between them, plus a total."""
-    current = [c for c in (current or []) if isinstance(c, dict)]
+    row's figure last period and the change between them, plus a total.
+
+    `settings` are the builder's choices for this table: columns left out
+    (cols_off), the change % or last period's figure left out for a whole
+    column (change_off, prev_off) or for one cell ("Direct|Sessions" in
+    cells_off), which rows show (rows; default the biggest `limit`), and typed
+    figures (edits: {row: {"now": {field: n}, "prev": {field: n}}}).
+    The total is the whole site's, so it counts every row, shown or not.
+    """
+    st = settings if isinstance(settings, dict) else {}
+    cols_off = set(st.get("cols_off") or [])
+    change_off = set(st.get("change_off") or [])
+    prev_off = set(st.get("prev_off") or [])
+    cells_off = set(st.get("cells_off") or [])
+    edits = st.get("edits") if isinstance(st.get("edits"), dict) else {}
+
+    def edited(rows, which: str) -> list[dict]:
+        out = []
+        for r in rows:
+            r = dict(r)
+            for field, v in ((edits.get(str(r.get(name_key))) or {}).get(which) or {}).items():
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0:
+                    r[field] = v
+            out.append(r)
+        return out
+
+    current = edited([c for c in (current or []) if isinstance(c, dict)], "now")
     if not current:
-        return {"columns": [], "rows": [], "has_previous": False}
-    before = {c.get(name_key): c for c in (previous or []) if isinstance(c, dict)}
-    has_previous = bool(before)
+        return {"columns": [], "rows": [], "has_previous": False, "meta": {"columns": [], "rows": []}}
+    before_rows = edited([c for c in (previous or []) if isinstance(c, dict)], "prev")
+    before = {c.get(name_key): c for c in before_rows}
+    # A previous figure typed for a row that had none last period.
+    for name, e in edits.items():
+        if (e or {}).get("prev") and name not in before and any(str(c.get(name_key)) == name for c in current):
+            before[name] = {name_key: name, **{k: v for k, v in e["prev"].items() if isinstance(v, (int, float))}}
+    has_data_before = bool(before)
+
+    visible = [col for col in columns if col[0] not in cols_off] or columns[:1]
+    shows_prev = has_data_before and show_prev and any(c[0] not in prev_off for c in visible)
+    shows_change = has_data_before and any(c[0] not in change_off for c in visible)
 
     def total(rows) -> dict:
         out: dict[str, float] = {}
@@ -443,39 +489,66 @@ def comparison_table(current: Any, previous: Any, name_key: str,
                     out[k] = out.get(k, 0.0) + _n(v)
         return out
 
-    def cells(now: dict, was_row: Optional[dict]) -> list[dict]:
+    def cells(row_name: str, now: dict, was_row: Optional[dict]) -> list[dict]:
         out = []
-        for _, calc, show in columns:
+        for label, calc, show in visible:
             value = calc(now)
             cell: dict[str, Any] = {"value": show(value), "prev": None, "change": None}
-            if has_previous:
+            if has_data_before:
                 was = calc(was_row or {})
+                off = f"{row_name}|{label}" in cells_off
                 # Over several months the baseline is worked out, not a real
                 # earlier figure, so only the change prints.
-                cell["prev"] = show(was) if show_prev else None
+                if show_prev and label not in prev_off and not off:
+                    cell["prev"] = show(was)
                 # A row with nothing last period has no percentage to grow
                 # by; the previous figure (0) says so on its own.
-                cell["change"] = round((value - was) / was * 100, 1) if was else None
+                if label not in change_off and not off:
+                    cell["change"] = round((value - was) / was * 100, 1) if was else None
             out.append(cell)
         return out
 
+    wanted = st.get("rows")
+    if isinstance(wanted, list) and wanted:
+        keep = {str(w) for w in wanted}
+        shown_rows = [c for c in current if str(c.get(name_key)) in keep][:TABLE_ROWS_MAX]
+    else:
+        shown_rows = current[:limit]
+    shown_names = {str(c.get(name_key)) for c in shown_rows}
+    edited_names = {k for k, v in edits.items() if (v or {}).get("now") or (v or {}).get("prev")}
+
     return {
-        "columns": [name for name, _, _ in columns],
-        "rows": [{"name": c.get(name_key), "cells": cells(c, before.get(c.get(name_key)))}
-                 for c in current[:limit]],
-        "total": {"name": "Total", "cells": cells(total(current), total(before.values()))},
-        "has_previous": has_previous,
+        "columns": [label for label, _, _ in visible],
+        "rows": [{"name": c.get(name_key), "cells": cells(str(c.get(name_key)), c, before.get(c.get(name_key)))}
+                 for c in shown_rows],
+        "total": {"name": "Total", "cells": cells("Total", total(current), total(before.values()) if before else None)},
+        "has_previous": shows_prev or shows_change,
+        # For the builder only: every column and row, and what is switched off.
+        "meta": {
+            "columns": [{"label": label, "field": TABLE_FIELDS.get(label), "off": label in cols_off,
+                         "change_off": label in change_off, "prev_off": label in prev_off} for label, _, _ in columns],
+            "rows": [{"name": str(c.get(name_key)), "shown": str(c.get(name_key)) in shown_names,
+                      "edited": str(c.get(name_key)) in edited_names,
+                      "now": {f: c.get(f) for f in TABLE_FIELDS.values() if f in c},
+                      "prev": {f: (before.get(c.get(name_key)) or {}).get(f) for f in TABLE_FIELDS.values()
+                               if f in (before.get(c.get(name_key)) or {})}}
+                     for c in current],
+            "cells_off": sorted(cells_off),
+            "edits": edits,
+            "has_data_before": has_data_before,
+            "max_rows": TABLE_ROWS_MAX,
+        },
     }
 
 
-def channel_table(ga4: dict) -> dict:
+def channel_table(ga4: dict, settings: Optional[dict] = None) -> dict:
     """GA4's Traffic acquisition view, by default channel group."""
     ga4 = ga4 or {}
     return comparison_table(ga4.get("channels"), ga4.get("channels_previous"), "channel", _CHANNEL_COLUMNS,
-                            show_prev=not ga4.get("_span_compare"))
+                            show_prev=not ga4.get("_span_compare"), settings=settings)
 
 
-def country_table(ga4: dict) -> dict:
+def country_table(ga4: dict, settings: Optional[dict] = None) -> dict:
     """GA4's Demographic details view, by country."""
     ga4 = ga4 or {}
     rows = ga4.get("countries_detail") or []
@@ -483,7 +556,14 @@ def country_table(ga4: dict) -> dict:
     if any(_n(r.get("revenue")) for r in rows if isinstance(r, dict)):
         columns.append(_REVENUE_COLUMN)
     return comparison_table(rows, ga4.get("countries_detail_previous"), "country", columns,
-                            show_prev=not ga4.get("_span_compare"))
+                            show_prev=not ga4.get("_span_compare"), settings=settings)
+
+
+def display_domain(domain) -> str:
+    """A site as people say it: https://www.foodbazaar.co.uk/ → foodbazaar.co.uk."""
+    text = str(domain or "").strip()
+    text = re.sub(r"^[a-z]+://", "", text, flags=re.I).split("/", 1)[0].split("?", 1)[0]
+    return text[4:] if text.lower().startswith("www.") else text
 
 
 def _nice_ceiling(value: float) -> float:
@@ -1085,14 +1165,14 @@ def build(data: dict, client: dict, sections: dict, metric_on,
         "ai_rate": ai_visibility_rate(data),
         "ai_summary": ai_summary(data),
         "gsc_console": gsc_console(data.get("gsc") or {}),
-        "ga4_channels": channel_table(ga4),
-        "ga4_country_table": country_table(ga4),
+        "ga4_channels": channel_table(ga4, (data.get("table_settings") or {}).get("channels")),
+        "ga4_country_table": country_table(ga4, (data.get("table_settings") or {}).get("countries")),
         "source_lines": source_lines(data.get("provenance")),
         "link_kinds": link_kinds,
         "summary_lede": brief(data.get("narrative")),
         "cover_lede": (data.get("cover_lede")
                        or f"Search visibility, keyword rankings and customer engagement for "
-                          f"{client.get('domain') or name}."),
+                          f"{display_domain(client.get('domain')) or name}."),
         "period_range": period_range,
         "generated_month": datetime.date.today().strftime("%B %Y"),
 

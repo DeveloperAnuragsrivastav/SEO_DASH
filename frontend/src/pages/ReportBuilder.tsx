@@ -11,6 +11,8 @@ import PageHeader from '../components/ui/PageHeader';
 import PageSkeleton from '../components/ui/PageSkeleton';
 import PeriodPicker from '../components/PeriodPicker';
 import ReportShots from '../components/report/ReportShots';
+import TableEditor from '../components/report/TableEditor';
+import type { GTable } from '../components/report/TableEditor';
 import { usePasteTarget } from '../lib/usePasteImage';
 import ListEditor, { type ListSpec } from '../components/report/ListEditor';
 import '../builder.css';
@@ -88,7 +90,9 @@ interface TextField { key: string; block: string; label: string; default: string
 interface Step { key: string; kind: 'slides' | 'review'; label: string; about?: string }
 /** One part of a slide's numbers, as the server describes it. */
 interface SlidePart {
-  type: 'figures' | 'rows' | 'table' | 'shots' | 'months' | 'editor';
+  type: 'figures' | 'rows' | 'table' | 'gtable' | 'shots' | 'months' | 'editor';
+  /** A GA4 comparison table edited as it prints (type 'gtable'). */
+  table?: 'channels' | 'countries';
   ids?: string[]; prefix?: string; path?: string; section?: string; name?: string;
   label?: string; hint?: string;
   /** Printed words rather than numbers (e.g. the brand line): shown under Words. */
@@ -337,6 +341,8 @@ const ReportBuilder: React.FC = () => {
   // The sheet month of each period, oldest first ("2026-09-01"): the month
   // columns the upload sheets use, whatever day this client's periods start on.
   const [sheetMonths, setSheetMonths] = useState<string[]>([]);
+  // The GA4 tables as the report prints them (channels, countries).
+  const [gTables, setGTables] = useState<Record<string, GTable>>({});
   // Why the builder could not open this report, said on the page.
   const [openError, setOpenError] = useState<string | null>(null);
   const [showPeriod, setShowPeriod] = useState(false);
@@ -366,6 +372,7 @@ const ReportBuilder: React.FC = () => {
   /** Take a composer payload as the new truth for every figure and tick. */
   const applyComposer = (d: any) => {
     setEditable(d.editable !== false);
+    if (d.tables) setGTables(d.tables);
     setSections(d.sections || []);
     setAvailable(d.available || {});
     setSectionOn(d.selectedSections || {});
@@ -1901,6 +1908,15 @@ const ReportBuilder: React.FC = () => {
             )}
           </div>
           {part.prefix === 'ai_visibility.' ? aiMatrix(list) : rowsTable(list)}
+        </div>
+      );
+    }
+    if (part.type === 'gtable' && part.table) {
+      return (
+        <div key={n} className="rb-part">
+          {head(part.label, part.hint)}
+          <TableEditor base={base} table={part.table} data={gTables[part.table]} editable={editable}
+            onChange={t => setGTables(cur => ({ ...cur, ...t }))} />
         </div>
       );
     }

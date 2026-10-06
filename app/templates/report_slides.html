@@ -348,7 +348,8 @@ table.data .idx { color: var(--ink-4); font-size: 12px; }
 .c-traffic .ring-row svg { flex: 1 1 auto; width: auto; height: auto; min-height: 56px; max-height: 112px; aspect-ratio: 1 / 1; align-self: center; }
 .c-traffic .ring-key { flex-shrink: 0; }
 .c-traffic .ring-key { gap: 5px; }
-.c-traffic .ring-item { grid-template-columns: 12px 42px 36px 1fr; gap: 6px; align-items: center; }
+.c-traffic .ring-item { grid-template-columns: 12px max-content 36px 1fr; gap: 6px; align-items: center; }
+.c-traffic .ring-figure, .ring-figure { white-space: nowrap; }
 .c-traffic .ring-swatch { width: 10px; height: 10px; margin-top: 0; }
 .c-traffic .ring-figure { font-size: 13px; }
 .c-traffic .ring-pct { font-size: 11.5px; }
@@ -804,6 +805,9 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
 .cv-eyebrow { font-size: 15px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--gold); }
 .cv-title { margin: 18px 0 0; font-size: 76px; font-weight: 800; line-height: 1.02; letter-spacing: -0.02em; text-transform: uppercase; color: #FFFFFF; }
 .cv-title.long { font-size: 56px; }
+/* A name is never split inside a word ("FOODBAZAAR. / CO.UK"): it wraps only
+   at spaces, and deckFit shrinks it until every word fits the column. */
+.cv-title { overflow-wrap: normal; word-break: keep-all; hyphens: none; align-self: stretch; max-width: 100%; }
 .cv-title span { color: var(--gold); }
 .cv-lede { margin: 16px 0 0; font-size: 25px; font-weight: 500; line-height: 1.35; color: rgba(255, 255, 255, 0.86); }
 .cv-rule { display: block; width: 66px; height: 5px; margin-top: 24px; border-radius: 3px; background: var(--gold); box-shadow: 0 0 14px rgba(244, 209, 60, 0.55); }
@@ -1396,7 +1400,7 @@ table.data.kw.half .rank-new { display: none; }
     <span class="cv-eyebrow">{{ brand_line }}</span>
     {%- set name = (ct('exec_summary') or client_name) | trim %}
     {%- set words = name.split() %}
-    <h1 class="cv-title {{ 'long' if name | length > 18 }}">
+    <h1 class="cv-title {{ 'long' if name | length > 18 }}" data-fit-title>
       {%- if words | length > 1 %}{{ words[:-1] | join(' ') }} <span>{{ words[-1] }}</span>{% else %}{{ name }}{% endif -%}
     </h1>
     {%- set lede = cs('exec_summary') or cover_lede %}
@@ -2296,7 +2300,7 @@ table.data.kw.half .rank-new { display: none; }
   <div class="cv-body">
     <span class="cv-eyebrow">{{ ce('closing') }}</span>
     {%- set title = ct('closing') %}
-    <h2 class="cv-title cv-close-title">
+    <h2 class="cv-title cv-close-title" data-fit-title>
       {%- if client_name and client_name in title -%}
         {{ title.split(client_name)[0] }}<span>{{ client_name }}</span>{{ title.split(client_name, 1)[1] }}
       {%- else %}{{ title }}{% endif -%}
@@ -2381,6 +2385,22 @@ function deckFit(doc) {
       if (textOut(b, Math.min(r.bottom + 2, r.bottom - pad + TOLERANCE))) return true;
     }
     return false;
+  }
+
+  // The cover's client name: the largest size at which no word is wider than
+  // the column, in at most two lines.
+  var titles = doc.querySelectorAll('[data-fit-title]');
+  for (var ti = 0; ti < titles.length; ti++) {
+    var el = titles[ti];
+    var size = parseFloat(win.getComputedStyle(el).fontSize) || 76;
+    var lineH = function () { return parseFloat(win.getComputedStyle(el).lineHeight) || size * 1.02; };
+    while (size > 30 && (el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().height > lineH() * 2 + 2)) {
+      size -= 2;
+      el.style.fontSize = size + 'px';
+    }
+    // A single word longer than the column even at the smallest size: only
+    // then may it break, rather than run off the slide.
+    if (el.scrollWidth > el.clientWidth + 1) el.style.wordBreak = 'break-all';
   }
 
   var slides = doc.querySelectorAll('section.slide');

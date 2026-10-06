@@ -755,3 +755,50 @@
 /* A box that takes a pasted image while the pointer is over it. */
 .rb-paste-zone { outline: none; transition: border-color 0.14s, background-color 0.14s; }
 .rb-paste-zone:hover, .rb-paste-zone:focus-within, .rb-paste-zone:focus { border-color: var(--brand-400); background: var(--brand-50); }
+
+/* ── GA4 table editor: the table as it prints, every part switchable ── */
+.tbl-ed { display: flex; flex-direction: column; gap: 10px; }
+.tbl-cols, .tbl-rows { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tbl-cols-label { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); margin-right: 4px; }
+.tbl-col { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: var(--radius-pill); overflow: hidden; background: var(--card); }
+.tbl-col > button { border: 0; background: none; font: inherit; font-size: 12px; padding: 4px 9px; color: var(--ink-2); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.tbl-col.off { background: var(--canvas-2); border-style: dashed; }
+.tbl-col.off > button { color: var(--ink-4); text-decoration: line-through; }
+.tbl-col > button:hover:not(:disabled) { color: var(--ink); background: var(--brand-50); }
+.tbl-mini { border-left: 1px solid var(--line-2) !important; font-weight: 700; font-size: 11px !important; padding: 4px 7px !important; color: var(--brand-700) !important; }
+.tbl-mini.off { color: var(--ink-4) !important; text-decoration: line-through; }
+.tbl-reset { margin-left: auto; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line-2); border-radius: var(--radius-md); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tbl th { background: #141414; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 8px; text-align: left; white-space: nowrap; }
+.tbl th.num, .tbl td.num { text-align: center; }
+.tbl td { padding: 6px 8px; border-bottom: 1px solid var(--line-3); vertical-align: middle; position: relative; }
+.tbl tbody tr:nth-child(even) td { background: #FAFBFB; }
+.tbl .tbl-name { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.tbl-total td { background: var(--brand-50) !important; font-weight: 700; }
+.tbl-v { font-weight: 700; color: var(--ink); white-space: nowrap; }
+.tbl-chg { margin-left: 4px; font-size: 10.5px; font-weight: 600; }
+.tbl-chg.up { color: var(--up); } .tbl-chg.down { color: var(--danger-500); }
+.tbl-prev { display: block; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.tbl-cell.can-edit { cursor: pointer; }
+.tbl-cell.can-edit:hover { box-shadow: inset 0 0 0 1px var(--brand-400); }
+.tbl-cell.edited .tbl-v { color: var(--brand-700); }
+.tbl-cell.edited::after { content: ""; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 7px 7px 0; border-color: transparent var(--brand-500) transparent transparent; }
+.tbl-cell.cmp-off .tbl-v { opacity: 0.85; }
+.tbl-tag { margin-left: 6px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brand-700); }
+.tbl-pop {
+  position: fixed; z-index: 60;
+  width: 260px; padding: 12px; text-align: left; cursor: default;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-xl);
+  display: flex; flex-direction: column; gap: 10px; font-weight: 400;
+}
+.tbl-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.tbl-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--ink-2); }
+.tbl-pop-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tbl-pop-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--ink-3); }
+.tbl-pop-fields input { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; font-size: 13px; background: var(--card); color: var(--ink); }
+.tbl-pop-fields input:focus { outline: none; border-color: var(--brand-400); box-shadow: 0 0 0 3px var(--brand-50); }
+.tbl-pop-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.tbl-pop-note { margin: 0; font-size: 12px; color: var(--ink-3); }
+.tbl-row { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 12px; color: var(--ink-3); cursor: pointer; }
+.tbl-row.on { color: var(--ink); border-color: var(--brand-300); background: var(--brand-50); }

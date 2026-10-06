@@ -164,7 +164,7 @@ def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: date
             if existing:
                 for keep in ("included_sections", "included_items", "copy", "narration", "narration_source",
                              "subtitle_ai", "subtitles_drafted", "links", "activities", "hidden_slides", "hidden_cards",
-                             "next_month_plan", "plan_source", "own_start"):
+                             "next_month_plan", "plan_source", "own_start", "table_settings"):
                     if keep in (existing.snapshot or {}):
                         snapshot[keep] = existing.snapshot[keep]
                 existing.start_date = window_start
