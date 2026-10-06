@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import api from '../api/client';
+import api, { errorText } from '../api/client';
 import { Info, Loader2 } from 'lucide-react';
 import '../builder.css';
 
@@ -167,7 +167,7 @@ export const periodLabel = (cycles: Cycle[], months: number) => {
 const PeriodPicker: React.FC<Props> = ({ clientId, snapshotId, initialMonths, busy, confirmText, onConfirm, onCancel, onLoaded }) => {
   const [info, setInfo] = useState<PeriodsInfo | null>(null);
   const [months, setMonths] = useState(1);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -180,11 +180,11 @@ const PeriodPicker: React.FC<Props> = ({ clientId, snapshotId, initialMonths, bu
         setMonths(Math.min(Math.max(initialMonths || d.months || 1, 1), max));
         onLoaded?.(d);
       })
-      .catch(() => { if (alive) setFailed(true); });
+      .catch((e) => { if (alive) setFailed(errorText(e, 'the report periods')); });
     return () => { alive = false; };
   }, [clientId, snapshotId]);
 
-  if (failed) return <p className="text-subtle">The report periods could not be loaded.</p>;
+  if (failed) return <p className="text-subtle">{failed}</p>;
   if (!info) return <div className="loader-container"><div className="spinner" /></div>;
   if (info.mode === 'first') return <FirstPeriod info={info} busy={busy} onCancel={onCancel} onConfirm={onConfirm} />;
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../api/client';
+import api, { errorText } from '../api/client';
 import { toast } from 'sonner';
 import { SlidersHorizontal } from 'lucide-react';
 import '../report.css';
@@ -41,7 +41,9 @@ const ReportView: React.FC = () => {
 
   // The report itself is the PDF's own template, rendered by the server.
   const [html, setHtml] = useState<string | null>(null);
-  const [htmlError, setHtmlError] = useState(false);
+  // Why the report could not be drawn or opened — said on the page, not "could not be loaded".
+  const [htmlError, setHtmlError] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [sheetHeight, setSheetHeight] = useState(0);
   const [scale, setScale] = useState(1);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -52,13 +54,12 @@ const ReportView: React.FC = () => {
     : `/clients/${clientId}/reports/${snapshotId}/html`;
 
   const loadHtml = useCallback(async () => {
-    setHtmlError(false);
+    setHtmlError(null);
     try {
-      const { data } = await api.get(htmlEndpoint, { responseType: 'text' });
+      const { data } = await api.get(htmlEndpoint, { responseType: 'text', skipErrorToast: true } as any);
       setHtml(asPrinted(String(data)).replace('</head>', `${SCREEN_HEAD}</head>`));
     } catch (e) {
-      setHtmlError(true);
-      // Handled by global interceptor
+      setHtmlError(errorText(e, 'this report'));
     }
   }, [htmlEndpoint]);
 
@@ -72,15 +73,16 @@ const ReportView: React.FC = () => {
     setLoading(true);
     Promise.all([
       api.get(`/clients/${clientId}`),
-      snapshotId === 'multi' 
-        ? api.get(`/clients/${clientId}/reports/multi?count=${count}`).catch(() => ({ data: null }))
-        : api.get(`/clients/${clientId}/reports/${snapshotId}`).catch(() => ({ data: null })),
+      (snapshotId === 'multi'
+        ? api.get(`/clients/${clientId}/reports/multi?count=${count}`, { skipErrorToast: true } as any)
+        : api.get(`/clients/${clientId}/reports/${snapshotId}`, { skipErrorToast: true } as any))
+        .catch((e: any) => { setReportError(errorText(e, 'this report')); return { data: null }; }),
     ]).then(([c, r]) => {
       setClient(c.data);
       setReport(r.data);
       if (r.data) loadHtml();
-    }).catch(() => {
-      // The reason is shown by the API client; the page shows "not found".
+    }).catch((e) => {
+      setReportError(errorText(e, 'this client'));
     }).finally(() => setLoading(false));
   }, [clientId, snapshotId]);
 
@@ -121,39 +123,11 @@ const ReportView: React.FC = () => {
   };
   useEffect(() => () => frameObserver.current?.disconnect(), []);
 
-  const handleGenerate = async () => {
+  /** Generate through the same page every other Generate button uses: it
+   *  shows progress, a failure's reason at once, and opens the builder. */
+  const handleGenerate = () => {
     setGenerating(true);
-    const toastId = toast.info('Report generation started (this may take a minute)...', { duration: 60000 });
-    try {
-      await api.post(`/clients/${clientId}/reports/generate`, {});
-      
-      let reportData = null;
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 3000));
-        try {
-          const full = await api.get(`/clients/${clientId}/reports/latest`);
-          if (full.data && full.data.id && (!report || full.data.id !== report.id)) {
-            reportData = full.data;
-            break;
-          }
-        } catch (e) {
-          // ignore 404s while processing
-        }
-      }
-      
-      toast.dismiss(toastId);
-      if (reportData) {
-        toast.success('Report snapshot generated!');
-        // A new draft opens in the builder, which asks what goes in first.
-        navigate(`/admin/clients/${clientId}/reports/${reportData.id}/build`);
-      } else {
-        toast.error('Report generation is taking too long. Please refresh later.');
-      }
-    } catch (err: any) {
-      toast.dismiss(toastId);
-      // Handled by global interceptor
-    }
-    setGenerating(false);
+    navigate(`/admin/clients/${clientId}/reports/new?months=1`);
   };
 
   const handlePublish = async () => {
@@ -248,15 +222,18 @@ const ReportView: React.FC = () => {
 
       {!report ? (
         <div className="wrap" style={{ padding: '80px 24px', textAlign: 'center' }}>
-          <h2 className="h1" style={{ marginBottom: '16px' }}>Snapshot not found</h2>
-          <p className="text-subtle" style={{ marginBottom: '32px' }}>Generate one to aggregate all data sources.</p>
+          <h2 className="h1" style={{ marginBottom: '16px' }}>{reportError ? 'This report could not be opened' : 'Report not found'}</h2>
+          <p className="text-subtle" style={{ marginBottom: '32px', maxWidth: 560, marginInline: 'auto' }}>
+            {reportError || 'There is no report here yet. Generate one to bring this period’s data together.'}
+          </p>
           <button className="btn btn-primary" onClick={handleGenerate} disabled={generating} style={{ padding: '12px 24px' }}>
             {generating ? 'Generating…' : 'Generate report'}
           </button>
         </div>
       ) : htmlError ? (
         <div className="wrap" style={{ padding: '64px 24px', textAlign: 'center' }}>
-          <p className="text-subtle" style={{ marginBottom: '20px' }}>The report could not be loaded.</p>
+          <h3 style={{ marginBottom: 8 }}>This report could not be shown</h3>
+          <p className="text-subtle" style={{ marginBottom: '20px', maxWidth: 560, marginInline: 'auto' }}>{htmlError}</p>
           <button className="btn btn-secondary" onClick={loadHtml}>Try again</button>
         </div>
       ) : !html ? (

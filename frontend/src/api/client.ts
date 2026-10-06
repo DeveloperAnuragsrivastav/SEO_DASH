@@ -99,4 +99,19 @@ api.interceptors.response.use(
   }
 );
 
+/** One readable sentence for a failed request: the server's own reason when
+ *  it gave one, otherwise what the status means. For screens that show the
+ *  error in place (the toast already appeared). */
+export function errorText(e: any, what = 'this'): string {
+  if (e?.userMessage) return e.userMessage;
+  const d = e?.response?.data?.detail;
+  if (typeof d === 'string' && d) return d;
+  const status: number | undefined = e?.response?.status;
+  if (!e?.response) return 'Can’t reach the server — check your internet connection, then try again.';
+  if (status === 403) return `You don’t have access to ${what}.`;
+  if (status === 404) return `${what[0].toUpperCase()}${what.slice(1)} no longer exists — it may have been deleted.`;
+  if (status && status >= 500) return `The server hit a problem with ${what}. Try again — if it keeps happening, tell your admin.`;
+  return `${what[0].toUpperCase()}${what.slice(1)} could not be loaded (error ${status}).`;
+}
+
 export default api;

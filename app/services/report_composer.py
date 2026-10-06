@@ -96,7 +96,8 @@ RANKING_SUMMARY = [
 
 # Leads & Conversion figures. GA4 names events per site, so each is found by
 # pattern (slide_deck.LEAD_FIGURES); a value typed in the builder replaces
-# what was found, and 0 hides the figure.
+# what was found, and unticking it in the builder leaves it out of the slide
+# and out of the total.
 LEAD_KEYS = [
     {"key": "thank_you", "label": "Thank-you page"},
     {"key": "email", "label": "Email clicks"},
@@ -542,18 +543,26 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
     # ── Leads & Conversion figures, and the Business Profile extras ──
     leads = lead_values(snap)
     typed_total = ((snap.get("ga4") or {}).get("lead_overrides") or {}).get("total")
+    # The stored ticks themselves (current_items builds this very list).
+    ticks = snap.get("included_items") if isinstance(snap.get("included_items"), dict) else {}
+    # The same total the report prints: the ticked figures only.
+    ticked = {k: v for k, v in leads.items() if ticks.get(f"ga4.lead.{k}", True) is not False}
     items.append({
         "id": "ga4.lead.total",
         "section": "ga4",
-        "label": "Total leads" + ("" if typed_total else " — sum of the four below"),
-        "value": typed_total or sum(leads.values()),
+        "label": "Total leads" + ("" if typed_total else " — sum of the ticked figures below"),
+        "value": typed_total or sum(ticked.values()),
         "format": "int",
         "editable": True,
         "writable": False,
         "kind": "summary",
-        "group": "Leads & Conversion — type a figure to replace what GA4 found; 0 hides it",
+        "group": "Leads & Conversion — type a figure to replace what GA4 found; untick one to leave it out",
     })
     last = previous_leads(snap)
+    if not ((snap.get("ga4") or {}).get("lead_overrides_previous") or {}).get("total"):
+        known = [last.get(k) for k in ticked if last.get(k) is not None]
+        if known:
+            last["total"] = float(sum(known))
     for key in ["total"] + [m["key"] for m in LEAD_KEYS]:
         items.append({
             "id": f"prev:ga4.lead.{key}",
@@ -576,7 +585,7 @@ def enumerate_items(snapshot: dict, labels: dict[str, str] | None = None) -> lis
             "editable": True,
             "writable": False,
             "kind": "summary",
-            "group": "Leads & Conversion — type a figure to replace what GA4 found; 0 hides it",
+            "group": "Leads & Conversion — type a figure to replace what GA4 found; untick one to leave it out",
         })
     from app.services.slide_deck import AI_REFERRAL_ENGINES, ai_referral_traffic
     referral = {e["name"]: e["sessions"] for e in ai_referral_traffic(snap.get("ga4") or {})["engines"]}
@@ -1166,7 +1175,7 @@ SLIDES: list[dict] = [
     {"key": "leads", "name": "Leads & Conversion", "step": "performance", "section": "ga4",
      "about": "The enquiries: thank-you pages, email and phone clicks, transactions — and their total.",
      "parts": [{"type": "figures", "prefix": "ga4.lead.", "label": "Lead figures",
-                "hint": "Filled from Google Analytics events. Type a number to replace it; 0 hides that box."}],
+                "hint": "Filled from Google Analytics events. Type a number to replace it; untick a box to leave it out of the report and the total."}],
      "heading": "leads", "narration": "leads", "texts": "block"},
 
     {"key": "rankings", "name": "Ranking Summary", "step": "rankings", "section": "rankings",

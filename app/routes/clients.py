@@ -80,7 +80,7 @@ def get_client(client_id: uuid.UUID, db: Session = Depends(get_db)) -> Client:
     """Get a single client by ID."""
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+        raise HTTPException(status_code=404, detail="This client no longer exists — it may have been deleted. Go back to All Clients.")
     return client
 
 
@@ -118,7 +118,7 @@ def update_client(client_id: uuid.UUID, data: ClientUpdate, db: Session = Depend
     """Update an existing client."""
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+        raise HTTPException(status_code=404, detail="This client no longer exists — it may have been deleted. Go back to All Clients.")
         
     if current_user.role == UserRole.manager and client.manager_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to edit this client")
@@ -189,7 +189,7 @@ def set_client_section(
 
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+        raise HTTPException(status_code=404, detail="This client no longer exists — it may have been deleted. Go back to All Clients.")
 
     row = (
         db.query(ClientSection)
@@ -215,7 +215,7 @@ def delete_client(client_id: uuid.UUID, db: Session = Depends(get_db)):
     """Delete a client and all associated data. Restricted to super_admin."""
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+        raise HTTPException(status_code=404, detail="This client no longer exists — it may have been deleted. Go back to All Clients.")
         
     from app.models.client_section import ClientSection
     from app.models.connection import Connection

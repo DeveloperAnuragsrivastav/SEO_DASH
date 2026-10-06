@@ -22,6 +22,16 @@ from app.services.report_period import build_report_data, cycle_bounds, previous
 
 logger = logging.getLogger(__name__)
 
+# How each client's latest generation went, for the page that waits on it:
+# {client_id: {"state": "running"|"done"|"failed", "error": str|None, "report_id": str|None, "at": float}}.
+# One process serves the app, so memory is enough; a restart simply forgets.
+GENERATION: dict[str, dict] = {}
+
+
+def _mark(client_id, state: str, error: str | None = None, report_id: str | None = None) -> None:
+    import time
+    GENERATION[str(client_id)] = {"state": state, "error": error, "report_id": report_id, "at": time.time()}
+
 
 def pull_for_report(db, client_id: uuid.UUID, end_date: datetime.date, months: int,
                     providers: tuple[str, ...] = ("gsc", "ga4", "gbp"),
@@ -73,7 +83,8 @@ def pull_for_report(db, client_id: uuid.UUID, end_date: datetime.date, months: i
         if isinstance(current, Exception):
             logger.warning("Pull failed for %s (%s): %s", conn.provider.value, client_id, current)
             conn.status = ConnectionStatus.error
-            conn.last_error = str(current)[:1000]
+            from app.services.google_clients import explain_pull_error
+            conn.last_error = explain_pull_error(conn.provider.value, current, conn.property_id)[:1000]
             continue
         if isinstance(before, Exception):
             logger.warning("Comparison pull failed for %s (%s): %s", conn.provider.value, client_id, before)
@@ -121,18 +132,20 @@ def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: date
     with engine.connect() as lock_conn:
         if not lock_conn.execute(text("SELECT pg_try_advisory_lock(:id)"), {"id": lock_id}).scalar():
             logger.warning("Report generation already in progress for %s %s", client_id, end_date)
-            return "Already in progress"
+            return "Already in progress"   # the running one reports for itself
 
         db = SessionLocal()
         try:
             client = db.get(Client, client_id)
             if not client:
+                _mark(client_id, "failed", "This client no longer exists.")
                 return "Client not found"
 
             existing = db.execute(
                 select(ReportSnapshot).where(ReportSnapshot.client_id == client_id, ReportSnapshot.end_date == end_date)
             ).scalars().first()
             if existing and existing.status == ReportStatus.published:
+                _mark(client_id, "failed", "This period's report is already published — make it a draft to change it.")
                 return "Report is published"
 
             first_start = start_date if months == 1 else None
@@ -158,6 +171,7 @@ def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: date
                 existing.snapshot = snapshot
                 existing.generated_at = datetime.datetime.now(datetime.timezone.utc)
                 db.commit()
+                _mark(client_id, "done", report_id=str(existing.id))
                 return str(existing.id)
 
             # A new month inherits the wording the agency settled on, so a
@@ -185,9 +199,15 @@ def generate_snapshot_report(client_id_str: str, months: int = 1, end_date: date
             )
             db.add(report)
             db.commit()
+            _mark(client_id, "done", report_id=str(report.id))
             return str(report.id)
         except Exception:
             logger.exception("Report generation failed for %s.", client_id)
+            import sys
+            err = sys.exc_info()[1]
+            _mark(client_id, "failed",
+                  "The report could not be built: "
+                  + (str(err)[:300] if isinstance(err, ValueError) else f"an unexpected error on the server ({type(err).__name__}). Try again — if it repeats, tell your admin."))
             db.rollback()
             raise
         finally:

@@ -1465,13 +1465,15 @@ table.data.kw.half .rank-new { display: none; }
         even grid: four across left one card stranded on a second row and a
         gap the height of the page above the commentary. -#}
     {%- set n = lead_figures | length %}
-    <div class="row c1-2 tight {{ 'grow' if not lead_events }} leads-row">
+    <div class="row {{ 'c1-2' if leads_total_shown else '' }} tight {{ 'grow' if not lead_events }} leads-row">
+      {% if leads_total_shown %}
       <div class="card cream pad-lg leads-total">
         {% if leads_change %}{{ delta(leads_total, leads_change) }}{% endif %}
         <span class="stat-figure lg">{{ leads_total | fmt }}</span>
         <span class="stat-name">{{ t('kpi.leads.name') }}</span>
         <span class="stat-note">{{ t('kpi.leads.note') }}</span>
       </div>
+      {% endif %}
       <div class="leads-grid n{{ n if n <= 6 else 6 }}">
         {% for f in lead_figures %}
         <div class="card fill">

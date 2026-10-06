@@ -55,34 +55,29 @@ class RequireRole:
             )
             
         route_client_id = request.path_params.get("client_id")
-        
-        if current_user.role == UserRole.super_admin:
-            pass # Super Admins bypass all ownership checks
-            
-        elif current_user.role == UserRole.manager:
-            if route_client_id:
-                from app.models.client import Client
-                client = db.get(Client, route_client_id)
-                if not client or str(client.manager_id) != str(current_user.id):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="You do not have access to this client."
-                    )
-                    
-        elif current_user.role == UserRole.user:
-            if route_client_id:
-                from app.models.user_project import UserProjectAssignment
-                assignment = db.execute(
-                    select(UserProjectAssignment).where(
-                        UserProjectAssignment.user_id == current_user.id,
-                        UserProjectAssignment.client_id == route_client_id
-                    )
-                ).scalar_one_or_none()
-                
-                if not assignment:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="You are not assigned to this client."
-                    )
-            
+        check_client_access(current_user, route_client_id, db)
         return current_user
+
+
+def check_client_access(current_user: User, route_client_id, db: Session) -> None:
+    """Whether this person may touch this client: super admins any, managers
+    their own clients, users the clients they are assigned to. Raises 403.
+    Used by RequireRole for /clients/{client_id}/… routes, and directly by
+    routes that reach a client through something else (a connection)."""
+    if current_user.role == UserRole.super_admin or not route_client_id:
+        return
+    if current_user.role == UserRole.manager:
+        from app.models.client import Client
+        client = db.get(Client, route_client_id)
+        if not client or str(client.manager_id) != str(current_user.id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this client.")
+    elif current_user.role == UserRole.user:
+        from app.models.user_project import UserProjectAssignment
+        assignment = db.execute(
+            select(UserProjectAssignment).where(
+                UserProjectAssignment.user_id == current_user.id,
+                UserProjectAssignment.client_id == route_client_id,
+            )
+        ).scalar_one_or_none()
+        if not assignment:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not assigned to this client.")

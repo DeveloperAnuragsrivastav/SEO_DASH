@@ -78,6 +78,38 @@ If there are no cited pages, "cited_pages" should be an empty list [].
             }
 
 
+def explain_ai_error(e: BaseException) -> str:
+    """What went wrong with an AI call, in words a person can act on."""
+    if isinstance(e, ValueError) and "OPENAI_API_KEY" in str(e):
+        return ("AI writing is not set up on the server yet — OPENAI_API_KEY is missing. "
+                "Add it (Railway → Variables) and redeploy.")
+    if isinstance(e, httpx.HTTPStatusError):
+        code = e.response.status_code if e.response is not None else None
+        body = ""
+        try:
+            body = (e.response.json().get("error") or {}).get("message") or ""
+        except Exception:
+            body = (e.response.text or "")[:200] if e.response is not None else ""
+        if code == 401:
+            return "OpenAI rejected the API key — check OPENAI_API_KEY on the server."
+        if code == 429:
+            if "quota" in body.lower() or "billing" in body.lower():
+                return "The OpenAI account has run out of credit — add billing at platform.openai.com, then try again."
+            return "OpenAI is limiting requests right now — wait a minute and try again."
+        if code == 400:
+            return f"OpenAI refused the request: {body or 'bad request'}."
+        if code and code >= 500:
+            return "OpenAI is having trouble right now — try again in a few minutes."
+        return f"OpenAI returned an error ({code}): {body or 'no details'}."
+    if isinstance(e, httpx.TimeoutException):
+        return "The AI took too long to answer — try again."
+    if isinstance(e, httpx.TransportError):
+        return "Could not reach OpenAI — check the server's internet connection, then try again."
+    if isinstance(e, (json.JSONDecodeError, KeyError, TypeError)):
+        return "The AI's answer could not be read — try again."
+    return f"The AI could not write this ({type(e).__name__})."
+
+
 def generate_report_narrative(client_name: str, month: str, snapshot_data: dict) -> str:
     """
     Generates a draft narrative for the monthly SEO report using OpenAI.
@@ -437,7 +469,11 @@ def section_facts(snapshot: dict, section: str, shown: Optional[dict] = None) ->
         # property up chose these names, so they are passed through as they
         # are rather than translated into ones the model expects.
         from app.services.slide_deck import lead_figures
-        derived = lead_figures(snap.get("ga4") or {}, (deltas.get("ga4") or {}))
+        # Only the figures ticked for the report — an unticked "0 email clicks"
+        # is not something the commentary should talk about.
+        ticks = (snap.get("included_items") or {}) if isinstance(snap.get("included_items"), dict) else {}
+        derived = lead_figures(snap.get("ga4") or {}, (deltas.get("ga4") or {}),
+                               shown=lambda i: visible(i) and ticks.get(i, True) is not False)
         facts = {f["name"]: f["raw"] for f in derived["lead_figures"]}
         # Named so the total cannot be misread as including them: these are
         # other events the property records, counted separately.
@@ -822,7 +858,7 @@ def read_ai_summary_screenshot(image: bytes, mime: str) -> dict:
 
     api_key = settings.OPENAI_API_KEY
     if not api_key:
-        raise ValueError("OpenAI is not configured.")
+        raise ValueError("OPENAI_API_KEY is not set in configuration.")
     engines = {
         "chatgpt": "ChatGPT", "google_ai_overview": "Google AI Overview / AI Overviews",
         "ai_mode": "Google AI Mode", "gemini": "Gemini", "perplexity": "Perplexity",
@@ -851,7 +887,15 @@ def read_ai_summary_screenshot(image: bytes, mime: str) -> dict:
     with httpx.Client(timeout=60.0) as client:
         res = client.post(OPENAI_API_URL, json=payload, headers={"Authorization": f"Bearer {api_key}"})
         res.raise_for_status()
-    data = json.loads(res.json()["choices"][0]["message"]["content"])
+    # An image with nothing to read comes back empty (or as a refusal): that
+    # is "no figures found", not a failure worth retrying.
+    content = ((res.json().get("choices") or [{}])[0].get("message") or {}).get("content")
+    try:
+        data = json.loads(content) if content else {}
+    except json.JSONDecodeError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
 
     def num(v):
         try:

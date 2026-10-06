@@ -751,3 +751,7 @@
   .pp-plan > div { grid-template-columns: 1fr; }
   .pp-plan span { grid-row: auto; }
 }
+
+/* A box that takes a pasted image while the pointer is over it. */
+.rb-paste-zone { outline: none; transition: border-color 0.14s, background-color 0.14s; }
+.rb-paste-zone:hover, .rb-paste-zone:focus-within, .rb-paste-zone:focus { border-color: var(--brand-400); background: var(--brand-50); }

@@ -91,14 +91,26 @@ class CatchCrashes:
 
         try:
             await self.app(scope, receive, tracked)
-        except Exception:
+        except Exception as exc:
             import json
             import logging
-            logging.getLogger("app").exception("Unhandled error on %s %s", scope.get("method"), scope.get("path"))
+            import uuid as _uuid
+            from sqlalchemy.exc import IntegrityError
+            ref = _uuid.uuid4().hex[:8]
+            logging.getLogger("app").exception("Unhandled error [ref %s] on %s %s", ref, scope.get("method"), scope.get("path"))
             if started:
                 raise
-            body = json.dumps({"detail": "Something went wrong on the server. Please try again — if it keeps happening, tell your admin."}).encode()
-            await send({"type": "http.response.start", "status": 500,
+            status_code = 500
+            if isinstance(exc, IntegrityError):
+                # A duplicate, or a row other data still points at.
+                status_code = 409
+                detail = ("That conflicts with something already saved — it may already exist, or other data "
+                          "still depends on it. Refresh the page and check, then try again.")
+            else:
+                detail = (f"Something went wrong on the server (ref {ref}). Please try again — if it keeps "
+                          f"happening, tell your admin and quote ref {ref}.")
+            body = json.dumps({"detail": detail}).encode()
+            await send({"type": "http.response.start", "status": status_code,
                         "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
             await send({"type": "http.response.body", "body": body})
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import api from '../api/client';
+import api, { errorText } from '../api/client';
 import { toast } from 'sonner';
 import {
   Sparkles, Loader2, Info, Pencil, Check, ArrowLeft, ArrowRight,
@@ -11,6 +11,7 @@ import PageHeader from '../components/ui/PageHeader';
 import PageSkeleton from '../components/ui/PageSkeleton';
 import PeriodPicker from '../components/PeriodPicker';
 import ReportShots from '../components/report/ReportShots';
+import { usePasteTarget } from '../lib/usePasteImage';
 import ListEditor, { type ListSpec } from '../components/report/ListEditor';
 import '../builder.css';
 import { confirmDialog } from '../components/ui/ConfirmDialog';
@@ -174,6 +175,25 @@ const fmtCell = (v: any, f: Format): string => {
 };
 
 /** "September 2026" → "Sep'26", the month header the upload sheets use. */
+/** "2026-09-01" (a sheet month) → "Sep'26". */
+const sheetCol = (iso: string): string => {
+  const d = new Date(`${iso.slice(0, 7)}-01T00:00:00`);
+  return `${d.toLocaleString('en', { month: 'short' })}'${String(d.getFullYear()).slice(2)}`;
+};
+/** The sheet month before `iso` ("2026-09-01" → "2026-08-01"). */
+const monthBefore = (iso: string): string => {
+  const d = new Date(`${iso.slice(0, 7)}-01T00:00:00`);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+};
+
+/** The AI-results screenshot box: Upload, or paste (⌘V / Ctrl+V) while the
+ *  pointer is over it or after clicking it. */
+const AiShotDrop: React.FC<{ busy: boolean; enabled: boolean; onFile: (f: File) => void; children: React.ReactNode }> = ({ busy, enabled, onFile, children }) => {
+  const ref = usePasteTarget<HTMLDivElement>(f => { if (!busy) onFile(f); }, enabled);
+  return <div ref={ref} className="rb-upload rb-paste-zone" style={{ marginBottom: 10 }} tabIndex={-1}>{children}</div>;
+};
+
 const monthCol = (label: string): string | null => {
   const d = new Date(`1 ${label}`);
   if (Number.isNaN(d.getTime())) return null;
@@ -314,6 +334,11 @@ const ReportBuilder: React.FC = () => {
   // The months this report covers
   const [period, setPeriod] = useState<Period | null>(null);
   const [periods, setPeriods] = useState<PeriodRow[]>([]);
+  // The sheet month of each period, oldest first ("2026-09-01"): the month
+  // columns the upload sheets use, whatever day this client's periods start on.
+  const [sheetMonths, setSheetMonths] = useState<string[]>([]);
+  // Why the builder could not open this report, said on the page.
+  const [openError, setOpenError] = useState<string | null>(null);
   const [showPeriod, setShowPeriod] = useState(false);
   const [periodBusy, setPeriodBusy] = useState(false);
 
@@ -394,6 +419,7 @@ const ReportBuilder: React.FC = () => {
     setHealth(d.dataHealth || {});
     setPeriod(d.period || null);
     setPeriods(d.periods || []);
+    if (Array.isArray(d.sheetMonths)) setSheetMonths(d.sheetMonths);
   };
 
 
@@ -411,8 +437,8 @@ const ReportBuilder: React.FC = () => {
       setReport(r.data);
       setConnections(conn.data || []);
       applyComposer(comp.data || {});
-    }).catch(() => {
-      // Handled by global interceptor
+    }).catch((e) => {
+      if (!cancelled) setOpenError(errorText(e, 'this report'));
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [clientId, snapshotId]);
@@ -784,6 +810,7 @@ const ReportBuilder: React.FC = () => {
       <div className="page-card" style={{ margin: '40px auto', maxWidth: 560 }}>
         <div className="empty-state">
           <h3>This report could not be opened</h3>
+          <p>{openError || 'This report has no sections to build — it may have been made before the builder existed.'}</p>
           <Link to={`/admin/clients/${clientId}`} className="btn btn-secondary" style={{ marginTop: 12 }}>Back to client</Link>
         </div>
       </div>
@@ -793,8 +820,11 @@ const ReportBuilder: React.FC = () => {
   const periodLabel = period?.label || (report?.end_date
     ? new Date(report.end_date).toLocaleDateString('default', { month: 'long', year: 'numeric' })
     : '');
-  const monthCols = (period?.labels || []).map(monthCol).filter(Boolean) as string[];
-  const lastCol = monthCols[monthCols.length - 1] || "Sep'26";
+  const monthCols = sheetMonths.length
+    ? sheetMonths.map(sheetCol)
+    : (period?.labels || []).map(monthCol).filter(Boolean) as string[];
+  const lastCol = monthCols[monthCols.length - 1]
+    || sheetCol(period?.end || new Date().toISOString().slice(0, 10));
   const sampleDay = period?.end || new Date().toISOString().slice(0, 10);
   const cur = steps[step];
 
@@ -1184,12 +1214,14 @@ const ReportBuilder: React.FC = () => {
       <div className="rb-group">
         <div className="rb-group-label">AI results slide — read the figures from a screenshot, or type them</div>
         {editable && (
-          <div className="rb-upload" style={{ marginBottom: 10 }}>
+          <AiShotDrop busy={aiReading} enabled={editable} onFile={readShot}>
             <div className="rb-upload-text">
               <ImagePlus size={16} />
               <span>
                 <strong>Fill from a screenshot</strong>
-                Upload a screenshot of your AI visibility tool (score, mentions, cited pages, each assistant). The figures are read and filled in below — every one stays editable.
+                Upload a screenshot of your AI visibility tool (score, mentions, cited pages, each assistant) —
+                or copy it and <strong>paste with ⌘V / Ctrl+V</strong> while the pointer is over this box (or after clicking it).
+                The figures are read and filled in below — every one stays editable.
               </span>
             </div>
             <div className="rb-upload-actions">
@@ -1200,7 +1232,7 @@ const ReportBuilder: React.FC = () => {
                   onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) readShot(f); }} />
               </label>
             </div>
-          </div>
+          </AiShotDrop>
         )}
         <div className="rb-ai-sum">
           <label className="rb-add-field"><span>AI Visibility (0–100)</span>{box('score', 100)}</label>
@@ -1311,10 +1343,11 @@ const ReportBuilder: React.FC = () => {
           sample: `${m},100,50,300,150,5,2,10,1`,
         };
       case 'rankings': {
-        // Last month's column too: it fills "Previous" when that month isn't published yet.
-        const first = new Date(`1 ${(period?.labels || [])[0] || ''}`);
-        const prevCol = Number.isNaN(first.getTime()) ? null
-          : monthCol(new Date(first.getFullYear(), first.getMonth() - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' }));
+        // Last month's column too: it fills "Previous" when that month isn't
+        // published yet. Always there — a sheet without it means typing every
+        // previous position by hand.
+        const firstMonth = sheetMonths[0] || (period?.start ? period.start : null);
+        const prevCol = firstMonth ? sheetCol(monthBefore(firstMonth)) : null;
         const cols = [...(prevCol ? [prevCol] : []), ...(monthCols.length ? monthCols : [m])];
         return {
           title: 'Upload keyword rankings', hint: 'One row per keyword, one column per month.',
@@ -2130,7 +2163,11 @@ const ReportBuilder: React.FC = () => {
     try {
       const res = await api.post(`${base}/ai-text/refresh`);
       applyComposer(res.data || {});
-      toast.success('Written with AI — edit anything you like.');
+      const w = res.data?.written || {};
+      const parts = [w.summaries && `${w.summaries} summar${w.summaries === 1 ? 'y' : 'ies'}`,
+                     w.subtitles && `${w.subtitles} subtitle${w.subtitles === 1 ? '' : 's'}`, w.plan && 'the plan'].filter(Boolean);
+      toast.success(`Written with AI: ${parts.join(', ') || 'done'} — edit anything you like.`);
+      if (res.data?.warning) toast.warning('Some text could not be written', { description: res.data.warning, duration: 8000 });
     } catch {
       // Handled by global interceptor
     }

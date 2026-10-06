@@ -80,7 +80,7 @@ def generate_report(
     """
     client = db.get(Client, client_id)
     if not client:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This client no longer exists — it may have been deleted. Go back to All Clients.")
 
     anchor = periods_svc.anchor_for(db, client_id)
     if anchor["mode"] == "locked":
@@ -119,6 +119,8 @@ def generate_report(
     task_id = str(uuid.uuid4())
     # The month the checks above were made for — never "yesterday", which
     # mid-month would start a report for the month still under way.
+    from app.tasks.reports import _mark
+    _mark(client_id, "running")
     background_tasks.add_task(generate_snapshot_report, str(client_id), months, anchor["anchor_end"], first_start)
 
     return {
@@ -129,6 +131,14 @@ def generate_report(
     }
 
 
+@router.get("/generate/status")
+def generation_status(client_id: uuid.UUID):
+    """How the latest generation for this client is going — so the waiting page
+    can show a failure and its reason at once instead of timing out."""
+    from app.tasks.reports import GENERATION
+    return GENERATION.get(str(client_id)) or {"state": "unknown", "error": None, "report_id": None}
+
+
 @router.put("/{snapshot_id}")
 def update_report_narrative(client_id: uuid.UUID, snapshot_id: uuid.UUID, payload: ReportUpdateNarrativeRequest, db: Session = Depends(get_db)):
     """Edit the narrative of a draft/review report."""
@@ -137,7 +147,7 @@ def update_report_narrative(client_id: uuid.UUID, snapshot_id: uuid.UUID, payloa
     ).scalar_one_or_none()
     
     if not report:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This report no longer exists — it may have been deleted, or the link is out of date. Open it again from the Reports page.")
         
     if report.status == ReportStatus.published:
         raise HTTPException(status.HTTP_409_CONFLICT, "Cannot edit a published report.")
@@ -161,6 +171,12 @@ def publish_report(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = D
     if report.status == ReportStatus.published:
         raise HTTPException(status.HTTP_409_CONFLICT, "Report is already published.")
     months = ((report.snapshot or {}).get("period") or {}).get("months") or 1
+    # Publishing writes this period into every sheet: an empty report would
+    # file an empty month there. Say what to add instead.
+    if not any(composer.section_availability(report.snapshot or {}).values()):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "This report has no figures yet, so there is nothing to publish. Fetch Search Console or "
+                            "Analytics, or add data in the steps (keywords, Business Profile, AI checks, links, work) first.")
     from app.services import sheets
     month = sheets.report_month(report)
     # A month belongs to one report. Republishing the same report (after it
@@ -232,6 +248,20 @@ class GenerateRequest(BaseModel):
     end: Optional[datetime.date] = None
 
 
+def _sheet_months(report: ReportSnapshot, snapshot: dict) -> list[str]:
+    """The sheet month of every period a report covers, oldest first."""
+    from app.services import sheets
+    ends = []
+    for p in snapshot.get("periods") or []:
+        try:
+            ends.append(datetime.date.fromisoformat(str((p or {}).get("end"))))
+        except ValueError:
+            continue
+    if not ends:
+        ends = [report.end_date]
+    return [sheets.cycle_month(e).isoformat() for e in ends]
+
+
 def _own_start(report: ReportSnapshot) -> Optional[datetime.date]:
     """A first report's own start, when the person picked a period that is
     not one whole cycle; None for every other report."""
@@ -297,7 +327,7 @@ def _load_draft(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session, lock:
         stmt = stmt.with_for_update()
     report = db.execute(stmt).scalar_one_or_none()
     if not report:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This report no longer exists — it may have been deleted, or the link is out of date. Open it again from the Reports page.")
     return report
 
 
@@ -395,6 +425,10 @@ def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Dep
         "aiSummaryAuto": __import__("app.services.slide_deck", fromlist=["ai_summary"]).ai_summary(
             {**snapshot, "ai_summary": {"engines": {k: {} for k in ((snapshot.get("ai_summary") or {}).get("engines") or {})}}}),
         "period": snapshot.get("period") or _legacy_period(report),
+        # The sheet month each period is filed under ("2026-09-01"), oldest
+        # first — what the upload sheets name their month columns by. Worked out
+        # here, not stored, so older reports get it too.
+        "sheetMonths": _sheet_months(report, snapshot),
         # The breakdown tables, editable row by row.
         "listSpecs": [
             {**spec, "columns": [{"key": k, "label": l, "type": t} for k, l, t in spec["columns"]]}
@@ -882,9 +916,12 @@ async def read_ai_summary(client_id: uuid.UUID, snapshot_id: uuid.UUID, file: Up
         read = read_ai_summary_screenshot(data, mime)
     except Exception as e:
         logger.warning("AI summary screenshot could not be read: %s", e)
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "The screenshot could not be read right now — try again, or type the figures.")
+        from app.services.openai_service import explain_ai_error
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"{explain_ai_error(e)} (Or type the figures below.)")
     if not read:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No AI visibility figures were found in that screenshot.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "No AI visibility figures were found in that screenshot — use one that shows the score, "
+                            "mentions or cited pages (the overview of your AI visibility tool), or type them below.")
 
     img = _find_image(db, report.id, "ai_summary", 0)
     if img is None:
@@ -989,8 +1026,9 @@ def draft_plan(client_name: str, snapshot: dict, force: bool = False) -> bool:
     try:
         plan = generate_next_plan(client_name, (snapshot.get("period") or {}).get("label", ""),
                                   composer.apply_selection(snapshot))
-    except Exception:
+    except Exception as e:
         logger.exception("Next plan of action could not be written.")
+        _note_ai_error(e)
         return False
     if not plan:
         return False
@@ -1029,8 +1067,9 @@ def autofill_text(client_name: str, snapshot: dict) -> dict[str, int]:
         try:
             lines = generate_slide_subtitles(client_name, (snapshot.get("period") or {}).get("label", ""),
                                              composer.apply_selection(snapshot), todo)
-        except Exception:
+        except Exception as e:
             logger.exception("Slide subtitles could not be written.")
+            _note_ai_error(e)
             lines = {}
         if lines:
             subtitles.update(lines)
@@ -1049,26 +1088,54 @@ def autofill_text(client_name: str, snapshot: dict) -> dict[str, int]:
 @router.post("/{snapshot_id}/ai-text/refresh")
 def refresh_ai_text(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depends(get_db)):
     """Rewrite everything the AI wrote — summaries, subtitles, the plan — from
-    the figures as they are now. Text a person typed or edited is left alone."""
+    the figures as they are now. Text a person typed or edited is left alone.
+    Answers with what was written, or why nothing could be."""
     report = _load_editable(client_id, snapshot_id, db)
     client = db.get(Client, client_id)
     name = client.name if client else ""
     snapshot = dict(report.snapshot or {})
-    draft_narration(name, snapshot)
-    ai_subs = set(snapshot.get("subtitle_ai") or [])
-    if ai_subs:
-        copy_ = dict(snapshot.get("copy") or {})
-        copy_["subtitles"] = {k: v for k, v in (copy_.get("subtitles") or {}).items() if k not in ai_subs}
-        snapshot["copy"] = copy_
-        snapshot["subtitles_drafted"] = [k for k in (snapshot.get("subtitles_drafted") or []) if k not in ai_subs]
-        snapshot["subtitle_ai"] = []
-    autofill_text(name, snapshot)
-    if snapshot.get("plan_source") == "ai" or not (snapshot.get("next_month_plan") or {}).get("now"):
-        draft_plan(name, snapshot, force=True)
+    available = [k for k, v in composer.narration_availability(snapshot).items() if v]
+    if not available:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Nothing to write about yet — this report has no figures. Fetch Search Console or Analytics, "
+            "or add data in the steps (keywords, Business Profile, AI checks, links, work), then try again.")
+    token = _AI_ERRORS.set([])
+    try:
+        before_text = dict(snapshot.get("narration") or {})
+        before_subs = dict(((snapshot.get("copy") or {}).get("subtitles")) or {})
+        before_plan = snapshot.get("next_month_plan")
+        draft_narration(name, snapshot)
+        ai_subs = set(snapshot.get("subtitle_ai") or [])
+        if ai_subs:
+            copy_ = dict(snapshot.get("copy") or {})
+            copy_["subtitles"] = {k: v for k, v in (copy_.get("subtitles") or {}).items() if k not in ai_subs}
+            snapshot["copy"] = copy_
+            snapshot["subtitles_drafted"] = [k for k in (snapshot.get("subtitles_drafted") or []) if k not in ai_subs]
+            snapshot["subtitle_ai"] = []
+        autofill_text(name, snapshot)
+        if snapshot.get("plan_source") == "ai" or not (snapshot.get("next_month_plan") or {}).get("now"):
+            draft_plan(name, snapshot, force=True)
+        errors = list(_AI_ERRORS.get() or [])
+    finally:
+        _AI_ERRORS.reset(token)
+    after_text = snapshot.get("narration") or {}
+    summaries = sum(1 for k, v in after_text.items() if v and v != before_text.get(k))
+    subtitles = sum(1 for k, v in (((snapshot.get("copy") or {}).get("subtitles")) or {}).items() if v and v != before_subs.get(k))
+    plan = 1 if snapshot.get("next_month_plan") != before_plan and (snapshot.get("next_month_plan") or {}).get("now") else 0
+    if not (summaries or subtitles or plan):
+        if errors:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, errors[0])
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Nothing was rewritten — every block with figures already has text you typed yourself "
+            "(that is never replaced). Clear a summary to have the AI write it.")
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
     db.commit()
-    return get_composer(client_id, snapshot_id, db)
+    return {**get_composer(client_id, snapshot_id, db),
+            "written": {"summaries": summaries, "subtitles": subtitles, "plan": plan},
+            "warning": errors[0] if errors else None}
 
 
 @router.post("/{snapshot_id}/plan/draft")
@@ -1078,10 +1145,21 @@ def draft_report_plan(client_id: uuid.UUID, snapshot_id: uuid.UUID, force: bool 
     report = _load_editable(client_id, snapshot_id, db)
     snapshot = dict(report.snapshot or {})
     client = db.get(Client, client_id)
-    if not draft_plan(client.name if client else "", snapshot, force=force):
+    if force and not any(composer.narration_availability(snapshot).values()):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "There are no figures in this report yet, so there is nothing to plan from. "
+                            "Fetch Google data or add figures in the steps first.")
+    token = _AI_ERRORS.set([])
+    try:
+        ok = draft_plan(client.name if client else "", snapshot, force=force)
+        errors = list(_AI_ERRORS.get() or [])
+    finally:
+        _AI_ERRORS.reset(token)
+    if not ok:
         stored = snapshot.get("next_month_plan")
-        if force and not (isinstance(stored, dict) and (stored.get("now") or stored.get("next"))):
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "The plan could not be written right now — try again.")
+        if force:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY,
+                                errors[0] if errors else "The AI did not return a usable plan — try again.")
         return {"plan": stored or {"now": [], "next": [], "lede": ""}, "source": snapshot.get("plan_source"), "written": False}
     report.snapshot = snapshot
     flag_modified(report, "snapshot")
@@ -1281,15 +1359,25 @@ def refetch_provider(client_id: uuid.UUID, snapshot_id: uuid.UUID, provider: str
     conn = db.execute(
         select(Connection).where(Connection.client_id == client_id, Connection.provider == ProviderType(provider))
     ).scalars().first()
-    if not conn or conn.status != ConnectionStatus.connected:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{name} is not connected for this client.")
+    if not conn:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"{name} is not connected for this client — map it on the Connections page, or add this period's figures with a sheet.")
+    if conn.status != ConnectionStatus.connected:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"{name} needs attention before it can be fetched: "
+                            f"{conn.last_error or 'press Verify on the Connections page.'}")
 
     months = ((report.snapshot or {}).get("period") or {}).get("months") or 1
     own = _own_start(report) if months == 1 else None
     rows, live = pull_for_report(db, client_id, report.end_date, months, providers=(provider,), start=own)
     if not rows:
         db.refresh(conn)
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not fetch from {name}: {conn.last_error or 'no data returned'}")
+        if conn.status == ConnectionStatus.error and conn.last_error:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not fetch from {name}: {conn.last_error}")
+        period = (report.snapshot or {}).get("period") or {}
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            f"{name} has no data for {period.get('label') or 'this period'} yet — a new property, or one "
+                            f"added to {name} only recently, has nothing to report. Add this period's figures with a sheet instead.")
 
     # The pull committed (the connection's health), which released the row;
     # take it again so an edit made meanwhile is built on, not overwritten.
@@ -1337,6 +1425,19 @@ def _live_of(snapshot: dict) -> dict:
     return dict(live) if isinstance(live, dict) else {}
 
 
+# AI failures during one request: the helpers below never block a report, so
+# they note why they wrote nothing here and the endpoint can say so.
+import contextvars as _cv
+_AI_ERRORS: _cv.ContextVar[list] = _cv.ContextVar("ai_errors", default=None)
+
+
+def _note_ai_error(e: BaseException) -> None:
+    from app.services.openai_service import explain_ai_error
+    errs = _AI_ERRORS.get()
+    if errs is not None:
+        errs.append(explain_ai_error(e))
+
+
 def _write_narration(client_name: str, snapshot: dict, sections: Optional[list[str]] = None) -> dict:
     """Section commentary for every section that has something to say.
     Never blocks a report: if the AI is unavailable the sections stay empty."""
@@ -1349,8 +1450,9 @@ def _write_narration(client_name: str, snapshot: dict, sections: Optional[list[s
             client_name, (snapshot.get("period") or {}).get("label", ""),
             composer.apply_selection(snapshot), wanted, composer.current_items(snapshot),
         )
-    except Exception:
+    except Exception as e:
         logger.exception("Section commentary could not be written.")
+        _note_ai_error(e)
         return {}
 
 
@@ -1595,16 +1697,19 @@ def regenerate_report_narration(client_id: uuid.UUID, snapshot_id: uuid.UUID, se
     report = _load_editable(client_id, snapshot_id, db)
     snapshot = dict(report.snapshot or {})
     client = db.get(Client, client_id)
+    if not composer.narration_availability(snapshot).get(section):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "There are no figures in this block yet, so there is nothing to write about. "
+                            "Add or fetch its data first.")
     try:
         written = generate_section_summaries(
             client.name if client else "", (snapshot.get("period") or _legacy_period(report)).get("label", ""),
             composer.apply_selection(snapshot), [section], composer.current_items(snapshot),
         )
-    except ValueError as e:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e))
-    except Exception:
+    except Exception as e:
         logger.exception("Section commentary could not be rewritten.")
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The AI could not write this section just now. Try again.")
+        from app.services.openai_service import explain_ai_error
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, explain_ai_error(e))
     text_ = written.get(section)
     if not text_:
         # Two different failures, and telling them apart is the difference
@@ -1708,7 +1813,7 @@ def _report_inputs(request: Request, db: Session, client_id: uuid.UUID, snapshot
 
     client = db.get(Client, client_id)
     if not client:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This client no longer exists — it may have been deleted. Go back to All Clients.")
 
     # Must be set before the logo fetch below — it used to be assigned after,
     # so any client with a relative logo_url failed with UnboundLocalError.
@@ -1821,7 +1926,7 @@ def get_latest_report(client_id: uuid.UUID, db: Session = Depends(get_db)):
     ).scalars().first()
     
     if not report:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This report no longer exists — it may have been deleted, or the link is out of date. Open it again from the Reports page.")
         
     return {
         "id": report.id,
@@ -1868,7 +1973,7 @@ def get_report(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Depen
     ).scalar_one_or_none()
     
     if not report:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This report no longer exists — it may have been deleted, or the link is out of date. Open it again from the Reports page.")
         
     return {
         "id": report.id,
@@ -2026,6 +2131,64 @@ def _aggregate_metrics(snapshots, section):
                 result[typed] = latest[typed]
 
     return result
+
+def _report_month_names(data: dict) -> None:
+    """The report names every period by its month, in place.
+
+    The builder and dashboard show a period's dates ("6 Sep – 5 Oct 2026");
+    the report a client reads says "September 2026" — the month the period is
+    filed under on the sheets. Keyword columns, the comparison, the footer and
+    the cover all follow."""
+    from app.services import sheets as sheets_svc
+    period = dict(data.get("period") or {})
+    periods = [dict(p) for p in (data.get("periods") or [])]
+
+    def month_of_end(end) -> str | None:
+        try:
+            return sheets_svc.cycle_month(datetime.date.fromisoformat(str(end))).strftime("%B %Y")
+        except (TypeError, ValueError):
+            return None
+
+    rename: dict[str, str] = {}
+    for p in periods:
+        name = month_of_end(p.get("end"))
+        if name and p.get("label"):
+            rename[p["label"]] = name
+            p["label"] = name
+    if not periods and period.get("end") and period.get("label"):
+        name = month_of_end(period["end"])
+        if name:
+            rename[period["label"]] = name
+    if not rename:
+        return
+    compare = dict(period.get("compare") or {})
+    labels = [rename.get(l, l) for l in (period.get("labels") or [])]
+    months_n = period.get("months") or 1
+    if compare.get("end") and months_n == 1:
+        prev = month_of_end(compare["end"])
+        if prev:
+            for old in (compare.get("range"), periods_svc.period_name(*(datetime.date.fromisoformat(compare[k]) for k in ("start", "end")))
+                        if compare.get("start") else None):
+                if old:
+                    rename[old] = prev
+            compare["range"] = prev
+    elif months_n > 1 and labels:
+        compare["range"] = periods_svc.span_compare_label([(None, None)] * len(labels), labels)
+    period["compare"] = compare
+    period["labels"] = labels
+    if labels:
+        period["label"] = labels[0] if months_n == 1 else f"{labels[0]} – {labels[-1]}"
+    data["period"], data["periods"] = period, periods
+    data["months"] = [rename.get(m, m) for m in (data.get("months") or [])]
+    if data.get("rank_months"):
+        data["rank_months"] = [rename.get(m, m) for m in data["rank_months"]]
+    rankings = data.get("rankings") or {}
+    for kw in rankings.get("keywords") or []:
+        if isinstance(kw.get("positions"), dict):
+            kw["positions"] = {rename.get(k, k): v for k, v in kw["positions"].items()}
+    if isinstance(rankings.get("months"), list):
+        rankings["months"] = [rename.get(m, m) for m in rankings["months"]]
+
 
 def _build_comparative_report(snapshots):
     if not snapshots:
@@ -2236,4 +2399,5 @@ def _build_comparative_report(snapshots):
         link_types[t] = link_types.get(t, 0) + int(l.get("count") or 1)
     comparative_data["link_types"] = link_types
     
+    _report_month_names(comparative_data)
     return comparative_data

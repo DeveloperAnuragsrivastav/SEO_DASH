@@ -305,12 +305,17 @@ def _previous_leads_of(data: dict) -> dict:
     return previous_leads(data)
 
 
-def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = None) -> dict:
+def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = None, shown=None) -> dict:
     """The individual lead actions, plus whatever the property calls its own.
 
     Revenue sits beside them because a transaction without its value answers
     only half the question.
+
+    `shown(item_id)` is the builder's ticks: an unticked figure is left out of
+    the slide and out of the total it is summed into (its events still count as
+    recognised, so they do not reappear under "other events").
     """
+    on = shown or (lambda _id: True)
     from app.services.report_text import resolver
     t = t or resolver(None)
 
@@ -330,16 +335,20 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
         key = text_key.split(".", 1)[1]
         if key in overrides:
             total = _n(overrides[key])
-        # Every figure prints, 0 included — only the builder's Show switch hides one.
-        figure = {"name": t(text_key), "value": _fmt(total), "raw": total}
+        # Every ticked figure prints, 0 included; unticking it in the builder
+        # is what leaves it out.
+        if not on(f"ga4.lead.{key}"):
+            continue
+        figure = {"name": t(text_key), "value": _fmt(total), "raw": total, "key": key}
         # Beside last period's figure when it is known.
         if (previous or {}).get(key) is not None:
             figure["change"] = total - _n(previous[key])
         figures.append(figure)
 
     revenue = _n(ga4.get("revenue"))
-    figures.append({"name": t("lead.revenue"), "value": _fmt(revenue), "raw": revenue,
-                    "change": _n(deltas.get("revenue"))})
+    if on("ga4.revenue"):
+        figures.append({"name": t("lead.revenue"), "value": _fmt(revenue), "raw": revenue,
+                        "change": _n(deltas.get("revenue")), "key": "revenue"})
 
     # Events the patterns above did not recognise. Shown under their own names
     # rather than dropped, so a property with house naming is not silently
@@ -350,11 +359,18 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
         key=lambda ec: -ec[1],
     )
 
-    from_events = sum(f["raw"] for f in figures if f["name"] != t("lead.revenue"))
+    from_events = sum(f["raw"] for f in figures if f.get("key") != "revenue")
     total_leads = from_events or _n(ga4.get("conversions"))
     # A total typed in the builder wins over the sum of the figures.
     if _n(overrides.get("total")):
         total_leads = _n(overrides.get("total"))
+    # Last period's total on the same terms: typed, or the same ticked figures.
+    prev = previous or {}
+    prev_total = prev.get("total")
+    typed_prev_total = _n((ga4.get("lead_overrides_previous") or {}).get("total"))
+    if prev_total is not None and not typed_prev_total:
+        parts = [_n(prev.get(f["key"])) for f in figures if f.get("key") not in (None, "revenue") and prev.get(f["key"]) is not None]
+        prev_total = sum(parts) if parts else prev_total
 
     return {
         "lead_figures": figures,
@@ -364,10 +380,10 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
         # The delta is recorded against GA4's single `conversions` figure, so
         # against a total summed from named events it is arithmetic between two
         # different things.
-        "leads_change": (total_leads - _n((previous or {}).get("total")))
-        if (previous or {}).get("total") is not None
+        "leads_change": (total_leads - prev_total) if prev_total is not None
         else (0.0 if from_events else _n(deltas.get("conversions"))),
         "leads_from_events": bool(from_events),
+        "leads_total_shown": on("ga4.lead.total"),
     }
 
 
@@ -730,7 +746,7 @@ def scorecard(data: dict, sections: dict, metric_on, baseline: bool = False, t=N
 
     # 5–6 · Leads and revenue
     from app.services.report_composer import previous_leads
-    leads = lead_figures(ga4, (deltas.get("ga4") or {}), t, previous_leads(data))
+    leads = lead_figures(ga4, (deltas.get("ga4") or {}), t, previous_leads(data), metric_on)
     if sections.get("ga4") and metric_on("ga4.conversions"):
         add("leads", t("kpi.leads.name"), _fmt(leads["leads_total"]), leads["leads_total"], leads["leads_change"],
             note=t("kpi.leads.note") if leads["leads_from_events"] else "",
@@ -1098,7 +1114,7 @@ def build(data: dict, client: dict, sections: dict, metric_on,
         "rank_highlights": ranking_highlights(keywords, journey, bands),
 
         **gbp_figures(data.get("gbp") or {}, (data.get("kpi_deltas") or {}).get("gbp") or {}, t),
-        **lead_figures(ga4, (data.get("kpi_deltas") or {}).get("ga4") or {}, t, _previous_leads_of(data)),
+        **lead_figures(ga4, (data.get("kpi_deltas") or {}).get("ga4") or {}, t, _previous_leads_of(data), metric_on),
 
         "plan_now": now_items,
         "plan_next": next_items,

@@ -61,8 +61,23 @@ const ReportPreparing: React.FC = () => {
       }
 
       for (let i = 0; i < 60; i++) {
-        await sleep(3000);
+        await sleep(i === 0 ? 1500 : 3000);
         if (!alive.current) return;
+        // The server says how the build is going: a failure shows at once,
+        // with its reason, instead of after a three-minute wait.
+        try {
+          const st = await api.get(`/clients/${clientId}/reports/generate/status`, { skipErrorToast: true } as any);
+          if (st.data?.state === 'failed') {
+            setError({ text: st.data.error || 'The report could not be built.' });
+            return;
+          }
+          if (st.data?.state === 'done' && st.data.report_id) {
+            navigate(`/admin/clients/${clientId}/reports/${st.data.report_id}/build`, { replace: true });
+            return;
+          }
+        } catch (e) {
+          // The status is a shortcut; the report itself is checked below.
+        }
         try {
           const r = await api.get(`/clients/${clientId}/reports/latest`, { skipErrorToast: true } as any);
           if (r.data?.id && r.data.id !== before) {
@@ -73,7 +88,7 @@ const ReportPreparing: React.FC = () => {
           // Not there yet
         }
       }
-      if (alive.current) setError({ text: 'This is taking longer than usual. The report will appear under All reports when it is ready.' });
+      if (alive.current) setError({ text: 'This is taking longer than usual (over 3 minutes) — Google may be slow to answer. The report will appear under All reports when it is ready; come back in a few minutes.' });
     })();
   }, [clientId]);
 

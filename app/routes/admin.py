@@ -76,7 +76,7 @@ def reassign_client(client_id: uuid.UUID, data: ReassignClient, db: Session = De
     """Super admin reassigns a client to a different manager."""
     client = db.get(Client, client_id)
     if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+        raise HTTPException(status_code=404, detail="This client no longer exists — it may have been deleted. Go back to All Clients.")
         
     manager = db.get(User, data.manager_id)
     if not manager or manager.role != UserRole.manager:
