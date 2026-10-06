@@ -754,6 +754,34 @@ def _span_table_baseline(key: str, combined: list, per_month: list[list]) -> lis
     return out
 
 
+def _is_month_label(label: str) -> bool:
+    """"September 2026" — a whole calendar month named as such."""
+    try:
+        datetime.datetime.strptime(label, "%B %Y")
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def span_compare_label(cycles: list[tuple[datetime.date, datetime.date]], labels: list[str]) -> str:
+    """What a several-period report's changes compare: calendar months by
+    name ("September vs Jun–Aug average"), other periods by their dates
+    ("5 Sep – 4 Oct vs the average of the 2 periods before")."""
+    if all(_is_month_label(l) for l in labels):
+        return f"{labels[-1].split(' ')[0]} vs {_short_months(labels[:-1])} average"
+    s, e = cycles[-1]
+    n = len(cycles) - 1
+    return f"{s.day} {s:%b} – {e.day} {e:%b} vs the average of the {n} period{'s' if n != 1 else ''} before"
+
+
+def span_name(cycles: list[tuple[datetime.date, datetime.date]], labels: list[str]) -> str:
+    """A several-period report's own name: "July 2026 – September 2026", or
+    its whole date range ("5 Jul – 4 Oct 2026") for other periods."""
+    if all(_is_month_label(l) for l in labels):
+        return f"{labels[0]} – {labels[-1]}"
+    return short_range(cycles[0][0], cycles[-1][1])
+
+
 def _short_months(labels: list[str]) -> str:
     """"June 2026", "July 2026", "August 2026" → "Jun–Aug"."""
     names = [l.split(" ")[0][:3] for l in labels]
@@ -893,7 +921,7 @@ def build_report_data(db: Session, client_id: uuid.UUID, anchor_end: datetime.da
     if months > 1:
         # Every figure prints the span's total; its change is the current
         # month against the average of the earlier months in the span.
-        span_label = f"{labels[-1].split(' ')[0]} vs {_short_months(labels[:-1])} average"
+        span_label = span_compare_label(cycles, labels)
         for p_, total in (("gsc", gsc), ("ga4", ga4), ("gbp", gbp)):
             kpi_deltas[p_], prev_ = _span_changes(total, per_cycle[p_])
             previous_values[p_] = prev_
@@ -921,7 +949,7 @@ def build_report_data(db: Session, client_id: uuid.UUID, anchor_end: datetime.da
             "start": start.isoformat(),
             "end": end.isoformat(),
             "labels": labels,
-            "label": labels[0] if months == 1 else f"{labels[0]} – {labels[-1]}",
+            "label": labels[0] if months == 1 else span_name(cycles, labels),
             "range": short_range(start, end),
             "compare": {
                 "start": prev_start.isoformat() if months == 1 else cycles[0][0].isoformat(),

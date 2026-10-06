@@ -361,7 +361,7 @@ def write_initial_position(snapshot: dict, ident: str, value: float) -> bool:
     for idx, kw in enumerate(kws):
         if str(kw.get("keyword_id") or f"i{idx}") == ident:
             kw = dict(kw)
-            kw["initial_rank"] = int(value) or None
+            kw["initial_rank"] = _rank(value)
             # "change" is measured from the start, so it follows the start.
             kw["change"] = (kw["initial_rank"] - int(kw.get("position") or 0)) \
                 if kw["initial_rank"] and kw.get("position") else None
@@ -398,12 +398,22 @@ def write_previous_position(snapshot: dict, ident: str, value: float) -> bool:
     for idx, kw in enumerate(kws):
         if str(kw.get("keyword_id") or f"i{idx}") == ident:
             kw = dict(kw)
-            kw["previous_position"] = int(value) or None
+            kw["previous_position"] = _rank(value)
             kws[idx] = kw
             rankings["keywords"] = kws
             snap["rankings"] = rankings
             return True
     return False
+
+
+def _rank(value) -> int | None:
+    """A typed position the way a rank tracker means it: 1–100, or None for
+    blank, 0, NR or anything past 100 (not in the top 100)."""
+    from app.services.draft_uploads import position
+    try:
+        return position(value)
+    except Exception:
+        return None
 
 
 def previous_leads(snapshot: dict) -> dict[str, float | None]:
@@ -873,7 +883,7 @@ def write_edit(snapshot: dict, item_id: str, value: Any) -> bool:
         for idx, kw in enumerate(kws):
             if str(kw.get("keyword_id") or f"i{idx}") == ident:
                 kw = dict(kw)
-                kw["position"] = int(float(value))
+                kw["position"] = _rank(value)
                 kws[idx] = kw
                 rankings["keywords"] = kws
                 snap["rankings"] = rankings

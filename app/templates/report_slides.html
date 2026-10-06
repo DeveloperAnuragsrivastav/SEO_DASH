@@ -624,7 +624,11 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
   font-size: 11.5px;
   color: var(--ink-3);
 }
-.foot .mark { width: 11px; height: 11px; border-radius: 2px; background: var(--gold); }
+.foot .mark { width: 11px; height: 11px; border-radius: 2px; background: var(--gold); flex-shrink: 0; }
+/* The footer is one line: a long brand line ends in "…" rather than wrapping
+   into the slide above it. */
+.foot > span:nth-child(2) { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.foot .pg, .foot .foot-source { flex-shrink: 0; }
 .foot .pg { margin-left: 20px; font-variant-numeric: tabular-nums; }
 .dark .foot { color: rgba(255, 255, 255, 0.5); }
 
@@ -909,8 +913,17 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
 
 @page { size: 1280px 720px; margin: 0; }
 
-/* Keyword tables: a narrow index column; side by side when there are many. */
+/* A word longer than its box (a pasted URL, a 200-character keyword, a
+   brand line with no spaces) wraps at the edge instead of running off it. */
+.slide { overflow-wrap: anywhere; }
+/* …but never inside a column heading, a figure or a number cell: those are
+   short, and splitting one ("INITIA / L") is worse than any overflow. */
+.slide th, .slide td.num, .slide .stat-figure, .slide .delta, .slide .rank-now { overflow-wrap: normal; }
+/* Keyword tables: a narrow index column; side by side when there are many.
+   A long keyword ends in "…" (its full text is the cell's tooltip) so the
+   position columns always keep their place. */
 table.data.kw th.kw-idx { width: 42px; }
+table.data.kw td.term { max-width: 0; width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kw-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; flex: none; }
 table.data.kw.half th.kw-idx { width: 30px; }
 table.data.kw.half td.term { max-width: 0; width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1742,7 +1755,10 @@ table.data.kw.half .rank-new { display: none; }
         <p class="card-name">{{ t('geo.name') }}</p>
         <p class="card-sub">{{ t('geo.sub') }}</p>
         <div style="margin-top:16px">
-          {% set top_c = ga4_countries[0].get('sessions', 1) or 1 %}
+          {#- No country rows (Analytics not connected or nothing recorded):
+              the slide still prints, and says so — never a crash. -#}
+          {% set top_c = (ga4_countries[0].get('sessions', 1) if ga4_countries else 1) or 1 %}
+          {% if not ga4_countries %}<p class="empty-card">No country data for this period yet.</p>{% endif %}
           {% for c in ga4_countries[:5] %}
           <div class="qbar">
             <div class="qbar-top">

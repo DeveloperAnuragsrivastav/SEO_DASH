@@ -775,6 +775,8 @@ def add_report_keyword(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: NewKe
     for n in (data.position, data.previous, data.initial, data.search_volume):
         if n is not None and n < 0:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Positions cannot be negative.")
+    # 1–100 is a ranking; 0 or anything past 100 means not in the top 100.
+    data.position, data.previous, data.initial = (composer._rank(v) for v in (data.position, data.previous, data.initial))
 
     snapshot = dict(report.snapshot or {})
     rankings = dict(snapshot.get("rankings") or {})
@@ -1945,7 +1947,7 @@ def _aggregate_metrics(snapshots, section):
         result[k] = 0
         
     for s in snapshots:
-        data = s.snapshot.get(section, {}) if s.snapshot else {}
+        data = (s.snapshot.get(section) or {}) if s.snapshot else {}
         for k in sum_keys:
             val = data.get(k)
             if val is not None:
@@ -1962,7 +1964,7 @@ def _aggregate_metrics(snapshots, section):
     for k in dict_keys:
         merged: dict[str, float] = {}
         for s_ in snapshots:
-            data = s_.snapshot.get(section, {}) if s_.snapshot else {}
+            data = (s_.snapshot.get(section) or {}) if s_.snapshot else {}
             for name, count_ in (data.get(k) or {}).items():
                 merged[name] = merged.get(name, 0) + (count_ or 0)
         if merged:
@@ -1971,7 +1973,7 @@ def _aggregate_metrics(snapshots, section):
     for k in list_keys:
         merged_list = {}
         for s in snapshots:
-            data = s.snapshot.get(section, {}) if s.snapshot else {}
+            data = (s.snapshot.get(section) or {}) if s.snapshot else {}
             items = data.get(k, [])
             for item in items:
                 m_key_name = list_merge_key.get(k)
@@ -1996,14 +1998,14 @@ def _aggregate_metrics(snapshots, section):
             result[k] = list(merged_list.values())
 
     if count == 1:
-        data = snapshots[0].snapshot.get(section, {}) if snapshots[0].snapshot else {}
+        data = (snapshots[0].snapshot.get(section) or {}) if snapshots[0].snapshot else {}
         for k, v in data.items():
             if k not in result and isinstance(v, (int, float)) and not isinstance(v, bool):
                 result[k] = v
 
     # Trending pages carry their own comparison too.
     if section == "gsc":
-        latest = snapshots[-1].snapshot.get(section, {}) if snapshots[-1].snapshot else {}
+        latest = (snapshots[-1].snapshot.get(section) or {}) if snapshots[-1].snapshot else {}
         for key in ("trending_pages", "daily", "top_queries"):
             if latest.get(key):
                 result[key] = latest[key]
@@ -2012,7 +2014,7 @@ def _aggregate_metrics(snapshots, section):
     # previous period, so they are taken from the latest report as it is.
     if section == "ga4":
         from app.services.ga4_service import BREAKDOWNS
-        latest = snapshots[-1].snapshot.get(section, {}) if snapshots[-1].snapshot else {}
+        latest = (snapshots[-1].snapshot.get(section) or {}) if snapshots[-1].snapshot else {}
         for k in BREAKDOWNS:
             for key in (k, f"{k}_previous"):
                 if latest.get(key):
@@ -2126,8 +2128,8 @@ def _build_comparative_report(snapshots):
         logger.exception("Daily clicks series unavailable for the trend chart.")
         comparative_data["gsc_daily"] = []
     comparative_data["narrative"] = snapshots[-1].narrative if getattr(snapshots[-1], 'narrative', None) else ""
-    if "rankings" in latest_snap:
-        comparative_data["rankings"]["summary"] = latest_snap["rankings"].get("summary", {})
+    if isinstance(latest_snap.get("rankings"), dict):
+        comparative_data["rankings"]["summary"] = latest_snap["rankings"].get("summary") or {}
         comparative_data["rankings"]["summary_overrides"] = latest_snap["rankings"].get("summary_overrides") or {}
         
     comparative_data["gsc"] = _aggregate_metrics(snapshots, "gsc")
@@ -2138,7 +2140,7 @@ def _build_comparative_report(snapshots):
     for idx, s in enumerate(snapshots):
         month = months[idx]
         snap_data = s.snapshot if s.snapshot else {}
-        rank_data = snap_data.get("rankings", {}).get("keywords", [])
+        rank_data = (snap_data.get("rankings") or {}).get("keywords") or []
         for kw in rank_data:
             kid = kw.get("keyword_id")
             if not kid: continue
@@ -2161,7 +2163,7 @@ def _build_comparative_report(snapshots):
             if kw_map[kid]["search_volume"] is None and kw.get("search_volume"):
                 kw_map[kid]["search_volume"] = kw.get("search_volume")
             
-    latest_rankings = latest_snap.get("rankings", {}).get("keywords", [])
+    latest_rankings = (latest_snap.get("rankings") or {}).get("keywords") or []
     for kw in latest_rankings:
         kid = kw.get("keyword_id")
         if kid in kw_map:

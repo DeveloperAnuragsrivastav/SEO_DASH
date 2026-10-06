@@ -161,7 +161,10 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     from datetime import datetime
     
     months = comparative_data.get("months", [])
-    display_label = months[0] if len(months) == 1 else f"{months[0]} \u2013 {months[-1]}" if months else "Unknown Range"
+    # The report's own name for its period when it has one (a several-period
+    # report of dated periods is "5 Jul – 4 Oct 2026", not two ranges joined).
+    own = ((comparative_data.get("period") or {}).get("label") or "").strip()
+    display_label = own or (months[0] if len(months) == 1 else f"{months[0]} \u2013 {months[-1]}" if months else "Unknown Range")
         
     import base64
     from pathlib import Path

@@ -358,10 +358,15 @@ def span_rule(snap: dict) -> str:
     if len(periods) < 2:
         return ""
     first, last = periods[0], periods[-1]
-    return (f"Every figure is the TOTAL for {first} to {last} combined ({len(periods)} months). Say "
-            f"\"across {first.split(' ')[0]}–{last}\" for totals, never \"in {last}\". Each change is "
-            f"{last.split(' ')[0]} alone against the average of the months before it — word it like "
-            f"\"{last.split(' ')[0]} was 15% above the monthly average\". Round averages to whole numbers.")
+    from app.services.report_period import _is_month_label
+    calendar_ = _is_month_label(first) and _is_month_label(last)
+    # Calendar months by their names; dated periods by their dates.
+    span = f"{first.split(' ')[0]}–{last}" if calendar_ else f"{first.split(' – ')[0]} – {last.split(' – ')[-1]}"
+    latest = last.split(' ')[0] if calendar_ else f"the latest period ({last})"
+    return (f"Every figure is the TOTAL for {first} to {last} combined ({len(periods)} periods). Say "
+            f"\"across {span}\" for totals, never \"in {last}\". Each change is "
+            f"{latest} alone against the average of the periods before it — word it like "
+            f"\"{latest} was 15% above the average\". Round averages to whole numbers.")
 
 
 def span_kpi_changes(snap: dict) -> dict:
