@@ -181,3 +181,51 @@ def test_unassign_requires_active_team_and_login(team, db_session):
     team['manager'].is_active = False
     db_session.commit()
     assert team['http'].delete(path, headers=headers(team['actor'])).status_code == 403
+
+
+def new_project_payload(**overrides):
+    return dict(name='New team project', domain='new.example.com', business_type='saas',
+                locale='en-US', package_keywords=10, **overrides)
+
+
+@pytest.mark.parametrize('target', ['actor', 'colleague'])
+def test_create_and_assign_team_project(team, db_session, target):
+    payload = new_project_payload()
+    if target != 'actor':
+        payload['user_id'] = str(team[target].id)
+    response = team['http'].post('/team/projects', headers=headers(team['actor']), json=payload)
+    assert response.status_code == 201, response.text
+    client_id = uuid.UUID(response.json()['id'])
+    project = db_session.get(Client, client_id)
+    assert project.manager_id == team['manager'].id
+    assert project.account_id == team['manager'].account_id
+    assignment = db_session.scalar(select(UserProjectAssignment).where(UserProjectAssignment.client_id == client_id))
+    assert assignment.user_id == team[target].id
+    assert team['http'].get(f'/clients/{client_id}', headers=headers(team[target])).status_code == 200
+    assert team['http'].get(f'/clients/{client_id}', headers=headers(team['outsider'])).status_code == 403
+
+
+@pytest.mark.parametrize('target', ['outsider', 'inactive', 'manager', 'orphan'])
+def test_create_rejects_invalid_assignee_without_creating_project(team, db_session, target):
+    before = db_session.query(Client).count()
+    response = team['http'].post('/team/projects', headers=headers(team['actor']),
+                                 json=new_project_payload(user_id=str(team[target].id)))
+    assert response.status_code == 403
+    assert db_session.query(Client).count() == before
+
+
+@pytest.mark.parametrize('extra', [{'manager_id': 'forged'}, {'account_id': 'forged'},
+                                   {'name': '   '}, {'package_keywords': -1}])
+def test_create_validates_fields_and_rejects_ownership_override(team, extra):
+    payload = new_project_payload()
+    payload.update(extra)
+    assert team['http'].post('/team/projects', headers=headers(team['actor']), json=payload).status_code == 422
+
+
+def test_create_requires_login_and_active_manager(team, db_session):
+    payload = new_project_payload()
+    assert team['http'].post('/team/projects', json=payload).status_code == 401
+    assert team['http'].post('/team/projects', headers=headers(team['orphan']), json=payload).status_code == 403
+    team['manager'].is_active = False
+    db_session.commit()
+    assert team['http'].post('/team/projects', headers=headers(team['actor']), json=payload).status_code == 403

@@ -1,8 +1,9 @@
 from __future__ import annotations
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -14,6 +15,7 @@ from app.models.user_project import UserProjectAssignment
 from app.dependencies import RequireRole, get_current_user
 from app.core.security import get_password_hash
 from app.routes.users import UserCreate, UserResponse
+from app.routes.clients import ClientCreate, ClientResponse
 
 class AssignedClient(BaseModel):
     id: uuid.UUID
@@ -102,6 +104,39 @@ def create_manager_user(user_in: UserCreate, db: Session = Depends(get_db), curr
 class AssignmentCreate(BaseModel):
     user_id: uuid.UUID
     client_id: uuid.UUID
+
+
+class TeamProjectCreate(ClientCreate):
+    name: str = Field(min_length=1, max_length=255)
+    domain: str = Field(min_length=1, max_length=255)
+    business_type: str = Field(min_length=1, max_length=100)
+    locale: str = Field(min_length=1, max_length=35)
+    package_keywords: int = Field(ge=0)
+    user_id: uuid.UUID | None = None
+
+    model_config = {"extra": "forbid", "str_strip_whitespace": True}
+
+
+@team_router.post("/projects", response_model=ClientResponse, status_code=201)
+def create_team_project(data: TeamProjectCreate, db: Session = Depends(get_db),
+                        current_user: User = Depends(get_current_user)):
+    """Create and assign atomically, with ownership derived from the caller's team."""
+    manager = assignment_manager(current_user, db)
+    target = db.get(User, data.user_id or current_user.id)
+    if (not target or target.manager_id != manager.id or target.account_id != manager.account_id
+            or target.role != UserRole.user or not target.is_active):
+        raise HTTPException(status_code=403, detail="Choose an active user in your team")
+    client = Client(
+        **data.model_dump(exclude={"user_id"}),
+        account_id=manager.account_id, manager_id=manager.id,
+        onboarded_at=datetime.now(timezone.utc).date(),
+    )
+    db.add(client)
+    db.flush()
+    db.add(UserProjectAssignment(client_id=client.id, user_id=target.id))
+    db.commit()
+    db.refresh(client)
+    return client
 
 @router.post("/assignments", response_model=dict, status_code=status.HTTP_201_CREATED)
 @team_router.post("/assignments", response_model=dict, status_code=status.HTTP_201_CREATED)

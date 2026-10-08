@@ -96,3 +96,29 @@ it('leaves the assignment intact when unassign is cancelled', async () => {
   expect(api.delete).not.toHaveBeenCalled();
   expect((screen.getByRole('button', { name: 'Assign Project' }) as HTMLButtonElement).disabled).toBe(true);
 });
+
+it('offers project creation even when the team has no projects', async () => {
+  vi.mocked(api.get).mockResolvedValue({ data: { users: options.users, projects: [] } });
+  render(<MemoryRouter><TeamAssignments /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Create Project' }));
+  expect((screen.getByLabelText('Assign to') as HTMLSelectElement).value).toBe('me');
+  fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New project' } });
+  fireEvent.change(screen.getByLabelText('Domain'), { target: { value: 'new.example.com' } });
+  fireEvent.change(screen.getByLabelText('Assign to'), { target: { value: 'colleague' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create & Assign' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/team/projects', {
+    name: 'New project', domain: 'new.example.com', business_type: 'ecommerce', locale: 'en-GB',
+    package_keywords: 10, user_id: 'colleague',
+  }));
+});
+
+it('keeps creation fields available after a failed request', async () => {
+  await open();
+  vi.mocked(api.post).mockRejectedValueOnce(new Error('unavailable'));
+  fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+  fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Keep this' } });
+  fireEvent.change(screen.getByLabelText('Domain'), { target: { value: 'keep.example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create & Assign' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Create & Assign' }) as HTMLButtonElement).disabled).toBe(false));
+  expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('Keep this');
+});
