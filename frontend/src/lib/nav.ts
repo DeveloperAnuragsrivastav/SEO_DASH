@@ -41,6 +41,13 @@ export interface Screen {
 /** Agency-level screens — shown above the client context. */
 export const AGENCY: Screen[] = [
   {
+    key: 'team-assignments',
+    name: 'Assign Projects',
+    lede: 'Assign your manager’s projects to yourself or another member of your team.',
+    path: () => '/admin/team-assignments',
+    roles: ['user'],
+  },
+  {
     key: 'clients',
     name: 'Clients',
     lede: 'Every project this agency is responsible for.',

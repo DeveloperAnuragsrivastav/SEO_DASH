@@ -23,6 +23,7 @@ import GoogleAnalytics from './pages/admin/GoogleAnalytics';
 import SearchConsole from './pages/admin/SearchConsole';
 import Users from './pages/admin/Users';
 import ManagerDashboard from './pages/admin/ManagerDashboard';
+import TeamAssignments from './pages/admin/TeamAssignments';
 import ReportView from './pages/ReportView';
 import ReportBuilder from './pages/ReportBuilder';
 import ReportPreparing from './pages/ReportPreparing';
@@ -69,6 +70,9 @@ const App: React.FC = () => {
                 </Route>
                 <Route element={<ProtectedRoute allowedRoles={['manager']} />}>
                   <Route path="/admin/manager-tools" element={<ManagerDashboard />} />
+                </Route>
+                <Route element={<ProtectedRoute allowedRoles={['user']} />}>
+                  <Route path="/admin/team-assignments" element={<TeamAssignments />} />
                 </Route>
 
                 {/* Reports stay inside the app shell — leaving it to read a

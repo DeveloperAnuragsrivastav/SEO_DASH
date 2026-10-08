@@ -29,6 +29,46 @@ router = APIRouter(
     dependencies=[Depends(RequireRole([UserRole.manager]))]
 )
 
+team_router = APIRouter(
+    prefix="/team",
+    tags=["team"],
+    dependencies=[Depends(RequireRole([UserRole.user]))],
+)
+
+
+def assignment_manager(current_user: User, db: Session) -> User:
+    """Resolve the active manager without allowing unlinked users into a team."""
+    manager = current_user if current_user.role == UserRole.manager else None
+    if current_user.role == UserRole.user and current_user.manager_id:
+        manager = db.get(User, current_user.manager_id)
+    if (
+        not manager or manager.role != UserRole.manager or not manager.is_active
+        or manager.account_id != current_user.account_id
+    ):
+        raise HTTPException(status_code=403, detail="An active manager is required to assign projects")
+    return manager
+
+
+@team_router.get("/assignments")
+def team_assignment_options(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    manager = assignment_manager(current_user, db)
+    members = db.scalars(select(User).where(
+        User.manager_id == manager.id, User.account_id == manager.account_id,
+        User.role == UserRole.user, User.is_active.is_(True),
+    ).order_by(User.email)).all()
+    projects = db.scalars(select(Client).where(
+        Client.manager_id == manager.id, Client.account_id == manager.account_id,
+    ).order_by(Client.name)).all()
+    assignments = db.execute(select(UserProjectAssignment).join(Client).where(
+        Client.manager_id == manager.id, Client.account_id == manager.account_id,
+    )).scalars().all()
+    assignees = {str(a.client_id): str(a.user_id) for a in assignments}
+    return {
+        "users": [{"id": str(u.id), "email": u.email} for u in members],
+        "projects": [{"id": str(c.id), "name": c.name, "domain": c.domain,
+                      "user_id": assignees.get(str(c.id))} for c in projects],
+    }
+
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_manager_user(user_in: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Manager creates a user under their own manager_id."""
@@ -64,17 +104,22 @@ class AssignmentCreate(BaseModel):
     client_id: uuid.UUID
 
 @router.post("/assignments", response_model=dict, status_code=status.HTTP_201_CREATED)
+@team_router.post("/assignments", response_model=dict, status_code=status.HTTP_201_CREATED)
 def assign_project_to_user(data: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Manager assigns a client project to one of their users."""
+    """Managers and team members assign projects within their own team."""
+    manager = assignment_manager(current_user, db)
     
     # 1. Verify manager owns the client
-    client = db.get(Client, data.client_id)
-    if not client or str(client.manager_id) != str(current_user.id):
+    # Serialize assignment changes for the same project, including its first assignment.
+    client = db.scalar(select(Client).where(Client.id == data.client_id).with_for_update())
+    if not client or client.manager_id != manager.id or client.account_id != manager.account_id:
         raise HTTPException(status_code=403, detail="You do not own this client project")
         
     # 2. Verify manager owns the user
     target_user = db.get(User, data.user_id)
-    if not target_user or str(target_user.manager_id) != str(current_user.id):
+    if (not target_user or target_user.manager_id != manager.id
+            or target_user.account_id != manager.account_id
+            or target_user.role != UserRole.user or not target_user.is_active):
         raise HTTPException(status_code=403, detail="You do not manage this user")
         
     # 3. Check if project is already assigned to ANY user
@@ -87,11 +132,7 @@ def assign_project_to_user(data: AssignmentCreate, db: Session = Depends(get_db)
     if existing_assignment:
         if str(existing_assignment.user_id) == str(data.user_id):
             return {"message": "User is already assigned to this project"}
-        else:
-            # Reassign to new user
-            existing_assignment.user_id = data.user_id
-            db.commit()
-            return {"message": "Project reassigned successfully"}
+        raise HTTPException(status_code=409, detail="This project is already assigned. Unassign the current user first.")
             
     # 4. Create new mapping if none exists
     assignment = UserProjectAssignment(
@@ -101,6 +142,26 @@ def assign_project_to_user(data: AssignmentCreate, db: Session = Depends(get_db)
     db.add(assignment)
     db.commit()
     return {"message": "Project assigned successfully"}
+
+
+@router.delete("/assignments/{project_id}/{user_id}")
+@team_router.delete("/assignments/{project_id}/{user_id}")
+def unassign_project(project_id: uuid.UUID, user_id: uuid.UUID,
+                     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Remove only the expected assignment; preserve the project and its data."""
+    manager = assignment_manager(current_user, db)
+    # Team ownership is checked here; project-content access is not required.
+    client = db.scalar(select(Client).where(Client.id == project_id).with_for_update())
+    if not client or client.manager_id != manager.id or client.account_id != manager.account_id:
+        raise HTTPException(status_code=403, detail="This project is outside your team")
+    assignment = db.scalar(select(UserProjectAssignment).where(UserProjectAssignment.client_id == project_id))
+    if not assignment:
+        return {"message": "Project is already unassigned"}
+    if assignment.user_id != user_id:
+        raise HTTPException(status_code=409, detail="The assignment has changed. Refresh before unassigning.")
+    db.delete(assignment)
+    db.commit()
+    return {"message": "Project unassigned successfully"}
 
 @router.get("/dashboard")
 def manager_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

@@ -7,6 +7,7 @@ import { UserPlus, Users as UsersIcon, FolderOpen, Search, ExternalLink, Chevron
 
 import Page from '../../components/ui/Page';
 import PageSkeleton from '../../components/ui/PageSkeleton';
+import { confirmDialog } from '../../components/ui/ConfirmDialog';
 
 interface AssignedClient {
   id: string;
@@ -51,6 +52,25 @@ export default function ManagerDashboard() {
   const [existingProjectId, setExistingProjectId] = useState('');
   const [wizardSubmitting, setWizardSubmitting] = useState(false);
   const [userQuery, setUserQuery] = useState('');
+  const [unassigning, setUnassigning] = useState(false);
+
+  const handleUnassign = async (client: AssignedClient, member: User) => {
+    if (unassigning || !(await confirmDialog({
+      title: 'Unassign project?',
+      message: `Remove ${member.email}’s access to ${client.name}? The project and its data will be kept.`,
+      confirmText: 'Unassign',
+    }))) return;
+    setUnassigning(true);
+    try {
+      const response = await api.delete(`/managers/me/assignments/${client.id}/${member.id}`);
+      toast.success(response.data.message);
+      await loadDashboard();
+    } catch {
+      // The API interceptor displays the error.
+    } finally {
+      setUnassigning(false);
+    }
+  };
 
   const loadDashboard = async () => {
     try {
@@ -284,6 +304,9 @@ export default function ManagerDashboard() {
                         <Link to={`/admin/clients/${c.id}`} className="btn btn-secondary btn-sm">
                           <ExternalLink size={13} /> Dashboard
                         </Link>
+                        <button className="btn btn-secondary btn-sm" disabled={unassigning} onClick={() => void handleUnassign(c, u)}>
+                          Unassign
+                        </button>
                       </div>
                     ))}
                   </div>

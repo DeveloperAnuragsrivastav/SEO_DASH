@@ -12,7 +12,7 @@ from app.routes.reports import router as reports_router
 from app.routes.clients import router as clients_router
 from app.routes.users import router as users_router
 from app.routes.admin import router as admin_router
-from app.routes.managers import router as managers_router
+from app.routes.managers import router as managers_router, team_router
 from app.routes.sheets import router as sheets_router
 
 from app.routes.auth import router as auth_router
@@ -151,6 +151,7 @@ app.include_router(reports_router)
 app.include_router(keyword_research_router)
 app.include_router(admin_router)
 app.include_router(managers_router)
+app.include_router(team_router)
 app.include_router(sheets_router)
 app.include_router(clients_router)
 app.include_router(users_router)

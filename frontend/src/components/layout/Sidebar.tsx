@@ -54,7 +54,7 @@ interface SidebarProps {
 
 export function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapsed, clientName = null }: SidebarProps) {
   const { user, logout } = useAuth();
-  const { canViewAdminTools, isSuperAdmin, isManager } = usePermissions();
+  const { canViewAdminTools, isSuperAdmin, isManager, isStandardUser } = usePermissions();
   const { clientId } = useParams();
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -142,6 +142,12 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
           {isManager && (
             <NavLink to="/admin/manager-tools" className={navCls} onClick={closeDrawer}>
               <span className="nav-ico"><Kanban size={15} /></span> <span className="nav-text">Team</span>
+            </NavLink>
+          )}
+
+          {isStandardUser && (
+            <NavLink to="/admin/team-assignments" className={navCls} onClick={closeDrawer}>
+              <span className="nav-ico"><Kanban size={15} /></span> <span className="nav-text">Assign Projects</span>
             </NavLink>
           )}
 

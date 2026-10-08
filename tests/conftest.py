@@ -102,8 +102,8 @@ def test_users(db_session):
     db_session.add(acc)
     db_session.commit()
     
-    admin = User(account_id=acc.id, email="admin@test.com", password_hash=get_password_hash("pass"), role=UserRole.agency_admin)
-    staff = User(account_id=acc.id, email="staff@test.com", password_hash=get_password_hash("pass"), role=UserRole.agency_staff)
+    admin = User(account_id=acc.id, email="admin@test.com", password_hash=get_password_hash("pass"), role=UserRole.super_admin)
+    staff = User(account_id=acc.id, email="staff@test.com", password_hash=get_password_hash("pass"), role=UserRole.user)
     db_session.add_all([admin, staff])
     db_session.commit()
     return {"admin": admin, "staff": staff}
@@ -121,10 +121,10 @@ def staff_auth_headers(test_users):
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture(autouse=True)
-def _inject_default_auth(admin_auth_headers):
+def _inject_default_auth(admin_auth_headers, request):
     # This automatically injects the admin token into the TestClient for legacy tests
-    from tests.test_reports import client as reports_client
-    reports_client.headers.update(admin_auth_headers)
+    if request.module.__name__ == "tests.test_reports":
+        request.module.client.headers.update(admin_auth_headers)
     # Note: Other test files using their own TestClient will need to update headers, 
     # but since many don't import globally, it's safer to override get_current_user globally
     pass
@@ -138,5 +138,3 @@ def override_current_user_for_legacy(db_session, test_users):
     app.dependency_overrides[get_current_user] = lambda: test_users["admin"]
     yield
     app.dependency_overrides.pop(get_current_user, None)
-
-
