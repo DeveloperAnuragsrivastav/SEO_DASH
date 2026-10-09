@@ -2234,64 +2234,6 @@ def _aggregate_metrics(snapshots, section):
 
     return result
 
-def _report_month_names(data: dict) -> None:
-    """The report names every period by its month, in place.
-
-    The builder and dashboard show a period's dates ("6 Sep – 5 Oct 2026");
-    the report a client reads says "September 2026" — the month the period is
-    filed under on the sheets. Keyword columns, the comparison, the footer and
-    the cover all follow."""
-    from app.services import sheets as sheets_svc
-    period = dict(data.get("period") or {})
-    periods = [dict(p) for p in (data.get("periods") or [])]
-
-    def month_of_end(end) -> str | None:
-        try:
-            return sheets_svc.cycle_month(datetime.date.fromisoformat(str(end))).strftime("%B %Y")
-        except (TypeError, ValueError):
-            return None
-
-    rename: dict[str, str] = {}
-    for p in periods:
-        name = month_of_end(p.get("end"))
-        if name and p.get("label"):
-            rename[p["label"]] = name
-            p["label"] = name
-    if not periods and period.get("end") and period.get("label"):
-        name = month_of_end(period["end"])
-        if name:
-            rename[period["label"]] = name
-    if not rename:
-        return
-    compare = dict(period.get("compare") or {})
-    labels = [rename.get(l, l) for l in (period.get("labels") or [])]
-    months_n = period.get("months") or 1
-    if compare.get("end") and months_n == 1:
-        prev = month_of_end(compare["end"])
-        if prev:
-            for old in (compare.get("range"), periods_svc.period_name(*(datetime.date.fromisoformat(compare[k]) for k in ("start", "end")))
-                        if compare.get("start") else None):
-                if old:
-                    rename[old] = prev
-            compare["range"] = prev
-    elif months_n > 1 and labels:
-        compare["range"] = periods_svc.span_compare_label([(None, None)] * len(labels), labels)
-    period["compare"] = compare
-    period["labels"] = labels
-    if labels:
-        period["label"] = labels[0] if months_n == 1 else f"{labels[0]} – {labels[-1]}"
-    data["period"], data["periods"] = period, periods
-    data["months"] = [rename.get(m, m) for m in (data.get("months") or [])]
-    if data.get("rank_months"):
-        data["rank_months"] = [rename.get(m, m) for m in data["rank_months"]]
-    rankings = data.get("rankings") or {}
-    for kw in rankings.get("keywords") or []:
-        if isinstance(kw.get("positions"), dict):
-            kw["positions"] = {rename.get(k, k): v for k, v in kw["positions"].items()}
-    if isinstance(rankings.get("months"), list):
-        rankings["months"] = [rename.get(m, m) for m in rankings["months"]]
-
-
 def _build_comparative_report(snapshots):
     if not snapshots:
         return {}
@@ -2502,5 +2444,6 @@ def _build_comparative_report(snapshots):
         link_types[t] = link_types.get(t, 0) + int(l.get("count") or 1)
     comparative_data["link_types"] = link_types
     
-    _report_month_names(comparative_data)
+    # Preserve the configured reporting periods in every section and comparison.
+    # Calendar-month labels are for the historical sheets, not custom-date reports.
     return comparative_data
