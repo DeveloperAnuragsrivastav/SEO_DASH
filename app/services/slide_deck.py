@@ -34,16 +34,8 @@ GBP_ACTIONS = [
 #
 # GA4 event names are chosen by whoever set the property up, so there is no
 # fixed list to read. Each figure below matches on the words that name the
-# action rather than on one exact event, and anything matching none of them
-# still shows under its own name further down the slide. A property using
-# house names is covered by hand-entering the figure instead.
-# Events GA4 collects on its own. A scroll or a page view is not an enquiry,
-# and listing them beside real conversions would overstate the month badly.
-GA4_AUTOMATIC_EVENTS = {
-    "page_view", "session_start", "first_visit", "first_open", "user_engagement",
-    "scroll", "click", "view_search_results", "file_download", "video_start",
-    "video_progress", "video_complete", "form_start", "site_search",
-}
+# action rather than on one exact event. A property using house names is
+# covered by hand-entering the figure instead.
 
 LEAD_FIGURES: list[tuple[str, tuple[str, ...]]] = [
     ("lead.thank_you", ("thank_you", "thankyou", "thank-you", "form_submit",
@@ -313,8 +305,7 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
     only half the question.
 
     `shown(item_id)` is the builder's ticks: an unticked figure is left out of
-    the slide and out of the total it is summed into (its events still count as
-    recognised, so they do not reappear under "other events").
+    the slide and out of the total it is summed into.
     """
     on = shown or (lambda _id: True)
     from app.services.report_text import resolver
@@ -323,7 +314,6 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
     events = ga4.get("events") or {}
     # Figures typed in the builder replace what the event names give.
     overrides = ga4.get("lead_overrides") or {}
-    claimed: set[str] = set()
     figures: list[dict] = []
 
     for text_key, needles in LEAD_FIGURES:
@@ -332,7 +322,6 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
             low = event.lower()
             if any(n in low for n in needles):
                 total += _n(count)
-                claimed.add(event)
         key = text_key.split(".", 1)[1]
         if key in overrides:
             total = _n(overrides[key])
@@ -351,15 +340,6 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
         figures.append({"name": t("lead.revenue"), "value": _fmt(revenue), "raw": revenue,
                         "change": _n(deltas.get("revenue")), "key": "revenue"})
 
-    # Events the patterns above did not recognise. Shown under their own names
-    # rather than dropped, so a property with house naming is not silently
-    # reported as having produced no leads.
-    other = sorted(
-        ((e, _n(c)) for e, c in events.items()
-         if e not in claimed and e.lower() not in GA4_AUTOMATIC_EVENTS and _n(c)),
-        key=lambda ec: -ec[1],
-    )
-
     from_events = sum(f["raw"] for f in figures if f.get("key") != "revenue")
     total_leads = from_events or _n(ga4.get("conversions"))
     # A total typed in the builder wins over the sum of the figures.
@@ -375,7 +355,6 @@ def lead_figures(ga4: dict, deltas: dict, t=None, previous: Optional[dict] = Non
 
     return {
         "lead_figures": figures,
-        "lead_events": [{"name": e, "value": _fmt(c)} for e, c in other],
         "leads_total": total_leads,
         # Only when the total and the stored change are the same measurement.
         # The delta is recorded against GA4's single `conversions` figure, so

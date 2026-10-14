@@ -475,10 +475,6 @@ def section_facts(snapshot: dict, section: str, shown: Optional[dict] = None) ->
         derived = lead_figures(snap.get("ga4") or {}, (deltas.get("ga4") or {}),
                                shown=lambda i: visible(i) and ticks.get(i, True) is not False)
         facts = {f["name"]: f["raw"] for f in derived["lead_figures"]}
-        # Named so the total cannot be misread as including them: these are
-        # other events the property records, counted separately.
-        for e in derived["lead_events"]:
-            facts[f"separate event, not part of the lead total: {e['name']}"] = e["value"]
         if derived["leads_total"]:
             facts["total_leads"] = derived["leads_total"]
             # Only offered when it is the same measurement — see lead_figures.

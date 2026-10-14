@@ -646,24 +646,6 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
   color: rgba(255, 255, 255, 0.62);
 }
 
-/* Conversion events under their own names: two columns of name-and-count, so
-   a property with six of them still fits without shrinking the type. */
-.lead-events {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 4px 28px; align-content: start; margin-top: 10px;
-}
-.lead-event {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 7px 0; border-bottom: 1px solid var(--rule);
-}
-.lead-event-name {
-  flex: 1 1 auto; min-width: 0; font-size: 11.5pt; color: var(--ink-2);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.lead-event-val {
-  font-size: 12.5pt; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
-}
-
 .baseline-strip {
   flex-shrink: 0;
   padding: 13px 18px;
@@ -1469,7 +1451,7 @@ table.data.kw.half .rank-new { display: none; }
         even grid: four across left one card stranded on a second row and a
         gap the height of the page above the commentary. -#}
     {%- set n = lead_figures | length %}
-    <div class="row {{ 'c1-2' if leads_total_shown else '' }} tight {{ 'grow' if not lead_events }} leads-row">
+    <div class="row {{ 'c1-2' if leads_total_shown else '' }} tight grow leads-row">
       {% if leads_total_shown %}
       <div class="card cream pad-lg leads-total">
         {% if leads_change %}{{ delta(leads_total, leads_change) }}{% endif %}
@@ -1484,23 +1466,6 @@ table.data.kw.half .rank-new { display: none; }
           {% if f.change is defined %}{{ delta(f.raw, f.change) }}{% endif %}
           <span class="stat-figure sm">{{ f.value }}</span>
           <span class="stat-name">{{ f.name }}</span>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
-    {% if lead_events %}
-    {#- Sized to its rows, not stretched: a property with one extra event was
-        printing a mostly empty box the height of the slide. -#}
-    <div class="card">
-      <p class="card-name">{{ t('leads.other.name') }}</p>
-      <p class="card-sub">{{ t('leads.other.sub') }}</p>
-      <div class="lead-events">
-        {% for e in lead_events %}
-        <div class="lead-event">
-          <span class="lead-event-name">{{ e.name }}</span>
-          <span class="lead-event-val">{{ e.value }}</span>
         </div>
         {% endfor %}
       </div>

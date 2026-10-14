@@ -55,9 +55,6 @@ TEXTS: list[tuple[str, str, str, str]] = [
     ("lead.phone", "leads", "Figure — phone number clicks", "Phone number clicks"),
     ("lead.transactions", "leads", "Figure — transactions", "Transactions"),
     ("lead.revenue", "leads", "Figure — revenue", "Revenue"),
-    ("leads.other.name", "leads", "Card — other events", "Other conversion events recorded"),
-    ("leads.other.sub", "leads", "Card — other events, sub-line",
-     "Named as they are set up in this property’s Analytics"),
     ("verdict.leads", "leads", "Commentary heading", "What the enquiries say"),
 
     # ── Ranking Summary ────────────────────────────────────────────────────
