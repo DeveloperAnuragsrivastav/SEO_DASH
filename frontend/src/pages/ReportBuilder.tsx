@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   Sparkles, Loader2, Info, Pencil, Check, ArrowLeft, ArrowRight,
   FileText, Plug, RefreshCw, ImagePlus, Type,
-  Upload, Download, CalendarRange, X,
+  Upload, Download, CalendarRange, X, Eye, EyeOff,
 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import PageSkeleton from '../components/ui/PageSkeleton';
@@ -114,6 +114,9 @@ interface PlanItem { title: string; detail: string }
 interface Plan { now: PlanItem[]; next: PlanItem[]; lede: string }
 
 const EMPTY_PLAN: Plan = { now: [], next: [], lede: '' };
+
+/** Breakdown tables whose columns can be hidden on their slide. */
+const COLUMN_SWITCH = new Set(['gsc.top_queries', 'gsc.trending_pages']);
 
 const EMPTY_COPY: Copy = { brand_line: '', eyebrows: {}, titles: {}, subtitles: {}, texts: {} };
 
@@ -280,6 +283,8 @@ const ReportBuilder: React.FC = () => {
   const [stepDefs, setStepDefs] = useState<StepDef[]>([]);
   const [slideBusy, setSlideBusy] = useState<string | null>(null);
   const [kpiList, setKpiList] = useState<{ id: string; name: string; value: string; shown: boolean }[]>([]);
+  // Switched off inside a slide: a figure's change line, a breakdown table's columns.
+  const [displayOff, setDisplayOff] = useState<{ changes: string[]; cols: Record<string, string[]> }>({ changes: [], cols: {} });
   // AI results figures: typed values ("" = worked out) and the worked-out ones.
   const [aiDraft, setAiDraft] = useState<Record<string, string>>({});
   const [aiSaved, setAiSaved] = useState<Record<string, string>>({});
@@ -382,6 +387,7 @@ const ReportBuilder: React.FC = () => {
     if (d.slides) setSlides(d.slides);
     if (d.steps) setStepDefs(d.steps);
     if (d.kpiCards) setKpiList(d.kpiCards);
+    if (d.displayOff) setDisplayOff(d.displayOff);
     const typedAi = d.aiSummary || {};
     const flat: Record<string, string> = {};
     for (const k of ['score', 'mentions', 'cited']) if (typedAi[k] !== undefined && typedAi[k] !== null) flat[k] = String(typedAi[k]);
@@ -913,9 +919,16 @@ const ReportBuilder: React.FC = () => {
   const initialOf = (i: Item) => items.find(p => p.kind === 'initial' && p.pair === i.id);
 
   /** The change between the two boxes, worded the way the report prints it. */
-  const changeText = (i: Item, prevText: string, nowText: string) => {
+  const changeText = (i: Item, prevText: string, nowText: string, prev?: Item) => {
     if (prevText.trim() === '' || nowText.trim() === '') return { text: 'Add last month to show the change', tone: 'none' };
-    const was = Number(prevText), now = Number(nowText);
+    // A box still showing the stored figure is worked out from that figure, not
+    // its rounded text — the same numbers the slide uses, so the two agree.
+    const exact = (it: Item | undefined, text: string) => (
+      it && text === toText(it) && Number.isFinite(Number(it.value))
+        ? Number(it.value) * (it.format === 'percent' ? 100 : 1) : Number(text)
+    );
+    const was = exact(prev, prevText), now = exact(i, nowText);
+
     if (!Number.isFinite(was) || !Number.isFinite(now)) return { text: '', tone: 'none' };
     if (i.id.endsWith('.position') || i.unit === 'position') {
       const moved = Math.round((now - was) * 10) / 10;
@@ -927,10 +940,26 @@ const ReportBuilder: React.FC = () => {
     return { text: `${pct > 0 ? '+' : ''}${pct}% vs last month`, tone: pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat' };
   };
 
+  /** Show or hide the change a slide prints under one figure. */
+  // Only the Click & Impressions slide prints its changes by this switch so far.
+  const changeSwitchable = (i: Item) => i.id.startsWith('gsc.');
+  const changeShown = (i: Item) => !displayOff.changes.includes(i.id);
+  const toggleChange = async (i: Item) => {
+    if (!editable) return;
+    try {
+      const res = await api.put(`${base}/changes`, { id: i.id, shown: !changeShown(i) });
+      if (res.data?.displayOff) setDisplayOff(res.data.displayOff);
+    } catch {
+      // The reason is shown by the API client.
+    }
+  };
+
   /** A figure with last period beside it: two boxes, and the change between. */
   const pairCard = (i: Item, prev: Item) => {
     const shown = itemOn[i.id] !== false;
-    const change = changeText(i, values[prev.id] ?? '', values[i.id] ?? '');
+    const change = changeText(i, values[prev.id] ?? '', values[i.id] ?? '', prev);
+    const switchable = changeSwitchable(i);
+    const changeOn = !switchable || changeShown(i);
     return (
       <div key={i.id} className={`metric-card rb-pair ${shown ? '' : 'off'}`}>
         <label className="metric-card-head">
@@ -953,7 +982,16 @@ const ReportBuilder: React.FC = () => {
             {valueInput(i, false, true)}
           </label>
         </div>
-        <div className={`rb-pair-change ${change.tone}`}>{change.text}</div>
+        <div className={`rb-pair-foot ${changeOn ? '' : 'chg-off'}`}>
+          <div className={`rb-pair-change ${change.tone}`}>{change.text}</div>
+          {switchable && change.tone !== 'none' && (
+            <button type="button" className="rb-chg-switch" disabled={!editable || !shown} onClick={() => toggleChange(i)}
+                    title={changeOn ? 'Hide this change on the slide' : 'Show this change on the slide'}>
+              {changeOn ? <Eye size={12} /> : <EyeOff size={12} />}
+              {changeOn ? 'On slide' : 'Hidden on slide'}
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -1755,7 +1793,7 @@ const ReportBuilder: React.FC = () => {
           <tbody>
             {list.map(i => {
               const prev = prevOf(i), init = initialOf(i);
-              const change = prev ? changeText(i, values[prev.id] ?? '', values[i.id] ?? '') : null;
+              const change = prev ? changeText(i, values[prev.id] ?? '', values[i.id] ?? '', prev) : null;
               const on = itemOn[i.id] !== false;
               return (
                 <tr key={i.id} className={on ? '' : 'off'}>
@@ -1926,6 +1964,8 @@ const ReportBuilder: React.FC = () => {
       return (
         <div key={n} className="rb-part">
           <ListEditor base={base} spec={spec} rows={lists[spec.path] || []} editable={editable}
+            colsOff={COLUMN_SWITCH.has(spec.path) ? (displayOff.cols[spec.path] || []) : undefined}
+            onColsOff={off => setDisplayOff(off)}
             defaultOpen={spec.path === 'links' || spec.path === 'activities'}
             onSaved={rows => {
               setLists(l => ({ ...l, [spec.path]: rows }));

@@ -229,6 +229,53 @@ def write_list(snapshot: dict, path: str, rows: Any) -> bool:
     return True
 
 
+# What the builder switches off inside a slide, beside the figures and rows
+# themselves: the "vs last month" change under a figure, and whole columns of
+# a breakdown table. Stored as {"changes": [figure id], "cols": {path: [field]}}.
+def display_off(snapshot: dict) -> dict:
+    raw = _s(snapshot).get("display_off")
+    raw = raw if isinstance(raw, dict) else {}
+    changes = [c for c in (raw.get("changes") or []) if isinstance(c, str)]
+    cols = raw.get("cols") if isinstance(raw.get("cols"), dict) else {}
+    return {"changes": sorted(set(changes)),
+            "cols": {p: sorted({f for f in v if isinstance(f, str)}) for p, v in cols.items()
+                     if p in _LIST_BY_PATH and isinstance(v, list) and v}}
+
+
+def set_change_shown(snapshot: dict, item_id: str, shown: bool) -> bool:
+    known = {f"{s}.{k}" for s, keys in comparable_keys().items() for k in keys}
+    if item_id not in known:
+        return False
+    off = display_off(snapshot)
+    changes = set(off["changes"])
+    (changes.discard if shown else changes.add)(item_id)
+    snapshot["display_off"] = {**off, "changes": sorted(changes)}
+    return True
+
+
+def set_list_columns(snapshot: dict, path: str, fields: Any) -> str | None:
+    """Hide these columns of one breakdown table; [] shows them all. Returns
+    why it can't, or None."""
+    spec = _LIST_BY_PATH.get(path)
+    if not spec:
+        return "That table can't be edited."
+    names = [c[0] for c in spec["columns"]]
+    fields = [f for f in (fields or []) if isinstance(f, str)]
+    bad = [f for f in fields if f not in names]
+    if bad:
+        return f"Unknown column: {bad[0]}."
+    if set(fields) >= set(names):
+        return "Keep at least one column in the table."
+    off = display_off(snapshot)
+    cols = dict(off["cols"])
+    if fields:
+        cols[path] = sorted(set(fields))
+    else:
+        cols.pop(path, None)
+    snapshot["display_off"] = {**off, "cols": cols}
+    return None
+
+
 def country_names(snapshot: dict) -> list[str]:
     """Every country either country slide could print, busiest first."""
     ga4 = _s(snapshot).get("ga4") or {}

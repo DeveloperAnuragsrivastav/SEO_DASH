@@ -522,6 +522,12 @@
 .rb-list-table td input:hover:not(:disabled) { border-color: var(--line); }
 .rb-list-table td input:focus { outline: none; border-color: var(--brand-400); background: var(--card); }
 .rb-list-table td.act { width: 36px; text-align: center; }
+.rb-list-hidden { margin-left: auto; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--canvas-2); color: var(--ink-3); font-size: 11px; font-weight: 600; }
+.rb-list-dirty + .rb-list-hidden { margin-left: 0; }
+.rb-list-body > .tbl-cols { margin-bottom: 10px; }
+/* A column hidden on the slide stays editable here, just quieter. */
+.rb-list-table th.col-off { color: var(--ink-4); text-decoration: line-through; }
+.rb-list-table td.col-off input { color: var(--ink-4); background: var(--canvas-2); }
 .rb-list-empty { padding: 14px !important; text-align: center; color: var(--ink-3); }
 .rb-list-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
 .rb-shot-frame[role="button"] { cursor: pointer; }
@@ -541,6 +547,16 @@
 .rb-pair-change.up { color: var(--success, #17864A); }
 .rb-pair-change.down { color: var(--danger, #B4432E); }
 .rb-pair-change.none { font-weight: 400; font-style: italic; }
+.rb-pair-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.rb-pair-foot.chg-off .rb-pair-change { color: var(--ink-4); text-decoration: line-through; }
+.rb-chg-switch {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line, #E5E7EB);
+  background: transparent; color: var(--ink-3); font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.rb-chg-switch:hover:not(:disabled) { border-color: var(--brand-300); color: var(--brand-700); }
+.rb-pair-foot.chg-off .rb-chg-switch { color: var(--ink-4); border-style: dashed; }
+.rb-chg-switch:disabled { opacity: .5; cursor: default; }
 
 /* ── Ranking summary, worked out from the keywords ── */
 .rb-rank-summary { display: flex; flex-direction: column; gap: 10px; }

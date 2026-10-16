@@ -518,6 +518,8 @@ def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Dep
         "steps": composer.STEPS,
         "slides": _slides_for(db, report, snapshot),
         "kpiCards": _kpi_cards(snapshot),
+        # What is switched off inside a slide: a figure's change, a table's columns.
+        "displayOff": composer.display_off(snapshot),
         "rankOverrides": composer.clean_rank_overrides((snapshot.get("rankings") or {}).get("summary_overrides")),
         "aiSummary": snapshot.get("ai_summary") or {},
         # Worked-out figures, listing every assistant a figure was typed or read in for too.
@@ -633,6 +635,43 @@ def set_kpi_card(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: CardToggle,
     flag_modified(report, "snapshot")
     db.commit()
     return {"kpiCards": _kpi_cards(snapshot)}
+
+
+class ChangeToggle(BaseModel):
+    id: str
+    shown: bool
+
+
+@router.put("/{snapshot_id}/changes")
+def set_change_shown(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: ChangeToggle, db: Session = Depends(get_db)):
+    """Show or hide the "vs last month" change printed under one figure."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    if not composer.set_change_shown(snapshot, data.id, data.shown):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That figure has no change to show or hide.")
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"displayOff": composer.display_off(snapshot)}
+
+
+class ListColumns(BaseModel):
+    path: str
+    off: list[str] = []
+
+
+@router.put("/{snapshot_id}/lists/columns")
+def set_list_columns(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: ListColumns, db: Session = Depends(get_db)):
+    """Which columns of a breakdown table the slide leaves out."""
+    report = _load_editable(client_id, snapshot_id, db)
+    snapshot = dict(report.snapshot or {})
+    error = composer.set_list_columns(snapshot, data.path, data.off)
+    if error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, error)
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+    return {"displayOff": composer.display_off(snapshot)}
 
 
 class SlideToggle(BaseModel):
@@ -1627,7 +1666,7 @@ def change_report_period(client_id: uuid.UUID, snapshot_id: uuid.UUID, data: Per
     # span it covers: keywords, prompt checks, links, work, words.
     for keep in ("included_sections", "included_items", "copy", "narration", "narration_source",
                  "rankings", "ai_visibility", "ai_summary", "links", "activities", "hidden_slides", "hidden_cards",
-                 "next_month_plan", "plan_source", "subtitle_ai", "subtitles_drafted", "table_settings"):
+                 "next_month_plan", "plan_source", "subtitle_ai", "subtitles_drafted", "table_settings", "display_off"):
         if keep in snapshot:
             fresh[keep] = snapshot[keep]
     # This month's own leads, typed or found — kept apart so the month can be
@@ -2288,6 +2327,7 @@ def _build_comparative_report(snapshots):
     comparative_data["hidden_slides"] = latest_snap.get("hidden_slides") or []
     comparative_data["hidden_cards"] = latest_snap.get("hidden_cards") or []
     comparative_data["table_settings"] = latest_snap.get("table_settings") or {}
+    comparative_data["display_off"] = composer.display_off(latest_snap)
 
     # Carry the composer's choices into the PDF. For a multi-month export the
     # most recent snapshot's selection wins, since that is the one just edited.
