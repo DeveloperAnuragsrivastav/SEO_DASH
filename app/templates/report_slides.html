@@ -1530,7 +1530,7 @@ table.data.kw.half .rank-new { display: none; }
           <th class="num">{{ t('rank.initial') }}</th>
           {#- The latest month sits in the middle, beside Initial; earlier
               months follow it, newest first. -#}
-          {% for m in rank_months | reverse %}<th class="num {{ 'now' if loop.first }}">{{ copy.rankings_headers.get(m, m) if copy.rankings_headers else m }}{% if loop.first and rank_months | length > 1 and not half %} (Latest){% endif %}</th>{% endfor %}
+          {% for m in rank_months | reverse %}<th class="num {{ 'now' if loop.first }}">{{ m }}{% if loop.first and rank_months | length > 1 and not half %} (Latest){% endif %}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>

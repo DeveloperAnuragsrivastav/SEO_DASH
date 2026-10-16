@@ -818,27 +818,3 @@
 .tbl-pop-note { margin: 0; font-size: 12px; color: var(--ink-3); }
 .tbl-row { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 12px; color: var(--ink-3); cursor: pointer; }
 .tbl-row.on { color: var(--ink); border-color: var(--brand-300); background: var(--brand-50); }
-
-/* Fill a slide from a screenshot of Google's own report (ShotReader) */
-.rb-shotread { margin-bottom: 14px; }
-.rb-upload-text strong.rb-inline { display: inline; }
-.rb-upload-actions .rb-shot-period { width: auto; min-width: 0; height: 32px; padding-top: 0; padding-bottom: 0; font-size: 12.5px; }
-.rb-shot-samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; width: 100%; }
-.rb-shot-sample { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card); min-width: 0; }
-.rb-shot-thumb { flex-shrink: 0; display: block; width: 96px; height: 64px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--canvas-2); }
-.rb-shot-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block; }
-.rb-shot-sample-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
-.rb-shot-sample-text strong { color: var(--ink); font-size: 12.5px; }
-.rb-shot-sample-text .btn { align-self: flex-start; margin-top: 3px; max-width: 100%; white-space: normal; text-align: left; height: auto; min-height: 28px; }
-.rb-shot-result { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-.rb-shot-filled { margin: 0; font-size: 12.5px; color: var(--ink-2); }
-.rb-shot-notice { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--info-500) 28%, transparent); background: color-mix(in srgb, var(--info-500) 9%, transparent); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
-.rb-shot-notice.warning { border-color: var(--amber-border); background: var(--amber-soft); }
-.rb-shot-notice > svg { flex-shrink: 0; margin-top: 2px; color: var(--info-500); }
-.rb-shot-notice.warning > svg { color: var(--brand-700); }
-.rb-shot-notice > span { flex: 1; min-width: 0; }
-.rb-shot-x { flex-shrink: 0; border: 0; background: none; padding: 2px; color: var(--ink-3); cursor: pointer; border-radius: 4px; }
-.rb-shot-x:hover { color: var(--ink); background: var(--canvas-2); }
-@media (max-width: 640px) {
-  .rb-shot-samples { grid-template-columns: 1fr; }
-}

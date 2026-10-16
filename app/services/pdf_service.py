@@ -256,7 +256,6 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
         ce=eyebrow,
         t=t,
         brand_line=composer.brand_line(copy),
-        copy=copy,
         cover_screenshot=comparative_data.get("cover_screenshot"),
         nar=lambda key: str((comparative_data.get("narration") or {}).get(key) or "").strip(),
         # A slide switched off in the builder is left out of the report.

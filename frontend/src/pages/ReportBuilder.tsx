@@ -15,7 +15,6 @@ import TableEditor from '../components/report/TableEditor';
 import type { GTable } from '../components/report/TableEditor';
 import { usePasteTarget } from '../lib/usePasteImage';
 import ListEditor, { type ListSpec } from '../components/report/ListEditor';
-import ShotReader, { type ShotSample } from '../components/report/ShotReader';
 import '../builder.css';
 import { confirmDialog } from '../components/ui/ConfirmDialog';
 
@@ -91,9 +90,7 @@ interface TextField { key: string; block: string; label: string; default: string
 interface Step { key: string; kind: 'slides' | 'review'; label: string; about?: string }
 /** One part of a slide's numbers, as the server describes it. */
 interface SlidePart {
-  type: 'figures' | 'rows' | 'table' | 'gtable' | 'shots' | 'months' | 'editor' | 'shotread';
-  /** Sample screenshots for a 'shotread' part, by key (see shotSamples). */
-  samples?: string[];
+  type: 'figures' | 'rows' | 'table' | 'gtable' | 'shots' | 'months' | 'editor';
   /** A GA4 comparison table edited as it prints (type 'gtable'). */
   table?: 'channels' | 'countries';
   ids?: string[]; prefix?: string; path?: string; section?: string; name?: string;
@@ -308,7 +305,6 @@ const ReportBuilder: React.FC = () => {
   // The ranking summary shows its worked-out counts; boxes open only to correct one.
   const [rankEditing, setRankEditing] = useState(false);
   const [lists, setLists] = useState<Record<string, any[]>>({});
-  const [shotSamples, setShotSamples] = useState<Record<string, ShotSample>>({});
   const [itemOn, setItemOn] = useState<Record<string, boolean>>({});
   const [values, setValues] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
@@ -404,7 +400,6 @@ const ReportBuilder: React.FC = () => {
     setRankOv(ov);
     setRankDraft(rankDraftFrom(ov));
     setLists(d.lists || {});
-    if (d.shotSamples) setShotSamples(d.shotSamples);
     // In a provider section with nothing in it yet, zero only means "not
     // entered": show the field empty so typing 7 gives 7, not 07.
     const avail = d.available || {};
@@ -933,6 +928,7 @@ const ReportBuilder: React.FC = () => {
         ? Number(it.value) * (it.format === 'percent' ? 100 : 1) : Number(text)
     );
     const was = exact(prev, prevText), now = exact(i, nowText);
+
     if (!Number.isFinite(was) || !Number.isFinite(now)) return { text: '', tone: 'none' };
     if (i.id.endsWith('.position') || i.unit === 'position') {
       const moved = Math.round((now - was) * 10) / 10;
@@ -1978,15 +1974,6 @@ const ReportBuilder: React.FC = () => {
                 api.get(`${base}/composer`).then(r => applyComposer(r.data || {})).catch(() => {});
               }
             }} />
-        </div>
-      );
-    }
-    if (part.type === 'shotread') {
-      return (
-        <div key={n} className="rb-part">
-          <ShotReader base={base} slide={_sl.key} label={part.label} hint={part.hint} editable={editable}
-            samples={(part.samples || []).map(k => shotSamples[k]).filter(Boolean)}
-            beforeRead={queueSave} onFilled={d => applyComposer(d)} />
         </div>
       );
     }

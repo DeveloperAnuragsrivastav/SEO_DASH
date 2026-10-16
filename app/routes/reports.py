@@ -4,7 +4,7 @@ import logging
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, File, Form, UploadFile, Response
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, File, UploadFile, Response
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -539,8 +539,6 @@ def get_composer(client_id: uuid.UUID, snapshot_id: uuid.UUID, db: Session = Dep
             for spec in composer.LIST_SPECS
         ],
         "lists": {spec["path"]: composer.list_rows(snapshot, spec["path"]) for spec in composer.LIST_SPECS},
-        # Sample screenshots for the "fill from a screenshot" boxes, by key.
-        "shotSamples": __import__("app.services.screenshot_reader", fromlist=["SAMPLES"]).SAMPLES,
         "periods": snapshot.get("periods") or [],
         "dataHealth": _data_health(db, client_id, snapshot, report),
     }
@@ -763,22 +761,6 @@ def set_composer_values(
         raise HTTPException(status.HTTP_409_CONFLICT, "Published reports cannot be edited.")
 
     snapshot = dict(report.snapshot or {})
-    applied, rejected = _apply_value_edits(snapshot, data.edits)
-    report.snapshot = snapshot
-    flag_modified(report, "snapshot")
-    db.commit()
-
-    return {"applied": applied, "rejected": rejected, "items": composer.enumerate_items(snapshot),
-            "available": composer.section_availability(snapshot),
-            "selectedSections": composer.current_sections(snapshot),
-            "kpiCards": _kpi_cards(snapshot), "slides": _slides_for(db, report, snapshot)}
-
-
-def _apply_value_edits(snapshot: dict, edits: dict[str, Any]) -> tuple[list[str], list[str]]:
-    """Write figure edits ({"gsc.clicks": 133, "prev:gsc.clicks": 123}) into
-    a draft's snapshot, in place, keeping every change equal to this period
-    minus the previous one. Shared by the builder's boxes and by figures read
-    off a screenshot, so both behave the same."""
     deltas = {k: dict(v) for k, v in (snapshot.get("kpi_deltas") or {}).items() if isinstance(v, dict)}
     previous_values = {k: dict(v) for k, v in (snapshot.get("previous_values") or {}).items() if isinstance(v, dict)}
     comparable = composer.comparable_keys()
@@ -803,7 +785,7 @@ def _apply_value_edits(snapshot: dict, edits: dict[str, Any]) -> tuple[list[str]
 
     # Where each keyword started. Kept in the draft; publishing saves it on
     # the keyword, so every later report starts from the same place.
-    for item_id, raw in edits.items():
+    for item_id, raw in data.edits.items():
         if not item_id.startswith("init:rankings.kw."):
             continue
         ident = item_id[len("init:rankings.kw."):]
@@ -813,7 +795,7 @@ def _apply_value_edits(snapshot: dict, edits: dict[str, Any]) -> tuple[list[str]
             rejected.append(item_id)
 
     # Last period's figures first, so an edit to both lands on the new pair.
-    for item_id, raw in edits.items():
+    for item_id, raw in data.edits.items():
         if not item_id.startswith("prev:"):
             continue
         if item_id.startswith("prev:ga4.lead."):
@@ -836,7 +818,7 @@ def _apply_value_edits(snapshot: dict, edits: dict[str, Any]) -> tuple[list[str]
         settle(provider, key, number(item_id, raw))
         applied.append(item_id)
 
-    for item_id, raw in edits.items():
+    for item_id, raw in data.edits.items():
         if item_id.startswith(("prev:", "init:")):
             continue
         provider, _, key = item_id.partition(".")
@@ -870,7 +852,14 @@ def _apply_value_edits(snapshot: dict, edits: dict[str, Any]) -> tuple[list[str]
             snapshot["period"] = period
 
     snapshot["kpi_deltas"] = deltas
-    return applied, rejected
+    report.snapshot = snapshot
+    flag_modified(report, "snapshot")
+    db.commit()
+
+    return {"applied": applied, "rejected": rejected, "items": composer.enumerate_items(snapshot),
+            "available": composer.section_availability(snapshot),
+            "selectedSections": composer.current_sections(snapshot),
+            "kpiCards": _kpi_cards(snapshot), "slides": _slides_for(db, report, snapshot)}
 
 
 @router.post("/{snapshot_id}/composer/suggest")
@@ -1093,69 +1082,6 @@ async def read_ai_summary(client_id: uuid.UUID, snapshot_id: uuid.UUID, file: Up
     flag_modified(report, "snapshot")
     db.commit()
     return {"read": read, "typed": typed, "shown": ai_summary(snapshot)}
-
-
-@router.post("/{snapshot_id}/screenshot/read")
-async def read_report_screenshot(client_id: uuid.UUID, snapshot_id: uuid.UUID, file: UploadFile = File(...),
-                                 slide: Optional[str] = Form(None), period: Optional[str] = Form(None),
-                                 db: Session = Depends(get_db)):
-    """Fill Search Console or Analytics figures from a screenshot of Google's
-    own report, for people who cannot connect either.
-
-    Whatever the screenshot shows is filled in, wherever it belongs — even
-    when it was uploaded on another slide, or covers a day more or less than
-    the report. Each such thing comes back as a notice; every figure stays
-    editable. `period` ("current" / "previous") says which period a
-    single-range screenshot is; by default its dates decide.
-    """
-    from app.services import screenshot_reader as shots
-    from app.services.openai_service import explain_ai_error
-    if period not in (None, "", "auto", "current", "previous"):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "period must be auto, current or previous.")
-    report = _load_editable(client_id, snapshot_id, db)
-    data = await file.read(COVER_MAX_BYTES + 1)
-    if not data:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The file is empty.")
-    if len(data) > COVER_MAX_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"The screenshot must be {settings.MAX_IMAGE_MB} MB or smaller.")
-    mime = _sniff_image(data)
-    if not mime:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Use a PNG, JPEG or WebP screenshot.")
-    snapshot = dict(report.snapshot or {})
-    months = (snapshot.get("period") or {}).get("months") or 1
-    if months > 1:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            f"This report combines {months} months. A screenshot fills one period — set the report to "
-                            "1 month (Change period on the Cover step), or type the figures in.")
-    own = _own_start(report)
-    windows = {"current": (own or periods_svc.cycle_bounds(report.end_date, 0)[0], report.end_date),
-               "previous": periods_svc.previous_window(report.end_date, 1, own)}
-
-    # The AI call takes a while: the row is not held for it.
-    db.rollback()
-    try:
-        read = shots.read_image(data, mime, windows["current"], windows["previous"])
-    except Exception as e:
-        logger.warning("Report screenshot could not be read: %s", e)
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"{explain_ai_error(e)} (Or type the figures in.)")
-
-    report = _load_editable(client_id, snapshot_id, db)
-    snapshot = dict(report.snapshot or {})
-    try:
-        result = shots.fill(snapshot, read, windows, force=period if period in ("current", "previous") else None,
-                            slide=slide or None)
-    except shots.ShotError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
-    small = shots.size_notice(data)
-    if small:
-        result["notices"].insert(0, small)
-    applied, _ = _apply_value_edits(snapshot, result["edits"])
-    report.snapshot = snapshot
-    flag_modified(report, "snapshot")
-    db.commit()
-    return {**get_composer(client_id, snapshot_id, db),
-            "shot": {"filled": result["filled"], "notices": result["notices"], "slides": result["slides"],
-                     "figures": len(applied), "screen": read.get("screen") or ""}}
 
 
 @router.put("/{snapshot_id}/ai-summary")
