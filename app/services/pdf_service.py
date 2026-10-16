@@ -230,6 +230,11 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
     # a card's name cannot differ between where it is built and where it prints.
     t = report_text.resolver(copy)
 
+    # Switched off in the builder inside a slide: a figure's change, a table's columns.
+    display_off = comparative_data.get("display_off") if isinstance(comparative_data.get("display_off"), dict) else {}
+    changes_off = set(display_off.get("changes") or [])
+    cols_off = display_off.get("cols") if isinstance(display_off.get("cols"), dict) else {}
+
     period = comparative_data.get("period") or {}
     deck = slide_deck.build(
         comparative_data, client, sections, metric_on,
@@ -244,11 +249,14 @@ def render_report_html(comparative_data: dict, client: dict, base_url: str) -> s
         agency_contact_line=settings.AGENCY_CONTACT_LINE,
         sections=sections,
         mo=metric_on,
+        chg=lambda item_id: item_id not in changes_off,
+        col=lambda path, field: field not in (cols_off.get(path) or []),
         ct=heading,
         cs=subheading,
         ce=eyebrow,
         t=t,
         brand_line=composer.brand_line(copy),
+        copy=copy,
         cover_screenshot=comparative_data.get("cover_screenshot"),
         nar=lambda key: str((comparative_data.get("narration") or {}).get(key) or "").strip(),
         # A slide switched off in the builder is left out of the report.

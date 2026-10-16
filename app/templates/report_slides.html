@@ -416,6 +416,8 @@ table.data.fit.d2 .rank-arrow, table.data.fit.d2 .rank-new { font-size: 9px; }
 .trend-list.d2 .trend-path { font-size: 13px; flex-shrink: 0; max-width: 55%; }
 .trend-list.d2 .trend-url { font-size: 10.5px; min-width: 0; }
 .trend-list.d2 .trend-figs { flex-direction: row; align-items: baseline; gap: 12px; }
+/* Image column switched off in the builder: the page takes the room. */
+.trend-list.no-thumb .trend-row { grid-template-columns: 1fr auto !important; }
 .trend-list.d2 .trend-now { font-size: 13.5px; }
 .trend-list.d2 .trend-gain { font-size: 11px; }
 /* Work: cards shrink as tasks are added. */
@@ -1528,7 +1530,7 @@ table.data.kw.half .rank-new { display: none; }
           <th class="num">{{ t('rank.initial') }}</th>
           {#- The latest month sits in the middle, beside Initial; earlier
               months follow it, newest first. -#}
-          {% for m in rank_months | reverse %}<th class="num {{ 'now' if loop.first }}">{{ m }}{% if loop.first and rank_months | length > 1 and not half %} (Latest){% endif %}</th>{% endfor %}
+          {% for m in rank_months | reverse %}<th class="num {{ 'now' if loop.first }}">{{ copy.rankings_headers.get(m, m) if copy.rankings_headers else m }}{% if loop.first and rank_months | length > 1 and not half %} (Latest){% endif %}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -1760,14 +1762,14 @@ table.data.kw.half .rank-new { display: none; }
     <div class="row c2 tight">
       {% if mo('gsc.clicks') %}
       <div class="card cream pad-lg">
-        {{ delta(gsc.get('clicks', 0), deltas.get('gsc', {}).get('clicks', 0)) }}
+        {% if chg('gsc.clicks') %}{{ delta(gsc.get('clicks', 0), deltas.get('gsc', {}).get('clicks', 0)) }}{% endif %}
         <span class="stat-figure">{{ gsc.get('clicks', 0) | fmt }}</span>
         <span class="stat-name">{{ t('gsc.clicks') }}</span>
       </div>
       {% endif %}
       {% if mo('gsc.impressions') %}
       <div class="card cream pad-lg">
-        {{ delta(gsc.get('impressions', 0), deltas.get('gsc', {}).get('impressions', 0)) }}
+        {% if chg('gsc.impressions') %}{{ delta(gsc.get('impressions', 0), deltas.get('gsc', {}).get('impressions', 0)) }}{% endif %}
         <span class="stat-figure">{{ gsc.get('impressions', 0) | fmt }}</span>
         <span class="stat-name">{{ t('gsc.impressions') }}</span>
       </div>
@@ -1777,14 +1779,14 @@ table.data.kw.half .rank-new { display: none; }
     <div class="row c2 tight">
       {% if mo('gsc.ctr') %}
       <div class="card fill">
-        {{ delta(gsc.get('ctr', 0), deltas.get('gsc', {}).get('ctr', 0)) }}
+        {% if chg('gsc.ctr') %}{{ delta(gsc.get('ctr', 0), deltas.get('gsc', {}).get('ctr', 0)) }}{% endif %}
         <span class="stat-figure sm">{{ (gsc.get('ctr', 0) * 100) | round(2) }}%</span>
         <span class="stat-name">{{ t('gsc.ctr') }}</span>
       </div>
       {% endif %}
       {% if mo('gsc.position') %}
       <div class="card fill">
-        {{ delta_position(gsc.get('position', 0), deltas.get('gsc', {}).get('position', 0)) }}
+        {% if chg('gsc.position') %}{{ delta_position(gsc.get('position', 0), deltas.get('gsc', {}).get('position', 0)) }}{% endif %}
         <span class="stat-figure sm">{{ gsc.get('position', 0) | round(1) }}</span>
         <span class="stat-name">{{ t('gsc.position') }}</span>
       </div>
@@ -1832,10 +1834,19 @@ table.data.kw.half .rank-new { display: none; }
     <div class="gc-table">
       <div class="gc-tabs"><span class="on">Queries</span><span>Pages</span><span>Countries</span><span>Devices</span><span>Search appearance</span><span>Days</span></div>
       <table>
-        <thead><tr><th>Top queries</th><th class="num">&darr; Clicks</th><th class="num">Impressions</th></tr></thead>
+        {%- set qp = 'gsc.top_queries' %}
+        <thead><tr>
+          {%- if col(qp, 'query') %}<th>Top queries</th>{% endif %}
+          {%- if col(qp, 'clicks') %}<th class="num">&darr; Clicks</th>{% endif %}
+          {%- if col(qp, 'impressions') %}<th class="num">Impressions</th>{% endif %}
+        </tr></thead>
         <tbody>
           {% for q in gc.queries %}
-          <tr><td>{{ q.get('query') }}</td><td class="num clicks">{{ q.get('clicks', 0) | fmt }}</td><td class="num impressions">{{ q.get('impressions', 0) | fmt }}</td></tr>
+          <tr>
+            {%- if col(qp, 'query') %}<td>{{ q.get('query') }}</td>{% endif %}
+            {%- if col(qp, 'clicks') %}<td class="num clicks">{{ q.get('clicks', 0) | fmt }}</td>{% endif %}
+            {%- if col(qp, 'impressions') %}<td class="num impressions">{{ q.get('impressions', 0) | fmt }}</td>{% endif %}
+          </tr>
           {% endfor %}
         </tbody>
       </table>
@@ -1854,22 +1865,30 @@ table.data.kw.half .rank-new { display: none; }
 <section class="slide">
   {{ head(ce('gsc_pages'), ct('gsc_pages'), (cs('gsc_pages') or 'The pages gaining the most search clicks against last period.') if loop.first else none) }}
   <div class="body">
-    <div class="card grow trend-list {{ density(tr_page | length, 5, 7) }}">
+    {%- set tp = 'gsc.trending_pages' %}
+    <div class="card grow trend-list {{ density(tr_page | length, 5, 7) }}{{ ' no-thumb' if not col(tp, 'image') }}">
       {% for p in tr_page %}
       {%- set url = p.get('page') or '' -%}
       {%- set path = url.split('://', 1)[-1].split('/', 1)[1] if '/' in url.split('://', 1)[-1] else '' -%}
       {%- set now = p.get('clicks', 0) | float -%}
       {%- set was = p.get('prev_clicks', 0) | float -%}
       <div class="trend-row">
+        {%- if col(tp, 'image') %}
         <span class="trend-thumb">
           {% if p.get('image') %}<img src="{{ p.get('image') }}" alt="" />{% else %}<span class="trend-thumb-none">{{ tr_offset + loop.index }}</span>{% endif %}
         </span>
+        {%- endif %}
         <span class="trend-page">
+          {%- if col(tp, 'page') %}
           <span class="trend-path">{{ ('/' ~ path.rstrip('/')) if path.strip('/') else 'Homepage' }}</span>
           <span class="trend-url">{{ url[:90] }}</span>
+          {%- endif %}
         </span>
         <span class="trend-figs">
+          {%- if col(tp, 'clicks') %}
           <span class="trend-now">{{ now | fmt }} <small>clicks</small></span>
+          {%- endif %}
+          {%- if col(tp, 'prev_clicks') %}
           {%- if p.get('span_pct') is not none %}
           <span class="trend-gain {{ 'down' if p.get('span_pct') < 0 }}">
             {{ '+' if p.get('span_pct') >= 0 else '−' }}{{ p.get('span_pct') | abs }}% <small>{{ compare_label }}</small>
@@ -1882,6 +1901,7 @@ table.data.kw.half .rank-new { display: none; }
             {%- if was > 0 %} · {{ '+' if diff >= 0 else '−' }}{{ ((diff | abs) / was * 100) | round(0) | int }}%{% else %} · {{ t('pages.new') }}{% endif %}
             <small>from {{ was | fmt }}</small>
           </span>
+          {%- endif %}
           {%- endif %}
         </span>
       </div>

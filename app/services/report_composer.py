@@ -229,6 +229,53 @@ def write_list(snapshot: dict, path: str, rows: Any) -> bool:
     return True
 
 
+# What the builder switches off inside a slide, beside the figures and rows
+# themselves: the "vs last month" change under a figure, and whole columns of
+# a breakdown table. Stored as {"changes": [figure id], "cols": {path: [field]}}.
+def display_off(snapshot: dict) -> dict:
+    raw = _s(snapshot).get("display_off")
+    raw = raw if isinstance(raw, dict) else {}
+    changes = [c for c in (raw.get("changes") or []) if isinstance(c, str)]
+    cols = raw.get("cols") if isinstance(raw.get("cols"), dict) else {}
+    return {"changes": sorted(set(changes)),
+            "cols": {p: sorted({f for f in v if isinstance(f, str)}) for p, v in cols.items()
+                     if p in _LIST_BY_PATH and isinstance(v, list) and v}}
+
+
+def set_change_shown(snapshot: dict, item_id: str, shown: bool) -> bool:
+    known = {f"{s}.{k}" for s, keys in comparable_keys().items() for k in keys}
+    if item_id not in known:
+        return False
+    off = display_off(snapshot)
+    changes = set(off["changes"])
+    (changes.discard if shown else changes.add)(item_id)
+    snapshot["display_off"] = {**off, "changes": sorted(changes)}
+    return True
+
+
+def set_list_columns(snapshot: dict, path: str, fields: Any) -> str | None:
+    """Hide these columns of one breakdown table; [] shows them all. Returns
+    why it can't, or None."""
+    spec = _LIST_BY_PATH.get(path)
+    if not spec:
+        return "That table can't be edited."
+    names = [c[0] for c in spec["columns"]]
+    fields = [f for f in (fields or []) if isinstance(f, str)]
+    bad = [f for f in fields if f not in names]
+    if bad:
+        return f"Unknown column: {bad[0]}."
+    if set(fields) >= set(names):
+        return "Keep at least one column in the table."
+    off = display_off(snapshot)
+    cols = dict(off["cols"])
+    if fields:
+        cols[path] = sorted(set(fields))
+    else:
+        cols.pop(path, None)
+    snapshot["display_off"] = {**off, "cols": cols}
+    return None
+
+
 def country_names(snapshot: dict) -> list[str]:
     """Every country either country slide could print, busiest first."""
     ga4 = _s(snapshot).get("ga4") or {}
@@ -1142,6 +1189,8 @@ def narration_availability(snapshot: dict) -> dict[str, bool]:
 #   table    — one of LIST_SPECS, edited as rows
 #   shots    — the slide's screenshot slots
 #   months   — the month-by-month table of a multi-month report
+#   shotread — fill the slide from a screenshot of Google's own report, with
+#              sample screenshots (screenshot_reader.SAMPLES) to copy
 #   editor   — a purpose-built editor the builder knows by name
 # Words are the slide's heading (label, title, subtitle), its commentary
 # paragraph, and any other wording printed on it.
@@ -1174,7 +1223,9 @@ SLIDES: list[dict] = [
 
     {"key": "leads", "name": "Leads & Conversion", "step": "performance", "section": "ga4",
      "about": "The enquiries: thank-you pages, email and phone clicks, transactions — and their total.",
-     "parts": [{"type": "figures", "prefix": "ga4.lead.", "label": "Lead figures",
+     "parts": [{"type": "shotread", "samples": ["ga4_events"], "label": "No access to Google? Fill from a screenshot",
+                "hint": "Upload or paste the Events screen; lead events (thank-you page, email, phone, purchase) are picked out of it."},
+               {"type": "figures", "prefix": "ga4.lead.", "label": "Lead figures",
                 "hint": "Filled from Google Analytics events. Type a number to replace it; untick a box to leave it out of the report and the total."}],
      "heading": "leads", "narration": "leads", "texts": "block"},
 
@@ -1193,7 +1244,9 @@ SLIDES: list[dict] = [
 
     {"key": "ga4", "name": "Traffic Progress Summary", "step": "traffic", "section": "ga4",
      "about": "Visits to the website, beside Google Analytics' traffic-by-channel table.",
-     "parts": [{"type": "figures", "ids": ["ga4.sessions", "ga4.users", "ga4.engaged_sessions", "ga4.conversions", "ga4.revenue"],
+     "parts": [{"type": "shotread", "samples": ["ga4_channels"], "label": "No access to Google? Fill from a screenshot",
+                "hint": "Upload or paste Traffic acquisition: it fills sessions, engaged sessions, key events and the channel table."},
+               {"type": "figures", "ids": ["ga4.sessions", "ga4.users", "ga4.engaged_sessions", "ga4.conversions", "ga4.revenue"],
                 "label": "Headline figures", "hint": "Last month on the left, this month on the right."},
                {"type": "months", "section": "ga4", "label": "Month by month", "hint": ""},
                {"type": "gtable", "table": "channels", "label": "Traffic acquisition by channel",
@@ -1202,7 +1255,9 @@ SLIDES: list[dict] = [
 
     {"key": "ga4_countries", "name": "Traffic by country", "step": "traffic", "section": "ga4",
      "about": "Where visitors were: a share-of-visits donut and a users-by-country table.",
-     "parts": [{"type": "rows", "prefix": "ga4.country.", "label": "Countries shown",
+     "parts": [{"type": "shotread", "samples": ["ga4_countries"], "label": "No access to Google? Fill from a screenshot",
+                "hint": "Upload or paste Demographic details by Country: it fills the country table, the donut and total users."},
+               {"type": "rows", "prefix": "ga4.country.", "label": "Countries shown",
                 "hint": "Untick a country to leave it out of the donut and the table."},
                {"type": "gtable", "table": "countries", "label": "Users by country",
                 "hint": "Exactly as it prints. Hide columns, a % or a “vs” figure — for a whole column or one cell — and type over a figure; totals and rates follow."}],
@@ -1210,20 +1265,26 @@ SLIDES: list[dict] = [
 
     {"key": "gsc", "name": "Click & Impressions", "step": "search", "section": "gsc",
      "about": "Clicks, impressions, click-through rate and average position from Google search.",
-     "parts": [{"type": "figures", "ids": ["gsc.clicks", "gsc.impressions", "gsc.ctr", "gsc.position"],
+     "parts": [{"type": "shotread", "samples": ["gsc_compare", "gsc_performance"], "label": "No access to Google? Fill from a screenshot",
+                "hint": "Upload or paste the Performance screen. With Compare on, one screenshot fills both periods."},
+               {"type": "figures", "ids": ["gsc.clicks", "gsc.impressions", "gsc.ctr", "gsc.position"],
                 "label": "Headline figures", "hint": "Last month on the left, this month on the right."},
                {"type": "months", "section": "gsc", "label": "Month by month", "hint": ""}],
      "heading": "gsc", "narration": "gsc", "texts": "block"},
 
     {"key": "gsc_console", "name": "Search Console Performance", "step": "search", "section": "gsc",
      "about": "Search Console's own view: the four totals, the daily chart and the top queries.",
-     "parts": [{"type": "table", "path": "gsc.top_queries", "label": "", "hint": ""}],
+     "parts": [{"type": "shotread", "samples": ["gsc_queries"], "label": "No access to Google? Fill from a screenshot",
+                "hint": "Upload or paste the Queries tab: it fills the queries table."},
+               {"type": "table", "path": "gsc.top_queries", "label": "", "hint": ""}],
      "heading": "gsc_console", "narration": None, "texts": [],
      "note": "The totals and the daily chart use the Click & Impressions figures and Search Console's daily data."},
 
     {"key": "gsc_pages", "name": "Top Performing Pages", "step": "search", "section": "gsc",
      "about": "The pages gaining the most clicks against last month, each with its own picture.",
-     "parts": [{"type": "table", "path": "gsc.trending_pages", "label": "", "hint": ""}],
+     "parts": [{"type": "shotread", "samples": ["gsc_pages"], "label": "No access to Google? Fill from a screenshot",
+                "hint": "Upload or paste the Pages tab. Add last period's too (or a Compare screenshot) for the clicks gained."},
+               {"type": "table", "path": "gsc.trending_pages", "label": "", "hint": ""}],
      "heading": "gsc_pages", "narration": "gsc_pages", "texts": "block"},
 
     {"key": "ai_visibility", "name": "AI Keyword Visibility", "step": "ai", "section": "ai_visibility",
